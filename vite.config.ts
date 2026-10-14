@@ -21,7 +21,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'client/index.html'),
-        gallery: resolve(import.meta.dirname, 'client/gallery.html'),
       },
     },
   },

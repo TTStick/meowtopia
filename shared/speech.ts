@@ -104,7 +104,7 @@ function voice(text: string, p: Personality, r: Rng): string {
   if (v.startsWith('有点傲娇')) return (r.chance(0.4) ? r.pick(['哼，', '才不是……', '勉强，']) : '') + text + (end ? '' : r.pick(['。', '，哼', '']));
   if (v.startsWith('元气')) return text + (end ? '' : r.pick(['！', '！！', '，冲呀！']));
   if (v.startsWith('慢吞吞')) return (r.chance(0.5) ? r.pick(['嗯……', '呼……', '唔……']) : '') + text + (end ? '' : '……');
-  if (v.startsWith('文艺')) return text + (end ? '' : r.pick(['。', '，像一首诗', '']));
+  if (v.startsWith('文艺')) return (r.chance(0.35) ? r.pick(['你听，', '悄悄地，', '风说，']) : '') + text + (end ? '' : r.pick(['。', '～', '']));
   if (v.startsWith('好奇')) return text + (end ? '' : r.pick(['？', '，为什么呢？', '！']));
   if (v.startsWith('小大人')) return (r.chance(0.35) ? '本喵认为，' : '') + text + (end ? '' : '。');
   if (v.startsWith('憨憨')) return text + (end ? '' : r.pick(['，嘿嘿', '！', '～嘿']));

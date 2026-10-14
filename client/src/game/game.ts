@@ -472,8 +472,10 @@ class Game {
   private onServer(m: ServerMsg) {
     this.world?.onServer(m);
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
+    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'friend')) ui.set((s) => ({ unread: s.unread + 1 }));
+    if (m.t === 'event' && m.kind === 'bond') this.refreshMe().catch(() => {});
     if (m.t === 'event') {
-      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : '🐾';
+      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💛' : '🐾';
       toast(m.text, icon, 4200);
       if (m.kind === 'find' || m.kind === 'gift') audio.sparkle();
       if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift') this.refreshMe().catch(() => {});

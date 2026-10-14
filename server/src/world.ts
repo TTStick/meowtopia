@@ -325,6 +325,15 @@ function finishTrip(e: Ent, now: number) {
     toOwners(c, { t: 'event', kind: 'home', text: `${c.name}回到了猫窝`, catId: c.id });
   });
   if (t.places.length) game.remember(c, `去了${t.places.slice(-2).join('和')}`);
+  // in autumn a leaf sometimes sticks to the cat's head and it refuses to give it back
+  if (clockAt(now).season === 2 && Math.random() < 0.12) {
+    for (const uid of game.ownersOf(c)) {
+      if (db.invCount(uid, 'leaf') === 0) {
+        db.invAdd(uid, 'leaf', 1);
+        db.addJournal(c.id, 'find', '回家的路上，一片小叶子落在了头顶。我决定一直戴着它。', { item: 'leaf' });
+      }
+    }
+  }
 }
 
 // ---------- meetings ----------
@@ -647,6 +656,12 @@ function tick() {
     }
   }
 }
+
+// relay in-app letters to players who are online right now
+game.onNotify((uid, ev) => {
+  if (ev.kind === 'home' || ev.kind === 'friend') return; // these already have live toasts
+  for (const c of clients) if (c.uid === uid) send(c, { t: 'event', kind: ev.kind, text: `${ev.title}：${ev.text}` });
+});
 
 export function startWorld() {
   ensureResidents();

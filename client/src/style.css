@@ -82,6 +82,8 @@ textarea {
   box-shadow: var(--shadow);
   font-size: 15px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 .btn:active {
