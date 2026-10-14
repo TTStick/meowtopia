@@ -5,6 +5,7 @@ import { CatActor } from './actor';
 import { NestBrain, type NestHost, type SpotInst } from './nestBrain';
 import { CELL, WALL_H, drawFurniture, drawWallItem, drawWallpaper, drawFloor, HAS_FRONT, wallpaperBase, type DrawCtx, type SkyInfo } from '../art/furniture';
 import { drawBubble } from '../art/fx';
+import { collectIcon } from '../art/collect';
 import { ITEM_MAP, ROOM_W, ROOM_H, WALL_SLOTS, type ItemDef } from '../../../shared/items';
 import { canPlace, canPlaceWall } from '../../../shared/nest';
 import { makeGrid, findPath, smoothPath, nearestOpen, isBlocked, type Grid } from '../../../shared/path';
@@ -22,6 +23,8 @@ export interface NestEnv {
   onCatEvent?(kind: string): void;
   onBuildSelect?(uid: string | null): void;
   onLayoutChange?(l: NestLayout): void;
+  onGift?(item: string, id: string): void;
+  onSpeak?(): void;
 }
 
 interface Placed {
@@ -66,6 +69,13 @@ export class NestScene implements NestHost {
   private light: HTMLCanvasElement | null = null;
   /** Treasures shown in the collection cabinet (rarest first). */
   collect: string[] = [];
+  /** A treasure the cat brought home and left on the floor for you. */
+  gift: { item: string; id: string; x: number; y: number } | null = null;
+
+  placeGift(item: string, id: string) {
+    const [x, y] = this.openFloorNear(W * 0.32, H - 34);
+    this.gift = { item, id, x, y };
+  }
 
   constructor(rec: CatRecord, layout: NestLayout, env: NestEnv, readonly = false) {
     this.rec = rec;
@@ -179,7 +189,10 @@ export class NestScene implements NestHost {
     this.sayBusy = true;
     this.env
       .say(this.rec, ctx, info)
-      .then((t) => this.cat.say(t, this.T))
+      .then((t) => {
+        this.cat.say(t, this.T);
+        this.env.onSpeak?.();
+      })
       .catch(() => {})
       .finally(() => (this.sayBusy = false));
   }
@@ -404,6 +417,30 @@ export class NestScene implements NestHost {
         this.cat.draw(pen);
       },
     });
+    if (this.gift && !this.away) {
+      const gf = this.gift;
+      list.push({
+        y: gf.y,
+        f: () => {
+          ctx.fillStyle = 'rgba(74,58,52,0.14)';
+          ctx.beginPath();
+          ctx.ellipse(gf.x, gf.y + 2, 12, 4, 0, 0, 7);
+          ctx.fill();
+          const bob = Math.sin(T * 2.4) * 1.5;
+          ctx.save();
+          ctx.translate(gf.x, gf.y - 9 + bob);
+          ctx.scale(0.62, 0.62);
+          collectIcon(pen, gf.item);
+          ctx.restore();
+          // twinkle
+          const k = (T * 0.8) % 1;
+          ctx.globalAlpha = Math.sin(k * Math.PI);
+          const sx = gf.x + 10, sy = gf.y - 22 - k * 6;
+          pen.shape([sx, sy - 4, sx + 1.2, sy - 1.2, sx + 4, sy, sx + 1.2, sy + 1.2, sx, sy + 4, sx - 1.2, sy + 1.2, sx - 4, sy, sx - 1.2, sy - 1.2], '#ffe27a', lw * 0.5);
+          ctx.globalAlpha = 1;
+        },
+      });
+    }
     if (this.feedItem) {
       const fi = this.feedItem;
       list.push({
@@ -617,6 +654,13 @@ export class NestScene implements NestHost {
         if (this.build) return this.buildTap(x, y);
         if (this.play) {
           this.moveToy(x, y);
+          return;
+        }
+        if (this.gift && Math.hypot(x - this.gift.x, y - (this.gift.y - 8)) < 22) {
+          const gf = this.gift;
+          this.gift = null;
+          this.env.onGift?.(gf.item, gf.id);
+          this.brain.interrupt([{ k: 'goto', x: gf.x + 30, y: gf.y, z: 0 }, { k: 'anim', anim: 'sit_happy', dur: 3, emote: 'heart', emoteEvery: 1 }], 'gift');
           return;
         }
         if (this.cat.hit(x, y)) this.petTap();

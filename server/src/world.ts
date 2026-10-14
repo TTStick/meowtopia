@@ -25,9 +25,11 @@ interface Trip {
   ends: number;
   places: string[];
   finds: string[];
+  findIds: string[];
   friends: string[];
   userSent: boolean;
   goingHome: boolean;
+  recalled?: boolean; // the owner asked it to come home
 }
 
 interface Ent {
@@ -184,7 +186,7 @@ function npcState(n: NpcDef, x: number, y: number): EntState {
 // ---------- trips ----------
 function newTrip(now: number, userSent: boolean, rng: Rng): Trip {
   const mins = userSent ? rng.range(14, 30) : rng.range(18, 45);
-  return { started: now, ends: now + mins * 60_000, places: [], finds: [], friends: [], userSent, goingHome: false };
+  return { started: now, ends: now + mins * 60_000, places: [], finds: [], findIds: [], friends: [], userSent, goingHome: false };
 }
 
 export function startTrip(c: CatRecord, userSent: boolean): boolean {
@@ -193,6 +195,7 @@ export function startTrip(c: CatRecord, userSent: boolean): boolean {
     const e = ents.get(c.id)!;
     if (!e.trip) e.trip = newTrip(now, userSent, new Rng(now));
     e.trip.goingHome = false;
+    e.trip.recalled = false;
     if (userSent) e.trip.ends = Math.max(e.trip.ends, now + 15 * 60_000);
     return true;
   }
@@ -208,6 +211,7 @@ export function callHome(catId: string) {
   if (!e?.trip || !e.cat) return;
   e.trip.ends = Date.now();
   e.trip.goingHome = false;
+  e.trip.recalled = true;
   e.controlledBy = undefined;
   e.until = 0;
   e.mode = 'idle';
@@ -298,6 +302,7 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
       if (it) {
         giveItem(c, it.id);
         e.trip?.finds.push(it.name);
+        e.trip?.findIds.push(it.id);
         db.addJournal(c.id, 'find', `在${poi.name}捡到了「${it.name}」。${it.desc}`, { item: it.id });
         toOwners(c, { t: 'event', kind: 'find', text: `${c.name}在${poi.name}捡到了「${it.name}」！`, item: it.id, catId: c.id });
         broadcast({ t: 'emote', id: c.id, kind: it.rarity && it.rarity >= 3 ? 'star' : 'sparkle' });
@@ -319,7 +324,7 @@ function finishTrip(e: Ent, now: number) {
   c.stats = applyDelta(c.stats, { energy: -10, mood: 6, social: 10 });
   game.saveNow(c);
   void journalEntry(c, t.places, t.finds, t.friends).then((text) => {
-    db.addJournal(c.id, 'home', text, { places: t.places, finds: t.finds, friends: t.friends });
+    db.addJournal(c.id, 'home', text, { places: t.places, finds: t.finds, findIds: t.findIds, friends: t.friends });
     const finds = t.finds.length ? `，带回了${t.finds.slice(0, 3).join('、')}` : '';
     for (const uid of game.ownersOf(c)) {
       if (!t.userSent || !ownerOnline(c)) game.notify(uid, 'home', `${c.name}探险回来啦`, `去了${t.places.slice(0, 3).join('、') || '附近'}${finds}。`);
@@ -430,7 +435,7 @@ function tickCat(e: Ent, now: number) {
   const isTown = c.ownerId === 'town';
   if (!isTown && e.trip) {
     // while the owner is out with the cat, it stays as long as they like (even late at night)
-    const accompanied = e.trip.userSent && ownerOnline(c);
+    const accompanied = e.trip.userSent && !e.trip.recalled && ownerOnline(c);
     if (accompanied) e.trip.ends = Math.max(e.trip.ends, now + 10 * 60_000);
     const late = (ck.hour >= 21 || ck.hour < 5.5) && !accompanied;
     if (!e.trip.goingHome && (now > e.trip.ends || late || (w.kind === 'rain' && !e.trip.userSent && now - e.trip.started > 5 * 60_000))) {

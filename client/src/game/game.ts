@@ -9,6 +9,7 @@ import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
 import type { SpeechCtx } from '../../../shared/speech';
 import { fallbackLine } from '../../../shared/speech';
 import { ITEM_MAP } from '../../../shared/items';
+import { ageOf } from '../../../shared/stats';
 import { clockAt, phaseOf, setWorldTz } from '../../../shared/time';
 import { now as clockNow } from './clock';
 import type { ServerMsg } from '../../../shared/protocol';
@@ -211,7 +212,37 @@ class Game {
       },
       onLayoutChange: () => ui.set({}),
       onBuildSelect: () => ui.set({}),
+      onGift: (item, id) => {
+        try {
+          localStorage.setItem(`catnest.gift.${id}`, '1');
+        } catch {
+          /* ignore */
+        }
+        const c = activeCat();
+        audio.sparkle();
+        toast(`${c?.name ?? '猫猫'}把「${ITEM_MAP[item]?.name ?? '宝贝'}」送给了你`, '🎁', 3600);
+        setTimeout(() => this.nest?.say('find', { item: ITEM_MAP[item]?.name ?? '' }), 900);
+      },
+      onSpeak: () => {
+        if (Math.random() < 0.45) {
+          const c = activeCat();
+          audio.meow(c ? 1.25 - ageOf(c.born) * 0.3 : 1);
+        }
+      },
     };
+  }
+
+  /** If the cat recently came home with treasures, leave one on the floor. */
+  private async placeGift(catId: string) {
+    try {
+      const entries = await api<{ id: number; ts: number; kind: string; data?: { findIds?: string[] } }[]>('GET', `/api/cat/${catId}/journal`);
+      const e = entries.find((x) => x.kind === 'home' && x.data?.findIds?.length && Date.now() - x.ts < 12 * 3600_000);
+      if (!e || !this.nest || this.nest.rec.id !== catId) return;
+      if (localStorage.getItem(`catnest.gift.${e.id}`)) return;
+      this.nest.placeGift(e.data!.findIds![0], String(e.id));
+    } catch {
+      /* no gift today */
+    }
   }
 
   async openNest(catId?: string) {
@@ -229,6 +260,7 @@ class Game {
       ui.set({ hint: null });
       this.tip();
       setTimeout(() => this.nest?.say('greet'), 1400);
+      void this.placeGift(r.cat.id);
     }
   }
 

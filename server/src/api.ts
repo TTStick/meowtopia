@@ -28,7 +28,14 @@ function myCat(uid: string, id: string): CatRecord {
 }
 
 // ---------- account ----------
+const regLog = new Map<string, number[]>();
 route('POST', '/api/register', (r) => {
+  const ip = String(r.raw.headers['x-forwarded-for'] ?? r.raw.socket.remoteAddress ?? '').split(',')[0].trim();
+  const now = Date.now();
+  const recent = (regLog.get(ip) ?? []).filter((t) => now - t < 3600_000);
+  if (recent.length >= 12) throw new HttpError(429, '领养得太频繁啦，休息一下再来吧');
+  recent.push(now);
+  regLog.set(ip, recent);
   const nickname = r.body.nickname ? cleanText(str(r.body.nickname, 12, '昵称')) : '铲屎官';
   const id = 'u_' + randomUUID().replace(/-/g, '').slice(0, 12);
   const token = randomBytes(24).toString('base64url');
