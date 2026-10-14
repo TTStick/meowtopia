@@ -8,7 +8,7 @@ import type { Phase, WeatherKind } from './time';
 export type SpeechCtx =
   | 'idle' | 'pet' | 'feed' | 'play' | 'sleepy' | 'wake' | 'window' | 'explore' | 'place' | 'find' | 'meet'
   | 'home' | 'greet' | 'hungry' | 'night' | 'rain' | 'snow' | 'box' | 'sun' | 'command_ok' | 'command_confused'
-  | 'friend' | 'bored' | 'groom' | 'scratch' | 'dress' | 'decor' | 'lonely';
+  | 'friend' | 'bored' | 'groom' | 'scratch' | 'dress' | 'decor' | 'lonely' | 'goodnight' | 'wish' | 'grow' | 'bond';
 
 export interface SpeechInfo {
   name: string;
@@ -85,6 +85,10 @@ const L: Record<SpeechCtx, string[]> = {
   dress: ['好看吗好看吗', '我是今天最靓的猫', '新衣服！转个圈给你看'],
   decor: ['家里变好看了！', '新东西！我要先闻闻', '这里我要了'],
   lonely: ['想要人陪陪', '你会一直在吗', '蹭蹭你的手，就不孤单了'],
+  goodnight: ['晚安，明天也要见面哦', '今天也谢谢你，晚安', '我先去梦里等你啦', '把月亮留给你，晚安', '呼噜……晚安……', '明天醒来第一眼想看到你'],
+  wish: ['心愿实现啦！', '你怎么知道我想要这个', '今天是最好的一天', '谢谢你，我好开心'],
+  grow: ['我好像长高了一点点', '镜子里的我变大了', '我不是小奶猫啦'],
+  bond: ['我越来越喜欢你了', '有你在就很安心', '以后也要一直在一起'],
 };
 
 const PHASE_IDLE: Partial<Record<Phase, string[]>> = {

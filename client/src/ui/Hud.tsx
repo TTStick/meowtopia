@@ -69,6 +69,67 @@ export function TopBar() {
   );
 }
 
+export function WishPill() {
+  const wish = useStore(ui, (s) => s.wish);
+  const visiting = useStore(ui, (s) => s.visiting);
+  const scene = useStore(ui, (s) => s.scene);
+  if (!wish || visiting) return null;
+  const act = () => {
+    if (wish.done) return toast('今天的心愿已经实现啦，明天它还会有新的小心愿', '🌟');
+    switch (wish.kind) {
+      case 'treat':
+        return ui.set({ panel: 'feed' });
+      case 'play':
+        if (scene !== 'nest') return game.openNest();
+        return ui.state.play || game.togglePlay();
+      case 'pet':
+        return toast('点点它、顺顺毛就好～', '🤲');
+      case 'outfit':
+        return ui.set({ panel: 'wardrobe' });
+      case 'goodnight':
+        return toast('晚上 8 点半以后，点「晚安」哄它睡觉', '🌙');
+      case 'friend':
+        return ui.state.catOut ? toast('它正在外面，遇到别的猫猫就会去打招呼', '🐾') : game.goOut();
+      case 'visit':
+        if (!ui.state.catOut) game.goOut();
+        else game.openWorld();
+        setTimeout(() => wish.target && game.world?.goToPoi(wish.target), 800);
+        return;
+    }
+  };
+  return (
+    <button class="pill wish" onClick={act} style={wish.done ? { background: 'var(--leaf-soft)' } : undefined}>
+      <I.ISparkle size={15} />
+      <span class="wt">{wish.done ? `心愿实现啦：${wish.text}` : `小心愿：${wish.text}`}</span>
+      {!wish.done && wish.need > 1 && (
+        <span class="muted">
+          {wish.progress}/{wish.need}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function GoodnightOverlay() {
+  const t = useStore(ui, (s) => s.goodnight);
+  const [show, setShow] = useState(false);
+  const cat = activeCat();
+  useEffect(() => {
+    if (!t) return;
+    setShow(true);
+    const h = setTimeout(() => setShow(false), 4200);
+    return () => clearTimeout(h);
+  }, [t]);
+  if (!show || !cat) return null;
+  return (
+    <div class="goodnight">
+      <I.IMoon size={40} />
+      <div class="gn-t">晚安，{cat.name}</div>
+      <div class="gn-s">今天也辛苦啦</div>
+    </div>
+  );
+}
+
 export function Hint() {
   const hint = useStore(ui, (s) => s.hint);
   if (!hint) return null;
@@ -174,10 +235,17 @@ export function NestBar() {
               出门
             </button>
           )}
-          <button onClick={() => open('shop')}>
-            <I.IBag />
-            商店
-          </button>
+          {!catOut && game.isNight() ? (
+            <button onClick={() => (audio.unlock(), game.goodnight())}>
+              <I.IMoon />
+              晚安
+            </button>
+          ) : (
+            <button onClick={() => open('shop')}>
+              <I.IBag />
+              商店
+            </button>
+          )}
         </div>
       </div>
     </>

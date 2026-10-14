@@ -10,6 +10,7 @@ import { POIS } from '../../shared/world';
 import type { CatRecord, NestLayout, UserSettings } from '../../shared/types';
 import type { SpeechCtx } from '../../shared/speech';
 import { catLine, interpretCommand, llmEnabled } from './llm';
+import { progressWish, wishState, addBond } from './wish';
 import { localClock } from '../../shared/time';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -120,34 +121,67 @@ route('POST', '/api/cat/:id/act', (r) => {
   const key = `${r.user.id}:${c.id}:${kind}`;
   const cool = (petCooldown.get(key) ?? 0) < now;
   let delta: Record<string, number> = {};
-  let fish: number | undefined;
+  let bond = 0;
+  let wishDone = false;
+  let first = false;
   switch (kind) {
     case 'pet':
-      delta = { mood: 3, social: 6, bond: cool ? 1 : 0 };
+      delta = { mood: 3, social: 6 };
+      bond = cool ? 1 : 0;
       if (cool) petCooldown.set(key, now + 20_000);
+      wishDone = progressWish(c, 'pet');
       break;
     case 'play':
-      delta = { mood: 5, energy: -3, social: 4, bond: cool ? 1 : 0 };
+      delta = { mood: 5, energy: -3, social: 4 };
+      bond = cool ? 1 : 0;
       if (cool) petCooldown.set(key, now + 30_000);
+      wishDone = progressWish(c, 'play');
       break;
     case 'feed': {
       const it = ITEM_MAP[String(r.body.item)];
       if (!it?.food) throw new HttpError(400, '这个不能吃哦');
       if (db.invCount(r.user.id, it.id) <= 0) throw new HttpError(400, `没有${it.name}了`);
       db.invAdd(r.user.id, it.id, -1);
-      delta = { hunger: it.food.hunger, mood: it.food.mood, bond: it.food.bond };
+      delta = { hunger: it.food.hunger, mood: it.food.mood };
+      bond = it.food.bond;
+      wishDone = progressWish(c, 'treat', it.id);
       break;
     }
     case 'brush':
-      delta = { clean: 15, mood: 2, bond: cool ? 1 : 0 };
+      delta = { clean: 15, mood: 2 };
+      bond = cool ? 1 : 0;
       if (cool) petCooldown.set(key, now + 40_000);
       break;
+    case 'goodnight': {
+      // once per night (a "night" runs from noon to noon)
+      const night = localClock(now - 12 * 3600_000, game.settingsOf(r.user).tzOffset).day;
+      const k = `gn:${c.id}:${r.user.id}:${night}`;
+      if (!db.kvGet(k)) {
+        db.kvSet(k, 1);
+        first = true;
+        delta = { mood: 6, energy: 10 };
+        bond = 2;
+        db.addJournal(c.id, 'mood', pickOne(['今晚你哄我睡觉了。梦里也是暖暖的。', '你说了晚安，我就安心地闭上了眼睛。', '睡前被摸了摸头，今天圆满了。']));
+      }
+      wishDone = progressWish(c, 'goodnight');
+      break;
+    }
     default:
       throw new HttpError(400, '未知的互动');
   }
   c.stats = applyDelta(c.stats, delta);
+  if (bond) addBond(c, bond);
   game.markDirty(c);
-  return { stats: c.stats, inventory: db.getInventory(r.user.id), fish };
+  return { stats: c.stats, inventory: db.getInventory(r.user.id), wishDone, first };
+});
+
+function pickOne<T>(a: T[]): T {
+  return a[Math.floor(Math.random() * a.length)];
+}
+
+route('GET', '/api/cat/:id/wish', (r) => {
+  const c = myCat(r.user.id, r.params.id);
+  return wishState(c);
 });
 
 route('POST', '/api/cat/:id/outfit', (r) => {
@@ -161,8 +195,10 @@ route('POST', '/api/cat/:id/outfit', (r) => {
     slots.add(slot);
     if (db.invCount(r.user.id, id) <= 0) throw new HttpError(400, `还没有${ITEM_MAP[id].name}`);
   }
+  const changed = list.join() !== c.outfit.join();
   c.outfit = list;
   game.saveNow(c);
+  if (changed && list.length) progressWish(c, 'outfit');
   return c;
 });
 

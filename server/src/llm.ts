@@ -134,6 +134,10 @@ const CTX_DESC: Record<SpeechCtx, string> = {
   dress: '主人给它换了新装扮',
   decor: '家里添了新家具',
   lonely: '想要主人陪陪',
+  goodnight: '夜深了，主人在哄它睡觉，它窝在床上快睡着了，跟主人说晚安',
+  wish: '主人刚刚实现了它今天的小心愿',
+  grow: '它最近长大了一点',
+  bond: '它和主人的感情又变深了',
 };
 
 // ---- pools ----

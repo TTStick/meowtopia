@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import type { CatRecord, MeResponse, UserSettings } from '../../shared/types';
 import { randomGenes, randomPersonality } from '../../shared/genes';
-import { advanceStats, freshStats } from '../../shared/stats';
+import { advanceStats, freshStats, ageOf } from '../../shared/stats';
 import { starterLayout, STARTER_ITEMS } from '../../shared/nest';
 import { HOME_SPAWN } from '../../shared/world';
 import * as db from './db';
@@ -52,7 +52,21 @@ export function allCatIds(): string[] {
   return db.allCats().map((c) => c.id);
 }
 
+const STAGE_TEXT = ['', '我好像长高了一点点，已经不是小奶猫啦。', '镜子里的我变成大猫了。谢谢你一直陪着我长大。'];
+const STAGE_NAME = ['小奶猫', '少年猫', '成年猫'];
+
 export function refresh(c: CatRecord, now = Date.now()): CatRecord {
+  const age = ageOf(c.born, now);
+  const stage = age < 0.6 ? 0 : age < 0.9 ? 1 : 2;
+  if (c.stage === undefined) {
+    c.stage = stage;
+    markDirty(c);
+  } else if (stage > c.stage && c.ownerId !== 'town') {
+    c.stage = stage;
+    markDirty(c);
+    db.addJournal(c.id, 'mood', STAGE_TEXT[stage]);
+    for (const uid of ownersOf(c)) notify(uid, 'grow', `${c.name}长大了`, `现在是一只${STAGE_NAME[stage]}了。`);
+  }
   if (now - c.statsAt > 60_000) {
     c.stats = advanceStats(c.stats, c.personality, c.statsAt, now, c.location);
     c.statsAt = now;

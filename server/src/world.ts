@@ -14,6 +14,7 @@ import { Rng, hashf } from '../../shared/rng';
 import * as game from './game';
 import * as db from './db';
 import { catLine, catDialogue, npcLine, journalEntry, type NpcPersona } from './llm';
+import { progressWish } from './wish';
 
 const world = getWorld();
 const CAT_SPEED = 46;
@@ -272,6 +273,7 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
   const c = e.cat!;
   const rng = new Rng(now);
   e.poi = poi.id;
+  progressWish(c, 'visit', poi.id);
   const act = rng.pick(poi.acts);
   const anims = ACT_ANIM[act] ?? ['sit'];
   setAct(e, rng.pick(anims), rng.range(18_000, 45_000) * (0.7 + c.personality.lazy * 0.6), now);
@@ -371,6 +373,7 @@ async function meet(a: Ent, b: Ent, now: number) {
       mc.stats = applyDelta(mc.stats, { social: 12, mood: 4 });
       game.markDirty(mc);
       me.trip?.friends.includes(oc.name) || me.trip?.friends.push(oc.name);
+      progressWish(mc, 'friend');
       if (!row && mc.ownerId !== 'town') {
         db.addJournal(mc.id, 'friend', `在${place}认识了新朋友「${oc.name}」，我们碰了碰鼻子。`, { cat: oc.id });
         game.remember(mc, `认识了${oc.name}`);

@@ -807,3 +807,59 @@ textarea {
     padding: 0 2px;
   }
 }
+
+.wish {
+  position: absolute;
+  top: calc(64px + var(--safe-top));
+  left: 8px;
+  z-index: 5;
+  max-width: calc(100% - 16px);
+  cursor: pointer;
+  background: #fff8dc;
+}
+.wish .wt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hint {
+  top: calc(100px + var(--safe-top));
+}
+.toasts {
+  top: calc(136px + var(--safe-top));
+}
+.goodnight {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #fff6d8;
+  background: radial-gradient(circle at 50% 45%, rgba(30, 34, 80, 0.15), rgba(20, 24, 60, 0.55));
+  pointer-events: none;
+  z-index: 25;
+  animation: gn 4.2s ease forwards;
+  text-shadow: 0 2px 0 rgba(20, 20, 50, 0.4);
+}
+.goodnight .gn-t {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.goodnight .gn-s {
+  font-size: 15px;
+  opacity: 0.85;
+}
+@keyframes gn {
+  0% {
+    opacity: 0;
+  }
+  20%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

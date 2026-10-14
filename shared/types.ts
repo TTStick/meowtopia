@@ -71,6 +71,7 @@ export interface CatRecord {
   memory: string[]; // short notable memories (most recent last)
   wx: number; // last world position
   wy: number;
+  stage?: number; // 0 kitten, 1 young, 2 adult (last announced)
 }
 
 export interface PlacedItem {

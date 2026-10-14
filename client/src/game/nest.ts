@@ -720,6 +720,23 @@ export class NestScene implements NestHost {
   }
   feedItem: { item: string; x: number; y: number; t: number } | null = null;
 
+  /** Bedtime: the cat goes to its favourite bed, kneads, curls up and drifts off. */
+  goodnight() {
+    const beds = this.spots.filter((s) => s.kind === 'sleep' || s.kind === 'warm');
+    const bed = beds.sort((a, b) => (a.item === 'bed_round' ? -1 : 0) - (b.item === 'bed_round' ? -1 : 0))[0];
+    const tasks: any[] = [];
+    if (bed) tasks.push({ k: 'goto', x: bed.x, y: bed.y, z: bed.z, spot: bed });
+    else {
+      const [x, y] = this.openFloorNear(W / 2, H - 40);
+      tasks.push({ k: 'goto', x, y, z: 0 });
+    }
+    tasks.push({ k: 'anim', anim: 'knead', dur: 3.5, emote: 'heart', emoteEvery: 1.6 });
+    tasks.push({ k: 'anim', anim: 'yawn', dur: 1.6 });
+    tasks.push({ k: 'call', fn: () => this.say('goodnight') });
+    tasks.push({ k: 'anim', anim: 'sleep', dur: 600, emote: 'zzz', emoteEvery: 4 });
+    this.brain.interrupt(tasks, 'goodnight');
+  }
+
   /** Simple text-command reactions inside the nest. */
   command(action: string) {
     const b = this.brain;

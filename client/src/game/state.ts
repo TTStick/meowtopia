@@ -39,6 +39,8 @@ export interface UIState {
   llm: boolean;
   busy: boolean;
   photo: string | null;
+  wish: { text: string; kind: string; target?: string; need: number; progress: number; done: boolean } | null;
+  goodnight: number; // timestamp of last goodnight overlay
 }
 
 export const ui = new Store<UIState>({
@@ -63,6 +65,8 @@ export const ui = new Store<UIState>({
   llm: false,
   busy: false,
   photo: null,
+  wish: null,
+  goodnight: 0,
 });
 
 let toastId = 1;

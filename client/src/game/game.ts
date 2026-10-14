@@ -10,6 +10,7 @@ import type { SpeechCtx } from '../../../shared/speech';
 import { fallbackLine } from '../../../shared/speech';
 import { ITEM_MAP } from '../../../shared/items';
 import { clockAt, phaseOf } from '../../../shared/time';
+import { now as clockNow } from './clock';
 import type { ServerMsg } from '../../../shared/protocol';
 
 export interface Scene {
@@ -114,6 +115,7 @@ class Game {
     this.ws.connect();
     await this.openNest();
     this.loadUnread();
+    this.loadWish();
     if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
     else this.tip();
     api('POST', '/api/daily')
@@ -124,6 +126,39 @@ class Game {
         }
       })
       .catch(() => {});
+  }
+
+  async loadWish() {
+    const c = activeCat();
+    if (!c) return;
+    try {
+      const w = await api<{ wish: { text: string; kind: string; target?: string; need: number }; progress: number; done: boolean }>('GET', `/api/cat/${c.id}/wish`);
+      ui.set({ wish: { ...w.wish, progress: w.progress, done: w.done } });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  isNight() {
+    const h = new Date(clockNow()).getHours() + new Date(clockNow()).getMinutes() / 60;
+    return h >= 20.5 || h < 5;
+  }
+
+  async goodnight() {
+    const c = activeCat();
+    if (!c || !this.nest || ui.state.visiting) return;
+    this.nest.setPlay(false);
+    ui.set({ play: false });
+    this.nest.goodnight();
+    audio.purr();
+    try {
+      const r = await api<{ stats: CatRecord['stats']; first: boolean; wishDone: boolean }>('POST', `/api/cat/${c.id}/act`, { kind: 'goodnight' });
+      patchCat(c.id, { stats: r.stats });
+      setTimeout(() => ui.set({ goodnight: Date.now() }), 2600);
+      if (r.wishDone) this.loadWish();
+    } catch (e) {
+      toast((e as Error).message);
+    }
   }
 
   async loadUnread() {
@@ -163,6 +198,7 @@ class Game {
     this.nest = new NestScene(r.cat, r.layout, this.nestEnv());
     ui.set({ nest: r.layout, visiting: null, scene: 'nest', catOut: r.cat.location === 'world', build: false, play: false });
     this.setScene(this.nest);
+    if (ui.state.phase === 'game') this.loadWish();
     if (r.cat.location === 'world') ui.set({ hint: `${r.cat.name}正在外面探险，可以去小镇看看它` });
     else {
       ui.set({ hint: null });
@@ -245,8 +281,9 @@ class Game {
     if (kind !== 'feed' && (this.actCool.get(kind) ?? 0) > now) return;
     this.actCool.set(kind, now + 2500);
     try {
-      const r = await api<{ stats: CatRecord['stats']; inventory: Record<string, number> }>('POST', `/api/cat/${catId}/act`, { kind, item });
+      const r = await api<{ stats: CatRecord['stats']; inventory: Record<string, number>; wishDone?: boolean }>('POST', `/api/cat/${catId}/act`, { kind, item });
       patchCat(catId, { stats: r.stats });
+      if (ui.state.wish && !ui.state.wish.done) this.loadWish();
       ui.set((s) => ({ me: s.me ? { ...s.me, inventory: r.inventory } : s.me }));
       if (this.nest && this.nest.rec.id === catId) this.nest.rec.stats = r.stats;
     } catch (e) {
@@ -478,8 +515,14 @@ class Game {
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
     if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'friend')) ui.set((s) => ({ unread: s.unread + 1 }));
     if (m.t === 'event' && m.kind === 'bond') this.refreshMe().catch(() => {});
+    if (m.t === 'event' && m.kind === 'wish') {
+      this.loadWish();
+      this.refreshMe().catch(() => {});
+      audio.sparkle();
+      setTimeout(() => this.nest?.say('wish'), 600);
+    }
     if (m.t === 'event') {
-      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💛' : '🐾';
+      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : '🐾';
       toast(m.text, icon, 4200);
       if (m.kind === 'find' || m.kind === 'gift') audio.sparkle();
       if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift') this.refreshMe().catch(() => {});
@@ -507,8 +550,12 @@ class Game {
   }
 }
 
-export const game = new Game();
+// Reuse the running instance if this module is ever re-evaluated (hot reload).
+export const game: Game = (window as any).__game ?? new Game();
 (window as any).__game = game;
 
 // The game is a stateful singleton bound to a canvas: reload fully on code changes.
-if (import.meta.hot) import.meta.hot.accept(() => location.reload());
+if (import.meta.hot) {
+  import.meta.hot.accept(() => location.reload());
+  import.meta.hot.dispose(() => location.reload());
+}
