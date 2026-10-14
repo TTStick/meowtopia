@@ -63,6 +63,8 @@ npm run build && npm run build:server && npm start
 
 ## 部署到服务器（Linux + Docker）
 
+> 面向运维的分步手册（上传压缩包、一键脚本 `deploy/setup.sh`、国内服务器注意事项、备份迁移、常见问题）见 **[DEPLOY.md](DEPLOY.md)**。
+
 一台 1 核 2G 的 Linux 云服务器就够起步（60 个同时在线的压测里 CPU < 5%、内存 ~140MB）。整套服务是两个容器：游戏本身，和前面负责 HTTPS 的 Caddy。
 
 1. **准备**：域名解析（A 记录）指向服务器 IP；服务器防火墙 / 安全组放行 80、443（TCP）和 443（UDP，HTTP/3）。安装 Docker：

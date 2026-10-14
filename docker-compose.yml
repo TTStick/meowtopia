@@ -3,7 +3,10 @@
 #   docker compose up -d --build
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     image: catnest:latest
     restart: unless-stopped
     init: true

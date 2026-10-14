@@ -13,3 +13,8 @@ tests
 deploy
 Dockerfile
 docker-compose.yml
+ios
+release
+*.tar.gz
+caddy-root.crt
+secrets

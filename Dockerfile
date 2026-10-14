@@ -1,9 +1,11 @@
 # syntax=docker/dockerfile:1
 # ---- build: typecheck, bundle the web client and the server ----
 FROM node:24-alpine AS build
+# servers in mainland China: build with NPM_REGISTRY=https://registry.npmmirror.com
+ARG NPM_REGISTRY=https://registry.npmjs.org
 WORKDIR /src
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --registry="$NPM_REGISTRY"
 COPY tsconfig.json vite.config.ts ./
 COPY client ./client
 COPY server ./server

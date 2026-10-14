@@ -9,3 +9,4 @@ caddy-root.crt
 !.env.example
 !.env.ios.example
 *.log
+release/
