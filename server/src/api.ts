@@ -121,6 +121,12 @@ route('POST', '/api/cat/:id/rename', (r) => {
 });
 
 const petCooldown = new Map<string, number>();
+// keep the small in-memory tables from growing forever
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, t] of petCooldown) if (t < now) petCooldown.delete(k);
+  for (const [k, ts] of regLog) if (!ts.some((t) => now - t < 3600_000)) regLog.delete(k);
+}, 10 * 60_000).unref();
 route('POST', '/api/cat/:id/act', (r) => {
   const c = myCat(r.user.id, r.params.id);
   const kind = String(r.body.kind);

@@ -143,6 +143,11 @@ const CTX_DESC: Record<SpeechCtx, string> = {
 
 // ---- pools ----
 const pools = new Map<string, string[]>();
+const MAX_POOLS = 5000;
+/** Insert-ordered maps double as a crude LRU: drop the oldest keys past the cap. */
+function capPools(m: Map<string, string[]>) {
+  while (m.size > MAX_POOLS) m.delete(m.keys().next().value!);
+}
 const inflight = new Set<string>();
 
 function poolKey(catId: string, ctx: SpeechCtx, extra: string) {
@@ -163,7 +168,10 @@ async function refill(cat: CatRecord, ctx: SpeechCtx, info: SpeechInfo, key: str
     const r = await callJSON<{ lines: string[] }>(user, LINES_SCHEMA, 800);
     if (r?.lines?.length) {
       const clean = r.lines.map((s) => s.trim().slice(0, 40)).filter((s) => s.length > 0);
-      pools.set(key, [...(pools.get(key) ?? []), ...clean].slice(-12));
+      const merged = [...(pools.get(key) ?? []), ...clean].slice(-12);
+      pools.delete(key);
+      pools.set(key, merged);
+      capPools(pools);
     }
   } finally {
     inflight.delete(key);
@@ -240,7 +248,10 @@ export function npcLine(n: NpcPersona, situation: string, fallback: string[]): s
     const user = `这次请为小镇的猫猫居民写话（不是玩家的猫）。\n名字：${n.name}\n身份：${n.role}\n${n.desc}\n说话风格：${n.voice}\n\n${envInfo()}\n情境：${situation}\n请写 6 句它可能说的话，像在过日子的拟人小猫，每句不超过 24 字。`;
     void callJSON<{ lines: string[] }>(user, NPC_LINES_SCHEMA, 800)
       .then((r) => {
-        if (r?.lines?.length) npcPools.set(key, [...(npcPools.get(key) ?? []), ...r.lines.map((s) => s.slice(0, 40))].slice(-12));
+        if (r?.lines?.length) {
+          npcPools.set(key, [...(npcPools.get(key) ?? []), ...r.lines.map((s) => s.slice(0, 40))].slice(-12));
+          capPools(npcPools);
+        }
       })
       .finally(() => inflight.delete(key));
   }

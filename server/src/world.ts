@@ -64,6 +64,10 @@ interface Client {
 const ents = new Map<string, Ent>();
 const clients = new Set<Client>();
 const meetCooldown = new Map<string, number>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, t] of meetCooldown) if (t < now) meetCooldown.delete(k);
+}, 10 * 60_000).unref();
 
 // ---------- broadcast ----------
 function send(c: Client, m: ServerMsg) {
@@ -713,10 +717,17 @@ function snapshot(now: number): EntState[] {
 
 export function onConnection(ws: WebSocket, uid: string | null, nickname: string) {
   const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0 };
+  let budget = 40, budgetAt = Date.now();
   clients.add(c);
   send(c, { t: 'welcome', you: uid, ents: snapshot(Date.now()), now: Date.now(), online: clients.size });
   broadcast({ t: 'online', n: clients.size }, c);
   ws.on('message', (data) => {
+    // token bucket: ~20 messages/second sustained, bursts of 40
+    const now = Date.now();
+    budget = Math.min(40, budget + ((now - budgetAt) / 1000) * 20);
+    budgetAt = now;
+    if (budget < 1) return;
+    budget -= 1;
     let m: ClientMsg;
     try {
       m = JSON.parse(String(data));
