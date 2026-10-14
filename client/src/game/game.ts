@@ -281,6 +281,25 @@ class Game {
     this.nest?.setPlay(false);
     this.setScene(this.world);
     this.world.enter(focus);
+    this.worldTip();
+  }
+
+  /** One-time hints for the town, one per visit. */
+  private worldTip() {
+    const tips: [string, string][] = [
+      ['w_tap', '点一下地面，它就会走过去；点别的猫猫或居民，可以去打个招呼'],
+      ['w_ctrl', '想亲自带它逛？点「接管」，拖动屏幕当摇杆（电脑上用 WASD）'],
+      ['w_map', '打开「地图」点一个地方，它会自己慢慢走过去'],
+      ['w_talk', '在小镇里也可以跟它说话，比如“去码头看看海”'],
+    ];
+    const next = tips.find(([k]) => !this.tipFlag(k));
+    if (!next) return;
+    try {
+      localStorage.setItem(`catnest.tip.${next[0]}`, '1');
+    } catch {
+      return;
+    }
+    setTimeout(() => toast(next[1], '💡', 5200), 1500);
   }
 
   private setScene(s: Scene) {

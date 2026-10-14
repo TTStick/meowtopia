@@ -67,6 +67,20 @@ npm start
 
 服务会在 :8737 同时提供页面、API 和 WebSocket。手机访问需要 HTTPS（PWA 安装与推送通知都要求安全上下文），可放在 Caddy / Nginx 后面。
 
+## 部署到服务器
+
+1. 在服务器上安装 Node.js 24，拷贝项目，`npm install && npm run build`。
+2. 用 systemd（或 pm2）常驻运行 `npm start`，数据都在 `data/` 目录（SQLite + 推送密钥），记得备份。
+3. 前面放一个 HTTPS 反向代理。Caddy 最省事（自动申请证书，WebSocket 也会自动转发）：
+
+```
+cat.example.com {
+    reverse_proxy 127.0.0.1:8737
+}
+```
+
+4. 面向国内玩家时在 `.env` 里设 `CAT_WORLD_TZ=8`，让小镇的昼夜和居民作息跟北京时间走。
+
 ## 配置
 
 复制 `.env.example` 为 `.env`。全部可选：
