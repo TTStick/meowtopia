@@ -1,0 +1,15 @@
+{
+  "name": "猫窝",
+  "short_name": "猫窝",
+  "description": "养一只只属于你的线条小猫",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6eedf",
+  "theme_color": "#f6eedf",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
