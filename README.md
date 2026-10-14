@@ -55,46 +55,102 @@ npm run dev
 
 然后打开 http://localhost:5199 。
 
-生产：
+本地跑生产版：
 
 ```bash
-npm run build
+npm run build && npm run build:server && npm start
+```
+
+## 部署到服务器（Linux + Docker）
+
+一台 1 核 2G 的 Linux 云服务器就够起步（60 个同时在线的压测里 CPU < 5%、内存 ~140MB）。整套服务是两个容器：游戏本身，和前面负责 HTTPS 的 Caddy。
+
+1. **准备**：域名解析（A 记录）指向服务器 IP；服务器防火墙 / 安全组放行 80、443（TCP）和 443（UDP，HTTP/3）。安装 Docker：
+
+```bash
+curl -fsSL https://get.docker.com | sh
+```
+
+2. **拷贝项目并配置**：
+
+```bash
+git clone <你的仓库地址> catnest && cd catnest
 ```
 
 ```bash
-npm start
+cp .env.example .env
 ```
 
-服务会在 :8737 同时提供页面、API 和 WebSocket。手机访问需要 HTTPS（PWA 安装与推送通知都要求安全上下文），可放在 Caddy / Nginx 后面。
+编辑 `.env`：至少填 `CAT_DOMAIN`（你的域名），建议填 `CAT_ADMIN_TOKEN`（`openssl rand -hex 24` 生成）。
 
-## 部署到服务器
+3. **启动**：
 
-1. 在服务器上安装 Node.js 24，拷贝项目，`npm install && npm run build`。
-2. 用 systemd（或 pm2）常驻运行 `npm start`，数据都在 `data/` 目录（SQLite + 推送密钥），记得备份。
-3. 前面放一个 HTTPS 反向代理。Caddy 最省事（自动申请证书，WebSocket 也会自动转发）：
-
-```
-cat.example.com {
-    reverse_proxy 127.0.0.1:8737
-}
+```bash
+docker compose up -d --build
 ```
 
-4. 面向国内玩家时在 `.env` 里设 `CAT_WORLD_TZ=8`，让小镇的昼夜和居民作息跟北京时间走。
+几十秒后打开 `https://你的域名` 即可。证书由 Caddy 自动申请、自动续期。
+
+4. **更新版本**：
+
+```bash
+git pull && docker compose up -d --build
+```
+
+数据在名为 `catnest-data` 的 Docker 卷里（数据库、加密密钥、推送密钥、每日备份），更新、重启、重建容器都不会丢。
+
+**已经有自己的 Nginx / Caddy？** 删掉 `docker-compose.yml` 里的 `caddy` 服务，给 `app` 加上 `ports: ["127.0.0.1:8737:8737"]`，再让你的反向代理转发到 `127.0.0.1:8737`（WebSocket 路径是 `/ws`，需要转发 Upgrade 头），并传递 `X-Forwarded-For` / `X-Forwarded-Proto` / `Host`。
+
+### 日常运维
+
+```bash
+docker compose logs -f app
+```
+
+```bash
+docker compose exec app node scripts/admin.mjs stats
+```
+
+`admin.mjs` 还支持：`reports`（看举报）、`resolve <id>`、`ban <用户id或猫id> [原因]`、`unban <用户id>`、`rename-cat <猫id> <名字>`、`delete-note <id>`、`delete-diary <id>`。被封禁的账号会立即下线，它的猫回家，不再出现在小镇和串门列表里。
+
+**屏蔽词**：内置了一份常见的联系方式、链接、辱骂和诈骗词表；要追加，在数据卷里放一个 `blocklist.txt`（一行一个，改完自动生效）：
+
+```bash
+docker compose cp blocklist.txt app:/app/data/blocklist.txt
+```
+
+**备份**：服务每天自动在 `data/backups/` 生成一份一致的数据库快照，保留最近 7 天。拷到服务器外面：
+
+```bash
+docker compose cp app:/app/data/backups ./catnest-backups
+```
+
+恢复时停掉服务，把某天的 `cats-YYYY-MM-DD.db` 复制成卷里的 `cats.db`（并删除 `cats.db-wal`、`cats.db-shm`），再启动。
+
+## 账号与安全
+
+- **先玩后注册**：第一次打开只需要起个称呼，就有了一个游客账号。为了防止被脚本批量注册，浏览器会在后台做一道几百毫秒的计算题（工作量证明），注册多了难度会自动变高；每个 IP 每小时也有上限。
+- **给猫窝上锁**：玩了一会儿后会温柔地提醒一次。可以绑定**通行密钥**（面容 / 指纹 / 设备密码，会随 iCloud 钥匙串或谷歌密码管理器同步），也可以生成一串 12 位的**找回码**。找回码只显示一次，服务器只存它的加密摘要。不需要邮箱和手机号。
+- **登录状态**：每台设备一个独立的登录会话，存在 HttpOnly + Secure 的 Cookie 里（网页脚本读不到）。设置里能看到所有登录着的设备，可以单独退出或一键退出其他设备。会话 180 天有效，常来会自动续期。
+- **防护**：所有改动类请求都检查来源（防 CSRF），WebSocket 只认自家页面带来的 Cookie（防跨站劫持）；全站限流（按 IP 和按账号），模型调用有全服和单人每日额度；严格的 CSP、HSTS、禁止嵌入；推送地址只接受浏览器官方推送服务（防 SSRF）；容器以非 root、只读文件系统、去掉全部权限运行。
+- **社区**：名字、纸条、交换日记都会过滤联系方式（包括“加 我 V 信”“一三八……”这类变体）、链接和不友善的话；玩家可以举报猫、纸条和日记，管理员用 `admin.mjs` 处理。
+- **你的数据**：设置里可以导出全部数据（JSON），或者删除账号（共养的猫会留给对方）。隐私说明在设置里。
 
 ## 配置
 
-复制 `.env.example` 为 `.env`。全部可选：
+见 `.env.example`，每一项都有中文说明。常用的：
 
 | 变量 | 作用 |
 |---|---|
+| `CAT_DOMAIN` | 部署用的域名 |
+| `CAT_ADMIN_TOKEN` | 管理口令，留空则管理功能关闭 |
+| `CAT_WORLD_TZ` | 小镇的统一时钟（相对 UTC 的小时数），面向国内玩家设为 `8` |
 | `ANTHROPIC_API_KEY` | 开启 Claude 生成猫语 |
 | `CAT_LLM_MODEL` | 默认 `claude-opus-5-5`；想省钱可换 `claude-haiku-5-5` |
-| `CAT_LLM_RPM` / `CAT_LLM_DAILY` | 全服调用限速 |
+| `CAT_LLM_RPM` / `CAT_LLM_DAILY` / `CAT_LLM_USER_DAILY` | 全服限速与每人每日额度 |
 | `CAT_VAPID_SUBJECT` | Web Push 联系方式 |
-| `CAT_WORLD_TZ` | 小镇的统一时钟（相对 UTC 的小时数，默认取服务器所在时区；面向国内玩家设为 `8`） |
-| `PORT` / `CAT_DB` | 端口、数据库路径 |
 
-模型调用做了“台词池”缓存：每次按场景批量生成几句，玩家拿到的永远是现成的一句，后台再补货，所以不会卡顿，也不会每句话都花钱。
+模型调用做了“台词池”缓存：每次按场景批量生成几句，玩家拿到的永远是现成的一句，后台再补货，所以不会卡顿，也不会每句话都花钱。模型生成的句子在展示给其他玩家前同样会经过屏蔽词过滤。
 
 ## 测试
 
@@ -102,7 +158,7 @@ cat.example.com {
 npm test
 ```
 
-包括：小镇每个地点从家门口都走得到、寻路、猫窝布局校验、数值“温柔”约束（一周没人管也不会饿坏）、每日心愿、兜底猫语覆盖所有场景、物品表一致性，以及一个真实启动服务器、走完注册 → 领养 → 喂食 → 购物 → 装修 → 共养全流程的接口测试。
+包括：小镇每个地点从家门口都走得到、寻路、猫窝布局校验、数值“温柔”约束（一周没人管也不会饿坏）、每日心愿、兜底猫语覆盖所有场景、物品表一致性；以及真实启动服务器的接口测试：工作量证明注册、Cookie 会话、CSRF 与跨站 WebSocket 拦截、找回码、通行密钥（用软件模拟的密钥完成绑定与登录）、设备管理、共养、删号移交、导出、举报与封禁、静态文件越权访问。
 
 ## 调试小工具
 

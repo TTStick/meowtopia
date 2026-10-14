@@ -9,10 +9,12 @@ import { fallbackLine, fallbackDialogue, fallbackJournal, type SpeechCtx, type S
 import { clockAt, phaseOf, PHASE_NAME, weatherAt, WEATHER_NAME, SEASON_NAME } from '../../shared/time';
 import { ageOf } from '../../shared/stats';
 import { POI_ALIASES } from '../../shared/world';
+import { textProblem } from './moderation';
 
 const MODEL = process.env.CAT_LLM_MODEL || 'claude-opus-5-5';
 const RPM = Number(process.env.CAT_LLM_RPM || 40);
 const DAILY = Number(process.env.CAT_LLM_DAILY || 4000);
+const USER_DAILY = Number(process.env.CAT_LLM_USER_DAILY || 120);
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey
@@ -40,6 +42,23 @@ function takeBudget(): boolean {
   if (windowCount >= RPM || dayCount >= DAILY) return false;
   windowCount++;
   dayCount++;
+  return true;
+}
+
+// Each player gets a daily share of model calls; past it their cat still talks,
+// just from the hand-written lines.
+const userCalls = new Map<string, number>();
+let userDay = dayKey;
+function takeUserBudget(uid: string | undefined): boolean {
+  if (!uid) return true;
+  const dk = new Date().toDateString();
+  if (dk !== userDay) {
+    userDay = dk;
+    userCalls.clear();
+  }
+  const n = userCalls.get(uid) ?? 0;
+  if (n >= USER_DAILY) return false;
+  userCalls.set(uid, n + 1);
   return true;
 }
 
@@ -167,7 +186,7 @@ async function refill(cat: CatRecord, ctx: SpeechCtx, info: SpeechInfo, key: str
     const user = `${catInfo(cat)}\n\n${envInfo()}\n场景：${CTX_DESC[ctx]}\n${details}\n\n请写 6 句这只猫此刻可能说的话，彼此不同。`;
     const r = await callJSON<{ lines: string[] }>(user, LINES_SCHEMA, 800);
     if (r?.lines?.length) {
-      const clean = r.lines.map((s) => s.trim().slice(0, 40)).filter((s) => s.length > 0);
+      const clean = r.lines.map((s) => s.trim().slice(0, 40)).filter((s) => s.length > 0 && !textProblem(s));
       const merged = [...(pools.get(key) ?? []), ...clean].slice(-12);
       pools.delete(key);
       pools.set(key, merged);
@@ -179,7 +198,7 @@ async function refill(cat: CatRecord, ctx: SpeechCtx, info: SpeechInfo, key: str
 }
 
 /** Get a line immediately (from pool or fallback) and top up the pool in the background. */
-export function catLine(cat: CatRecord, ctx: SpeechCtx, info: Partial<SpeechInfo> = {}): string {
+export function catLine(cat: CatRecord, ctx: SpeechCtx, info: Partial<SpeechInfo> = {}, uid?: string): string {
   const ck = clockAt(Date.now());
   const full: SpeechInfo = { name: cat.name, p: cat.personality, phase: phaseOf(ck.hour), weather: weatherAt(Date.now()).kind, season: ck.season, memory: cat.memory, ...info };
   const extra = `${info.place ?? ''}${info.item ?? ''}${info.other ?? ''}${info.food ?? ''}${ctx === 'idle' ? `${full.phase}${full.weather}` : ''}`;
@@ -189,7 +208,7 @@ export function catLine(cat: CatRecord, ctx: SpeechCtx, info: Partial<SpeechInfo
   if (pool && pool.length) {
     line = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
   }
-  if (client && (!pool || pool.length < 2)) void refill(cat, ctx, full, key);
+  if (client && (!pool || pool.length < 2) && !inflight.has(key) && takeUserBudget(uid)) void refill(cat, ctx, full, key);
   return line ?? fallbackLine(ctx, full);
 }
 
@@ -267,9 +286,9 @@ export interface CommandResult {
   reply: string;
 }
 
-export async function interpretCommand(cat: CatRecord, text: string, places: { id: string; name: string }[], where: 'nest' | 'world'): Promise<CommandResult> {
+export async function interpretCommand(cat: CatRecord, text: string, places: { id: string; name: string }[], where: 'nest' | 'world', uid?: string): Promise<CommandResult> {
   const fb = keywordCommand(text, places);
-  if (!client) return { ...fb, reply: fallbackLine(fb.action === 'unknown' ? 'command_confused' : 'command_ok', { name: cat.name, p: cat.personality }) };
+  if (!client || !takeUserBudget(uid)) return { ...fb, reply: fallbackLine(fb.action === 'unknown' ? 'command_confused' : 'command_ok', { name: cat.name, p: cat.personality }) };
   const schema = {
     type: 'object',
     properties: {

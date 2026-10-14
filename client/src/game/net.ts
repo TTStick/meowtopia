@@ -1,18 +1,25 @@
 import type { ClientMsg, ServerMsg } from '../../../shared/protocol';
 
-const TOKEN_KEY = 'catnest.token';
+// Browsers are signed in with an HttpOnly cookie the page can't read. The native
+// app (no shared cookie jar with the server) holds a bearer token instead.
+let bearer: string | null = null;
+export function setBearer(t: string | null) {
+  bearer = t;
+}
 
-export function getToken(): string | null {
+const LEGACY_KEY = 'catnest.token';
+/** Token from older versions that kept it in localStorage; moved to a cookie once. */
+export function takeLegacyToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    const t = localStorage.getItem(LEGACY_KEY);
+    return t;
   } catch {
     return null;
   }
 }
-export function setToken(t: string | null) {
+export function clearLegacyToken() {
   try {
-    if (t) localStorage.setItem(TOKEN_KEY, t);
-    else localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
     /* private mode */
   }
@@ -26,14 +33,14 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
-  const t = getToken();
+export async function api<T = any>(method: string, path: string, body?: unknown, auth?: string): Promise<T> {
+  const headers: Record<string, string> = { 'x-catnest': '1' };
+  const t = auth ?? bearer;
   if (t) headers.authorization = `Bearer ${t}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
-    res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    res = await fetch(path, { method, headers, credentials: 'same-origin', body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
     throw new ApiError(0, '网络好像断开了');
   }
@@ -58,13 +65,15 @@ export class WorldSocket {
   private pingTimer: any;
   connected = false;
   onState?: (connected: boolean) => void;
+  onKicked?: () => void;
 
   connect() {
     this.closed = false;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws?t=${encodeURIComponent(getToken() ?? '')}`);
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
     this.ws = ws;
     ws.onopen = () => {
+      if (bearer) ws.send(JSON.stringify({ t: 'auth', token: bearer }));
       this.connected = true;
       this.retry = 0;
       this.onState?.(true);
@@ -82,10 +91,15 @@ export class WorldSocket {
       }
       this.handlers.forEach((h) => h(m));
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       this.connected = false;
       this.onState?.(false);
       clearInterval(this.pingTimer);
+      if (ev.code === 4003) {
+        // signed out elsewhere, deleted or suspended: don't hammer the server
+        this.closed = true;
+        this.onKicked?.();
+      }
       if (this.closed) return;
       const d = Math.min(10_000, 800 * 2 ** this.retry++);
       setTimeout(() => !this.closed && this.connect(), d);

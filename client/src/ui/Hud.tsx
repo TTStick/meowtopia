@@ -11,6 +11,7 @@ import { phaseOf, PHASE_NAME, SEASON_NAME } from '../../../shared/time';
 import * as clock from '../game/clock';
 import { NPC_MAP } from '../../../shared/npcs';
 import * as I from './icons';
+import { ReportLink } from './Account';
 
 function open(panel: Panel) {
   audio.blip(600, 0.06);
@@ -363,6 +364,7 @@ function TargetCard() {
               去它家串门
             </button>
           )}
+          {!npc && e?.st.ownerId && e.st.ownerId !== 'town' && e.st.ownerId !== ui.state.me?.user.id && <ReportLink kind="cat" target={t.id} />}
           <button class="btn small ghost" onClick={() => ui.set({ worldTarget: null })}>
             <I.IClose size={18} />
           </button>

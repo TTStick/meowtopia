@@ -2,7 +2,8 @@
 // never guilt-trips. In-app letters are always stored; push is optional.
 import webpush from 'web-push';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join } from 'node:path';
+import { DATA_DIR } from './config';
 import { route, HttpError } from './http';
 import * as db from './db';
 import * as game from './game';
@@ -10,21 +11,35 @@ import { localClock } from '../../shared/time';
 import { catLetter } from './llm';
 import { fallbackLine } from '../../shared/speech';
 
-const VAPID_PATH = resolve('data/vapid.json');
+const VAPID_PATH = join(DATA_DIR, 'vapid.json');
 let keys: { publicKey: string; privateKey: string };
 if (existsSync(VAPID_PATH)) keys = JSON.parse(readFileSync(VAPID_PATH, 'utf8'));
 else {
   keys = webpush.generateVAPIDKeys();
-  writeFileSync(VAPID_PATH, JSON.stringify(keys));
+  writeFileSync(VAPID_PATH, JSON.stringify(keys), { mode: 0o600 });
 }
 webpush.setVapidDetails(process.env.CAT_VAPID_SUBJECT || 'mailto:hello@example.com', keys.publicKey, keys.privateKey);
 
-route('GET', '/api/push/key', () => ({ key: keys.publicKey }), false);
+route('GET', '/api/push/key', () => ({ key: keys.publicKey }), { auth: false });
+
+// The server POSTs to whatever endpoint a subscription names, so only accept the
+// browsers' real push services (never an address inside our own network).
+const PUSH_HOSTS = ['fcm.googleapis.com', 'android.googleapis.com', 'updates.push.services.mozilla.com', 'push.services.mozilla.com', 'web.push.apple.com', 'notify.windows.com', 'push.apple.com', ...(process.env.CAT_PUSH_HOSTS || '').split(',').map((s) => s.trim()).filter(Boolean)];
+function pushEndpointOk(endpoint: unknown): boolean {
+  if (typeof endpoint !== 'string' || endpoint.length > 1000) return false;
+  try {
+    const u = new URL(endpoint);
+    return u.protocol === 'https:' && !u.port && PUSH_HOSTS.some((h) => u.hostname === h || u.hostname.endsWith('.' + h));
+  } catch {
+    return false;
+  }
+}
 
 route('POST', '/api/push/subscribe', (r) => {
   const sub = r.body.sub;
-  if (!sub?.endpoint || !sub?.keys?.p256dh) throw new HttpError(400, '订阅信息不对');
-  db.updateUser(r.user.id, { push_sub: JSON.stringify(sub) });
+  if (!pushEndpointOk(sub?.endpoint) || typeof sub?.keys?.p256dh !== 'string' || typeof sub?.keys?.auth !== 'string') throw new HttpError(400, '订阅信息不对');
+  const clean = { endpoint: sub.endpoint, expirationTime: null, keys: { p256dh: sub.keys.p256dh.slice(0, 200), auth: sub.keys.auth.slice(0, 100) } };
+  db.updateUser(r.user.id, { push_sub: JSON.stringify(clean) });
   const s = game.settingsOf(r.user);
   db.updateUser(r.user.id, { settings: JSON.stringify({ ...s, push: true }) });
   return { ok: true };
@@ -65,7 +80,7 @@ const MAX_PER_DAY = 4;
 
 async function tick() {
   const now = Date.now();
-  const users = db.db.prepare("SELECT * FROM users WHERE push_sub IS NOT NULL").all() as unknown as db.UserRow[];
+  const users = db.db.prepare('SELECT * FROM users WHERE push_sub IS NOT NULL AND banned = 0').all() as unknown as db.UserRow[];
   for (const u of users) {
     const s = game.settingsOf(u);
     if (!s.push) continue;
@@ -83,7 +98,7 @@ async function tick() {
       const e = evs[0];
       payload = { title: e.title, body: evs.length > 1 ? `${e.text}（还有${evs.length - 1}件小事）` : e.text, tag: e.kind };
       db.db.prepare('UPDATE events SET pushed = 1 WHERE user_id = ? AND pushed = 0').run(u.id);
-    } else if (ck.hour >= 20 && ck.hour < 21.5 && now - u.last_seen > 20 * 3600_000 && u.push_day !== ck.day) {
+    } else if (ck.hour >= 20 && ck.hour < 21.5 && now - u.last_seen > 20 * 3600_000 && now - u.last_seen < 21 * 86400_000 && u.push_day !== ck.day) {
       // one soft evening letter on days the user hasn't come by
       const cat = game.catsOf(u.id)[0];
       if (cat) {

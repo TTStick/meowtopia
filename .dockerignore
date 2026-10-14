@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+data
+.env
+.env.*
+!.env.example
+*.log
+.git
+.claude
+docs
+tests
+deploy
+Dockerfile
+docker-compose.yml

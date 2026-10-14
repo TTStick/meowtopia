@@ -613,13 +613,23 @@ function chatter(now: number) {
 }
 
 // ---------- autonomous trips ----------
+// Only cats whose people have been around lately wander on their own, so the
+// town stays lively without filling up with cats nobody will ever check on.
+const ACTIVE_OWNER_DAYS = 7;
+const MAX_WANDERERS = Number(process.env.CAT_MAX_WANDERERS || 60);
 function autoTrips(now: number) {
   const ck = clockAt(now);
   if (ck.hour < 8.5 || ck.hour > 18) return;
   const w = weatherAt(now);
   if (w.kind === 'rain' || w.kind === 'snow') return;
-  const rows = db.db.prepare("SELECT id FROM cats WHERE owner_id != 'town'").all() as { id: string }[];
+  let wandering = 0;
+  for (const e of ents.values()) if (e.cat && e.cat.ownerId !== 'town' && e.trip && !e.trip.userSent) wandering++;
+  if (wandering >= MAX_WANDERERS) return;
+  const rows = db.db
+    .prepare("SELECT c.id FROM cats c JOIN users u ON u.id = c.owner_id WHERE c.owner_id != 'town' AND u.banned = 0 AND u.last_seen > ? ORDER BY RANDOM() LIMIT 400")
+    .all(now - ACTIVE_OWNER_DAYS * 86400_000) as { id: string }[];
   for (const { id } of rows) {
+    if (wandering >= MAX_WANDERERS) break;
     if (ents.has(id)) continue;
     const c = game.getCat(id);
     if (!c || c.location !== 'nest') continue;
@@ -627,7 +637,7 @@ function autoTrips(now: number) {
     game.refresh(c, now);
     if (c.stats.energy < 35) continue;
     const p = 1 / 200 * (0.5 + c.personality.curious + c.personality.brave * 0.5 - c.personality.lazy * 0.4);
-    if (Math.random() < p) startTrip(c, false);
+    if (Math.random() < p && startTrip(c, false)) wandering++;
   }
 }
 
@@ -657,7 +667,7 @@ function ensureResidents() {
 }
 
 function restoreCats() {
-  const rows = db.db.prepare("SELECT id FROM cats WHERE owner_id != 'town'").all() as { id: string }[];
+  const rows = db.db.prepare("SELECT c.id FROM cats c JOIN users u ON u.id = c.owner_id WHERE c.owner_id != 'town' AND u.banned = 0").all() as { id: string }[];
   const now = Date.now();
   for (const { id } of rows) {
     const c = game.getCat(id);
@@ -709,6 +719,7 @@ game.onNotify((uid, ev) => {
 });
 
 export function startWorld() {
+  game.keepCached((id) => ents.has(id));
   ensureResidents();
   restoreCats();
   setInterval(tick, 250).unref();
@@ -745,8 +756,42 @@ function snapshot(now: number): EntState[] {
   return out;
 }
 
+/** A banned or deleted account: drop its connections and send its cats home. */
+export function kickUser(uid: string, deletedCats: string[] = []) {
+  for (const c of [...clients]) if (c.uid === uid) c.ws.close(4003, 'account');
+  for (const e of [...ents.values()]) {
+    if (!e.cat) continue;
+    if (deletedCats.includes(e.cat.id)) {
+      despawn(e, 'leave');
+    } else if (e.cat.ownerId === uid && !e.cat.coOwnerId) {
+      despawn(e, 'home');
+      e.cat.location = 'nest';
+      game.saveNow(e.cat);
+    }
+  }
+}
+
+// drop connections that stopped answering (phones going to sleep, flaky networks)
+const alive = new WeakSet<WebSocket>();
+setInterval(() => {
+  for (const c of clients) {
+    if (!alive.has(c.ws)) {
+      c.ws.terminate();
+      continue;
+    }
+    alive.delete(c.ws);
+    try {
+      c.ws.ping();
+    } catch {
+      /* closed */
+    }
+  }
+}, 30_000).unref();
+
 export function onConnection(ws: WebSocket, uid: string | null, nickname: string) {
   const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0, view: null };
+  alive.add(ws);
+  ws.on('pong', () => alive.add(ws));
   if (uid) for (const cat of game.catsOf(uid)) c.cats.add(cat.id);
   let budget = 40, budgetAt = Date.now();
   clients.add(c);
@@ -759,6 +804,7 @@ export function onConnection(ws: WebSocket, uid: string | null, nickname: string
     budgetAt = now;
     if (budget < 1) return;
     budget -= 1;
+    alive.add(ws);
     let m: ClientMsg;
     try {
       m = JSON.parse(String(data));

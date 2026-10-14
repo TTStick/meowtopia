@@ -1,0 +1,18 @@
+# Caddy 自动申请和续期 HTTPS 证书。CAT_DOMAIN 来自 .env。
+{$CAT_DOMAIN} {
+	encode zstd gzip
+	# 不信任客户端自带的 X-Forwarded-*，由 Caddy 写入真实 IP
+	reverse_proxy app:8737 {
+		transport http {
+			keepalive 60s
+		}
+	}
+	header -Server
+	request_body {
+		max_size 1MB
+	}
+	log {
+		output stdout
+		format console
+	}
+}

@@ -105,3 +105,18 @@ test('weather is shared and the world clock follows the configured timezone', ()
   setWorldTz(2);
   assert.equal(Math.floor(clockAt(t).hour), 14);
 });
+
+test('proof-of-work sha256 matches node crypto', async () => {
+  const { createHash } = await import('node:crypto');
+  const { sha256Word0, zeroBits } = await import('../client/src/game/sha256');
+  for (const msg of ['abc', '0123456789abcdef0123456789abcdef:0', 'f00d:123456789']) {
+    const bytes = new TextEncoder().encode(msg);
+    const buf = new Uint8Array(64);
+    buf.set(bytes);
+    const [w0, w1] = sha256Word0(buf, bytes.length);
+    const ref = createHash('sha256').update(msg).digest();
+    assert.equal(w0, ref.readUInt32BE(0));
+    assert.equal(w1, ref.readUInt32BE(4));
+    assert.ok(zeroBits(w0, w1) >= 0);
+  }
+});

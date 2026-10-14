@@ -27,33 +27,7 @@ function myCat(uid: string, id: string): CatRecord {
   return game.refresh(c);
 }
 
-// ---------- account ----------
-const regLog = new Map<string, number[]>();
-route('POST', '/api/register', (r) => {
-  const ip = String(r.raw.headers['x-forwarded-for'] ?? r.raw.socket.remoteAddress ?? '').split(',')[0].trim();
-  const now = Date.now();
-  const recent = (regLog.get(ip) ?? []).filter((t) => now - t < 3600_000);
-  const devLoopback = process.env.NODE_ENV !== 'production' && /^(::1|127\.|::ffff:127\.)/.test(ip);
-  if (recent.length >= 12 && !devLoopback) throw new HttpError(429, '领养得太频繁啦，休息一下再来吧');
-  recent.push(now);
-  regLog.set(ip, recent);
-  const nickname = r.body.nickname ? cleanText(str(r.body.nickname, 12, '昵称')) : '铲屎官';
-  const id = 'u_' + randomUUID().replace(/-/g, '').slice(0, 12);
-  const token = randomBytes(24).toString('base64url');
-  const recovery = `${code(4)}-${code(4)}-${code(4)}`;
-  const settings: UserSettings = { ...game.DEFAULT_SETTINGS, tzOffset: Number(r.body.tzOffset) || -480 };
-  db.insertUser({ id, token, code: recovery, nickname, fish: 200, settings });
-  return { token, me: game.me(db.getUser(id)!) };
-}, false);
-
-route('POST', '/api/login', (r) => {
-  const c = str(r.body.code, 20, '找回码').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const formatted = c.length === 12 ? `${c.slice(0, 4)}-${c.slice(4, 8)}-${c.slice(8)}` : c;
-  const u = db.getUserByCode(formatted);
-  if (!u) throw new HttpError(404, '没有找到这个找回码');
-  return { token: u.token, me: game.me(u) };
-}, false);
-
+// ---------- account (sign-in lives in auth.ts) ----------
 route('GET', '/api/me', (r) => {
   const me = game.me(r.user);
   const gap = Date.now() - r.user.last_seen;
@@ -126,7 +100,6 @@ const petCooldown = new Map<string, number>();
 setInterval(() => {
   const now = Date.now();
   for (const [k, t] of petCooldown) if (t < now) petCooldown.delete(k);
-  for (const [k, ts] of regLog) if (!ts.some((t) => now - t < 3600_000)) regLog.delete(k);
 }, 10 * 60_000).unref();
 route('POST', '/api/cat/:id/act', (r) => {
   const c = myCat(r.user.id, r.params.id);
@@ -230,18 +203,18 @@ route('GET', '/api/cat/:id/line', (r) => {
     const v = r.query.get(k);
     if (v) info[k] = v.slice(0, 20);
   }
-  return { text: catLine(c, ctx, { ...info, owner: r.user.nickname }) };
-});
+  return { text: catLine(c, ctx, { ...info, owner: r.user.nickname }, r.user.id) };
+}, { limit: 'llm' });
 
 route('POST', '/api/cat/:id/command', async (r) => {
   const c = myCat(r.user.id, r.params.id);
   const text = str(r.body.text, 60, '指令');
   const where = r.body.where === 'world' ? 'world' : 'nest';
   const places = POIS.filter((p) => c.discovered.includes(p.id) || where === 'world').map((p) => ({ id: p.id, name: p.name }));
-  return interpretCommand(c, text, places, where);
-});
+  return interpretCommand(c, text, places, where, r.user.id);
+}, { limit: 'llm' });
 
-route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ }), false);
+route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ }), { auth: false });
 
 // ---------- nest ----------
 route('GET', '/api/nest/:catId', (r) => {
@@ -327,7 +300,9 @@ route('GET', '/api/cat/:id/friends', (r) => {
 });
 
 route('GET', '/api/visit/random', (r) => {
-  const rows = db.db.prepare("SELECT id FROM cats WHERE owner_id != ? AND (co_owner_id IS NULL OR co_owner_id != ?) AND owner_id != 'town' ORDER BY RANDOM() LIMIT 8").all(r.user.id, r.user.id) as { id: string }[];
+  const rows = db.db
+    .prepare("SELECT c.id FROM cats c JOIN users u ON u.id = c.owner_id WHERE c.owner_id != ? AND (c.co_owner_id IS NULL OR c.co_owner_id != ?) AND c.owner_id != 'town' AND u.banned = 0 AND u.last_seen > ? ORDER BY RANDOM() LIMIT 8")
+    .all(r.user.id, r.user.id, Date.now() - 14 * 86400_000) as { id: string }[];
   return rows.map((x) => game.getCat(x.id)).filter(Boolean).map((c) => ({ id: c!.id, name: c!.name, genes: c!.genes, outfit: c!.outfit, location: c!.location }));
 });
 
@@ -349,7 +324,9 @@ route('POST', '/api/notes', (r) => {
 route('GET', '/api/notes/:catId', (r) => {
   const c = game.getCat(r.params.catId);
   if (!c) throw new HttpError(404, '找不到');
-  const rows = db.db.prepare('SELECT id, from_name, from_cat, sticker, text, ts, seen FROM notes WHERE cat_id = ? ORDER BY ts DESC LIMIT 30').all(c.id);
+  const rows = db.db
+    .prepare('SELECT n.id, n.from_name, n.from_cat, n.sticker, n.text, n.ts, n.seen FROM notes n LEFT JOIN users u ON u.id = n.from_user WHERE n.cat_id = ? AND COALESCE(u.banned, 0) = 0 ORDER BY n.ts DESC LIMIT 30')
+    .all(c.id);
   if (game.canAccess(r.user.id, c)) db.db.prepare('UPDATE notes SET seen = 1 WHERE cat_id = ?').run(c.id);
   return rows;
 });
@@ -359,7 +336,7 @@ function bondView(uid: string, b: any) {
   const partnerId = b.user_a === uid ? b.user_b : b.user_a;
   const partner = partnerId ? db.getUser(partnerId) : undefined;
   const cat = b.cat_id ? game.getCat(b.cat_id) : undefined;
-  const diary = db.db.prepare('SELECT user_id, text, ts FROM diary WHERE bond_id = ? ORDER BY ts DESC LIMIT 30').all(b.id) as any[];
+  const diary = db.db.prepare('SELECT id, user_id, text, ts FROM diary WHERE bond_id = ? ORDER BY ts DESC LIMIT 30').all(b.id) as any[];
   return {
     id: b.id,
     status: b.status,
@@ -367,7 +344,7 @@ function bondView(uid: string, b: any) {
     partnerName: partner?.nickname ?? null,
     cat: cat ? game.refresh(cat) : null,
     created: b.created,
-    diary: diary.map((d) => ({ mine: d.user_id === uid, text: d.text, ts: d.ts })),
+    diary: diary.map((d) => ({ id: d.id, mine: d.user_id === uid, text: d.text, ts: d.ts })),
   };
 }
 
@@ -391,7 +368,9 @@ route('GET', '/api/bond', (r) => {
 route('POST', '/api/bond/match', (r) => {
   const active = db.db.prepare("SELECT COUNT(*) n FROM bonds WHERE (user_a = ? OR user_b = ?) AND status = 'active'").get(r.user.id, r.user.id) as { n: number };
   if (active.n >= 2) throw new HttpError(400, '已经有两只共养的猫猫啦');
-  const other = db.db.prepare('SELECT user_id FROM match_queue WHERE user_id != ? ORDER BY ts LIMIT 1').get(r.user.id) as { user_id: string } | undefined;
+  const other = db.db
+    .prepare('SELECT q.user_id FROM match_queue q JOIN users u ON u.id = q.user_id WHERE q.user_id != ? AND u.banned = 0 AND q.ts > ? ORDER BY q.ts LIMIT 1')
+    .get(r.user.id, Date.now() - 3 * 86400_000) as { user_id: string } | undefined;
   if (other) {
     const already = db.db.prepare("SELECT 1 FROM bonds WHERE status = 'active' AND ((user_a = ? AND user_b = ?) OR (user_a = ? AND user_b = ?))").get(r.user.id, other.user_id, other.user_id, r.user.id);
     if (!already) {
@@ -425,7 +404,7 @@ route('POST', '/api/bond/join', (r) => {
   db.db.prepare("UPDATE bonds SET status = 'ended' WHERE id = ?").run(b.id);
   createBond(b.user_a, r.user.id);
   return { ok: true };
-});
+}, { limit: 'login', by: 'user' });
 
 route('POST', '/api/bond/:id/diary', (r) => {
   const b = db.db.prepare("SELECT * FROM bonds WHERE id = ? AND status = 'active' AND (user_a = ? OR user_b = ?)").get(r.params.id, r.user.id, r.user.id) as any;

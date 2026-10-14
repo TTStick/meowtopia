@@ -1,0 +1,57 @@
+# 猫窝：一台 Linux 服务器 + Docker 即可上线。
+#   cp .env.example .env   # 填好 CAT_DOMAIN 等
+#   docker compose up -d --build
+services:
+  app:
+    build: .
+    image: catnest:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      CAT_DATA_DIR: /app/data
+    volumes:
+      - catnest-data:/app/data
+    expose:
+      - "8737"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CAT_DOMAIN: ${CAT_DOMAIN:?请在 .env 里设置 CAT_DOMAIN，例如 cat.example.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  catnest-data:
+  caddy-data:
+  caddy-config:

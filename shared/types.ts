@@ -123,7 +123,7 @@ export interface InventoryMap {
 }
 
 export interface MeResponse {
-  user: UserPublic & { fish: number; settings: UserSettings; code: string };
+  user: UserPublic & { fish: number; settings: UserSettings; secured: boolean };
   cats: CatRecord[];
   activeCatId: string | null;
   inventory: InventoryMap;

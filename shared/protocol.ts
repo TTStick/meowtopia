@@ -52,4 +52,5 @@ export type ClientMsg =
   | { t: 'interact'; catId: string; target: string }
   | { t: 'explore'; catId: string }
   | { t: 'view'; x: number; y: number } // camera centre, for area-of-interest filtering
-  | { t: 'ping' };
+  | { t: 'ping' }
+  | { t: 'auth'; token: string }; // first message from clients without a session cookie (native app)

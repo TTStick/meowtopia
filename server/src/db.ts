@@ -1,9 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type { CatRecord, NestLayout, UserSettings, JournalEntry, InventoryMap } from '../../shared/types';
+import { DATA_DIR } from './config';
 
-const DB_PATH = resolve(process.env.CAT_DB ?? 'data/cats.db');
+export const DB_PATH = resolve(process.env.CAT_DB ?? join(DATA_DIR, 'cats.db'));
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 export const db = new DatabaseSync(DB_PATH);
@@ -109,12 +110,63 @@ CREATE TABLE IF NOT EXISTS kv (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  created INTEGER NOT NULL,
+  last_used INTEGER NOT NULL,
+  expires INTEGER NOT NULL,
+  agent TEXT,
+  kind TEXT NOT NULL DEFAULT 'web'
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+CREATE TABLE IF NOT EXISTS passkeys (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  public_key BLOB NOT NULL,
+  counter INTEGER NOT NULL,
+  transports TEXT,
+  device_type TEXT,
+  backed_up INTEGER NOT NULL DEFAULT 0,
+  name TEXT,
+  created INTEGER NOT NULL,
+  last_used INTEGER
+);
+CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys(user_id);
+CREATE TABLE IF NOT EXISTS reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reporter TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  target TEXT NOT NULL,
+  detail TEXT,
+  reason TEXT,
+  ts INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open'
+);
+CREATE INDEX IF NOT EXISTS reports_status ON reports(status, ts);
+CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen);
 `);
+
+function addColumn(table: string, col: string, def: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('users', 'code_hash', 'TEXT');
+addColumn('users', 'code_at', 'INTEGER');
+addColumn('users', 'banned', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('users', 'ban_reason', 'TEXT');
+addColumn('reports', 'target_user', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS users_code_hash ON users(code_hash)');
 
 export interface UserRow {
   id: string;
-  token: string;
-  code: string;
+  token: string; // legacy placeholder ('~' + id); real credentials live in sessions
+  code: string; // legacy placeholder; recovery codes are stored hashed in code_hash
+  code_hash: string | null;
+  code_at: number | null;
+  banned: number;
+  ban_reason: string | null;
   nickname: string;
   fish: number;
   settings: string;
@@ -129,9 +181,8 @@ export interface UserRow {
 }
 
 const q = {
-  userByToken: db.prepare('SELECT * FROM users WHERE token = ?'),
   userById: db.prepare('SELECT * FROM users WHERE id = ?'),
-  userByCode: db.prepare('SELECT * FROM users WHERE code = ?'),
+  userByCodeHash: db.prepare('SELECT * FROM users WHERE code_hash = ?'),
   insertUser: db.prepare('INSERT INTO users (id, token, code, nickname, fish, settings, created, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
   catsByUser: db.prepare('SELECT data FROM cats WHERE owner_id = ? OR co_owner_id = ? ORDER BY rowid'),
   catById: db.prepare('SELECT data FROM cats WHERE id = ?'),
@@ -148,18 +199,15 @@ const q = {
   addEvent: db.prepare('INSERT INTO events (user_id, ts, kind, title, text) VALUES (?, ?, ?, ?, ?)'),
 };
 
-export function getUserByToken(token: string): UserRow | undefined {
-  return q.userByToken.get(token) as UserRow | undefined;
-}
 export function getUser(id: string): UserRow | undefined {
   return q.userById.get(id) as UserRow | undefined;
 }
-export function getUserByCode(code: string): UserRow | undefined {
-  return q.userByCode.get(code) as UserRow | undefined;
+export function getUserByCodeHash(hash: string): UserRow | undefined {
+  return q.userByCodeHash.get(hash) as UserRow | undefined;
 }
-export function insertUser(u: { id: string; token: string; code: string; nickname: string; fish: number; settings: UserSettings }) {
+export function insertUser(u: { id: string; nickname: string; fish: number; settings: UserSettings }) {
   const now = Date.now();
-  q.insertUser.run(u.id, u.token, u.code, u.nickname, u.fish, JSON.stringify(u.settings), now, now);
+  q.insertUser.run(u.id, '~' + u.id, '~' + u.id, u.nickname, u.fish, JSON.stringify(u.settings), now, now);
 }
 export function updateUser(id: string, patch: Partial<Omit<UserRow, 'id'>>) {
   const keys = Object.keys(patch);

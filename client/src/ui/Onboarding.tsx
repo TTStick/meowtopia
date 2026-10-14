@@ -5,11 +5,12 @@ import { LiveCat } from './LiveCat';
 import { randomGenes, randomPersonality, coatName, traitWords, CAT_NAMES } from '../../../shared/genes';
 import { audio } from '../game/audio';
 import { hash3 } from '../../../shared/rng';
+import { prepareGuest } from '../game/pow';
+import { RecoverForm } from './Account';
 
 export function Welcome() {
   const [mode, setMode] = useState<'start' | 'name' | 'code'>('start');
   const [nick, setNick] = useState('');
-  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const heroGenes = useMemo(() => randomGenes((Date.now() / 86400000) | 0), []);
   const run = async (f: () => Promise<void>) => {
@@ -35,11 +36,11 @@ export function Welcome() {
       </p>
       {mode === 'start' && (
         <div class="actions">
-          <button class="btn primary" onClick={() => (audio.unlock(), setMode('name'))}>
+          <button class="btn primary" onClick={() => (audio.unlock(), void prepareGuest().catch(() => {}), setMode('name'))}>
             开始养猫
           </button>
           <button class="btn" onClick={() => setMode('code')}>
-            我有找回码
+            找回我的猫窝
           </button>
         </div>
       )}
@@ -54,17 +55,7 @@ export function Welcome() {
           </button>
         </div>
       )}
-      {mode === 'code' && (
-        <div class="actions">
-          <input class="field" placeholder="XXXX-XXXX-XXXX" value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
-          <button class="btn primary" disabled={busy || code.length < 8} onClick={() => run(() => game.login(code))}>
-            回到我的猫窝
-          </button>
-          <button class="btn ghost" onClick={() => setMode('start')}>
-            返回
-          </button>
-        </div>
-      )}
+      {mode === 'code' && <RecoverForm onBack={() => setMode('start')} />}
     </div>
   );
 }

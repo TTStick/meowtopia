@@ -2,7 +2,9 @@ import { Viewport } from '../engine/view';
 import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
-import { api, getToken, setToken, WorldSocket, ApiError } from './net';
+import { api, takeLegacyToken, clearLegacyToken, WorldSocket, ApiError } from './net';
+import { takeGuestPow } from './pow';
+import { codeLogin, passkeyLogin, scheduleProtectNudge } from './account';
 import { ui, toast, activeCat, patchCat } from './state';
 import { audio } from './audio';
 import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
@@ -43,6 +45,7 @@ class Game {
     });
     ro.observe(canvas);
     this.ws.onState = (c) => ui.set({ connected: c });
+    this.ws.onKicked = () => location.reload();
     let lastInv: unknown = null;
     ui.subscribe(() => {
       const inv = ui.state.me?.inventory;
@@ -63,9 +66,15 @@ class Game {
       this.running = true;
       requestAnimationFrame((t) => this.frame(t));
     }
-    if (!getToken()) {
-      ui.set({ phase: 'welcome' });
-      return;
+    // older versions kept the login token in localStorage: trade it for a cookie once
+    const legacy = takeLegacyToken();
+    if (legacy) {
+      try {
+        await api('POST', '/api/auth/upgrade', {}, legacy);
+        clearLegacyToken();
+      } catch (e) {
+        if (e instanceof ApiError && (e.status === 401 || e.status === 403)) clearLegacyToken();
+      }
     }
     for (let attempt = 0; ; attempt++) {
       try {
@@ -75,8 +84,12 @@ class Game {
         return;
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
-          setToken(null);
           ui.set({ phase: 'welcome' });
+          return;
+        }
+        if (e instanceof ApiError && e.status === 403) {
+          ui.set({ phase: 'welcome' });
+          toast(e.message, '🔒', 8000);
           return;
         }
         // server unreachable or a hiccup: keep the player's place and retry quietly
@@ -109,16 +122,19 @@ class Game {
   }
 
   async register(nickname: string) {
-    const r = await api<{ token: string; me: MeResponse }>('POST', '/api/register', { nickname, tzOffset: new Date().getTimezoneOffset() });
-    setToken(r.token);
+    const pow = await takeGuestPow();
+    const r = await api<{ me: MeResponse }>('POST', '/api/auth/guest', { nickname, tzOffset: new Date().getTimezoneOffset(), pow });
     this.setMe(r.me);
     ui.set({ phase: 'adopt' });
   }
 
   async login(code: string) {
-    const r = await api<{ token: string; me: MeResponse }>('POST', '/api/login', { code });
-    setToken(r.token);
-    this.setMe(r.me);
+    this.setMe(await codeLogin(code));
+    await this.enterGame();
+  }
+
+  async loginPasskey() {
+    this.setMe(await passkeyLogin());
     await this.enterGame();
   }
 
@@ -141,6 +157,7 @@ class Game {
     await this.openNest();
     this.loadUnread();
     this.loadWish();
+    if (!me.user.secured) scheduleProtectNudge();
     if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
     else this.tip();
     api('POST', '/api/daily')
@@ -629,6 +646,7 @@ class Game {
 // Reuse the running instance if this module is ever re-evaluated (hot reload).
 export const game: Game = (window as any).__game ?? new Game();
 (window as any).__game = game;
+if (import.meta.env.DEV) (window as any).__ui = ui;
 
 // The game is a stateful singleton bound to a canvas: reload fully on code changes.
 if (import.meta.hot) {

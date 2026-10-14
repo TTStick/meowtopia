@@ -2,7 +2,7 @@ import { Store } from './store';
 import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
 
 export type Panel =
-  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo';
+  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo' | 'protect' | 'privacy';
 
 export interface Toast {
   id: number;

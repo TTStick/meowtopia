@@ -11,6 +11,7 @@ const cache = new Map<string, CatRecord>();
 const dirty = new Set<string>();
 
 export function getCat(id: string): CatRecord | undefined {
+  touched.set(id, Date.now());
   let c = cache.get(id);
   if (!c) {
     c = db.getCat(id);
@@ -20,6 +21,7 @@ export function getCat(id: string): CatRecord | undefined {
 }
 
 export function markDirty(c: CatRecord) {
+  touched.set(c.id, Date.now());
   cache.set(c.id, c);
   dirty.add(c.id);
 }
@@ -37,10 +39,37 @@ export function flushCats() {
   }
   dirty.clear();
 }
-setInterval(flushCats, 20_000).unref();
+
+/** Drop a deleted cat from memory without writing it back. */
+export function forget(id: string) {
+  cache.delete(id);
+  dirty.delete(id);
+  touched.delete(id);
+}
+
+// Cats nobody has looked at for a while leave the cache so memory stays flat as
+// the town grows. Cats out in the world stay: the simulation holds references.
+const touched = new Map<string, number>();
+let pinned: (id: string) => boolean = () => false;
+export function keepCached(fn: (id: string) => boolean) {
+  pinned = fn;
+}
+function evictIdle() {
+  const cutoff = Date.now() - 20 * 60_000;
+  for (const id of cache.keys()) {
+    if (dirty.has(id) || pinned(id) || (touched.get(id) ?? 0) > cutoff) continue;
+    cache.delete(id);
+    touched.delete(id);
+  }
+}
+setInterval(() => {
+  flushCats();
+  evictIdle();
+}, 20_000).unref();
 
 export function catsOf(uid: string): CatRecord[] {
   return db.getCatsOfUser(uid).map((c) => {
+    touched.set(c.id, Date.now());
     const cached = cache.get(c.id);
     if (cached) return cached;
     cache.set(c.id, c);
@@ -131,11 +160,16 @@ export function settingsOf(u: db.UserRow): UserSettings {
   }
 }
 
+/** Has a way back in besides this device: a recovery code or a passkey. */
+export function isSecured(u: db.UserRow): boolean {
+  return !!u.code_hash || !!db.db.prepare('SELECT 1 FROM passkeys WHERE user_id = ? LIMIT 1').get(u.id);
+}
+
 export function me(u: db.UserRow): MeResponse {
   const cats = catsOf(u.id).map((c) => refresh(c));
   const active = u.active_cat && cats.some((c) => c.id === u.active_cat) ? u.active_cat : cats[0]?.id ?? null;
   return {
-    user: { id: u.id, nickname: u.nickname, fish: u.fish, settings: settingsOf(u), code: u.code },
+    user: { id: u.id, nickname: u.nickname, fish: u.fish, settings: settingsOf(u), secured: isSecured(u) },
     cats,
     activeCatId: active,
     inventory: db.getInventory(u.id),

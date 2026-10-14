@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 import { ui, activeCat, toast, patchCat, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
-import { api, setToken } from '../game/net';
+import { api } from '../game/net';
 import { audio } from '../game/audio';
 import { itemIcon, catPortrait } from '../art/icons';
 import { LiveCat } from './LiveCat';
@@ -13,49 +13,10 @@ import { ageOf, bondLevel, moodWord } from '../../../shared/stats';
 import { getWorld, TILE, WW, WH, Ter, POIS, ZONE_NAME } from '../../../shared/world';
 import type { CatRecord, JournalEntry } from '../../../shared/types';
 import * as I from './icons';
-
-function Sheet(p: { title: string; onClose?: () => void; children: ComponentChildren; tabs?: ComponentChildren; right?: ComponentChildren }) {
-  const close = p.onClose ?? (() => ui.set({ panel: null }));
-  return (
-    <div class="scrim" onClick={(e) => e.target === e.currentTarget && close()}>
-      <div class="sheet" role="dialog" aria-label={p.title}>
-        <div class="sheet-h">
-          <h2>{p.title}</h2>
-          {p.right}
-          <button class="iconbtn" aria-label="关闭" onClick={close}>
-            <I.IClose />
-          </button>
-        </div>
-        {p.tabs}
-        <div class="sheet-b">{p.children}</div>
-      </div>
-    </div>
-  );
-}
-
-function Tabs<T extends string>(p: { value: T; set: (v: T) => void; items: [T, string][] }) {
-  return (
-    <div class="tabs">
-      {p.items.map(([k, n]) => (
-        <button key={k} class={p.value === k ? 'on' : ''} onClick={() => p.set(k)}>
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
+import { Sheet, Tabs, when } from './Sheet';
+import { SecuritySection, ProtectPanel, PrivacyPanel, ReportLink } from './Account';
 
 const go = (panel: Panel) => ui.set({ panel });
-
-function when(ts: number) {
-  const d = new Date(ts);
-  const now = new Date();
-  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-  if (d.toDateString() === now.toDateString()) return `今天 ${hm}`;
-  const y = new Date(now.getTime() - 86400000);
-  if (d.toDateString() === y.toDateString()) return `昨天 ${hm}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
-}
 
 // ---------------- feed ----------------
 function FeedPanel() {
@@ -472,6 +433,7 @@ function Bond() {
               <div key={i} class="entry" style={{ borderLeftColor: d.mine ? 'var(--coral)' : 'var(--sky)' }}>
                 <div class="when">
                   {d.mine ? '我' : 'TA'} · {when(d.ts)}
+                  {!d.mine && d.id && <ReportLink kind="diary" target={String(d.id)} />}
                 </div>
                 {d.text}
               </div>
@@ -599,6 +561,7 @@ function Notes() {
               {when(n.ts)}
             </div>
           </div>
+          {n.text && <ReportLink kind="note" target={String(n.id)} />}
         </div>
       ))}
     </div>
@@ -897,20 +860,7 @@ function SettingsPanel() {
           </select>
         </span>
       </div>
-      <div class="sec">找回码</div>
-      <p class="muted" style={{ marginTop: 0, fontSize: 13 }}>换手机或清了浏览器数据时，用它回到你的猫窝。请悄悄收好。</p>
-      <div class="code">{me.user.code}</div>
-      <button
-        class="btn ghost"
-        style={{ marginTop: 16 }}
-        onClick={() => {
-          if (!confirm('退出后需要找回码才能回来，确定吗？')) return;
-          setToken(null);
-          location.reload();
-        }}
-      >
-        退出登录
-      </button>
+      <SecuritySection />
     </Sheet>
   );
 }
@@ -1053,6 +1003,10 @@ export function Panels() {
       return <AwayPanel />;
     case 'photo':
       return <PhotoPanel />;
+    case 'protect':
+      return <ProtectPanel />;
+    case 'privacy':
+      return <PrivacyPanel />;
     default:
       return null;
   }
