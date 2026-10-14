@@ -181,7 +181,7 @@ async function refill(cat: CatRecord, ctx: SpeechCtx, info: SpeechInfo, key: str
 /** Get a line immediately (from pool or fallback) and top up the pool in the background. */
 export function catLine(cat: CatRecord, ctx: SpeechCtx, info: Partial<SpeechInfo> = {}): string {
   const ck = clockAt(Date.now());
-  const full: SpeechInfo = { name: cat.name, p: cat.personality, phase: phaseOf(ck.hour), weather: weatherAt(Date.now()).kind, season: ck.season, ...info };
+  const full: SpeechInfo = { name: cat.name, p: cat.personality, phase: phaseOf(ck.hour), weather: weatherAt(Date.now()).kind, season: ck.season, memory: cat.memory, ...info };
   const extra = `${info.place ?? ''}${info.item ?? ''}${info.other ?? ''}${info.food ?? ''}${ctx === 'idle' ? `${full.phase}${full.weather}` : ''}`;
   const key = poolKey(cat.id, ctx, extra);
   const pool = pools.get(key);

@@ -21,6 +21,7 @@ export interface SpeechInfo {
   other?: string; // other cat / npc name
   food?: string;
   owner?: string;
+  memory?: string[]; // recent notable memories, e.g. "认识了花卷"
 }
 
 const L: Record<SpeechCtx, string[]> = {
@@ -115,8 +116,16 @@ function voice(text: string, p: Personality, r: Rng): string {
   return text;
 }
 
+function recall(m: string, r: Rng): string {
+  // memories read like "去了河边和花田" / "认识了花卷" / "在码头找到了稀有的海玻璃"
+  return r.pick([`还记得我${m}吗`, `突然想起${m}的那天`, `今天又想起来，${m}`, `${m}，好开心呀`]);
+}
+
 export function fallbackLine(ctx: SpeechCtx, info: SpeechInfo, seed = Math.random() * 1e9): string {
   const r = new Rng(seed);
+  if ((ctx === 'idle' || ctx === 'greet' || ctx === 'night') && info.memory?.length && r.chance(0.18)) {
+    return voice(recall(r.pick(info.memory.slice(-4)), r), info.p, r);
+  }
   let pool = L[ctx] ?? L.idle;
   if (ctx === 'idle') {
     const extra = info.phase ? PHASE_IDLE[info.phase] ?? [] : [];

@@ -14,5 +14,5 @@
     "noUnusedLocals": false,
     "types": ["node"]
   },
-  "include": ["shared", "client/src", "server/src"]
+  "include": ["shared", "client/src", "server/src", "tests"]
 }
