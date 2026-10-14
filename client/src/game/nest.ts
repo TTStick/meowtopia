@@ -8,7 +8,8 @@ import { drawBubble } from '../art/fx';
 import { ITEM_MAP, ROOM_W, ROOM_H, WALL_SLOTS, type ItemDef } from '../../../shared/items';
 import { canPlace, canPlaceWall } from '../../../shared/nest';
 import { makeGrid, findPath, smoothPath, nearestOpen, isBlocked, type Grid } from '../../../shared/path';
-import { daylight, weatherAt, skyColor, clockAt, sunset } from '../../../shared/time';
+import { daylight, skyColor, sunset } from '../../../shared/time';
+import * as clock from './clock';
 import { ageOf } from '../../../shared/stats';
 import { Rng } from '../../../shared/rng';
 import type { CatRecord, NestLayout, PlacedItem, WallItem } from '../../../shared/types';
@@ -70,7 +71,7 @@ export class NestScene implements NestHost {
     this.env = env;
     this.readonly = readonly;
     this.cat = new CatActor(rec.id, rec.name, rec.genes);
-    this.cat.scale = 1.25;
+    this.cat.scale = 1.4;
     this.cat.speed = 34;
     this.cat.age = ageOf(rec.born);
     this.cat.outfit = rec.outfit;
@@ -155,17 +156,16 @@ export class NestScene implements NestHost {
   }
 
   hour() {
-    const d = new Date();
-    return d.getHours() + d.getMinutes() / 60;
+    return clock.localHour();
   }
   night() {
     return 1 - daylight(this.hour());
   }
   weather() {
-    return weatherAt(Date.now()).kind;
+    return clock.weather().kind;
   }
   season() {
-    return clockAt(Date.now()).season;
+    return clock.season();
   }
 
   private sayBusy = false;
@@ -208,7 +208,7 @@ export class NestScene implements NestHost {
   sunbeams(): number[][] {
     const h = this.hour();
     const day = daylight(h);
-    const w = weatherAt(Date.now());
+    const w = clock.weather();
     if (day < 0.5 || w.kind === 'rain' || w.kind === 'snow') return [];
     const out: number[][] = [];
     const skew = (h - 12.5) * -22;
@@ -276,7 +276,7 @@ export class NestScene implements NestHost {
     const pen = v.pen;
     const night = this.night();
     const h = this.hour();
-    const w = weatherAt(Date.now());
+    const w = clock.weather();
     const sky: SkyInfo = { sky: skyColor(h, w), sun: daylight(h), rain: w.rain, snow: w.snow, hour: h };
     const boil = Math.floor(T * 7) % 3;
     // background
@@ -472,7 +472,7 @@ export class NestScene implements NestHost {
 
   private drawGrid(ctx: CanvasRenderingContext2D, lw: number) {
     ctx.save();
-    ctx.strokeStyle = 'rgba(240,138,93,0.35)';
+    ctx.strokeStyle = 'rgba(240,138,93,0.7)';
     ctx.lineWidth = lw * 0.5;
     ctx.setLineDash([3, 4]);
     for (let x = 0; x <= ROOM_W; x++) {
@@ -505,7 +505,7 @@ export class NestScene implements NestHost {
     if (g.wall) {
       ctx.fillStyle = g.ok ? 'rgba(140,210,150,0.3)' : 'rgba(240,120,110,0.3)';
       ctx.fillRect(g.wx * CELL, -WALL_H + 10, (def.w ?? 1) * CELL, WALL_H - 24);
-      const w = weatherAt(Date.now());
+      const w = clock.weather();
       drawWallItem(g.item, d, g.wx * CELL, def.w ?? 1, { sky: skyColor(this.hour(), w), sun: 1, rain: 0, snow: 0, hour: 12 });
     } else {
       const w = def.w ?? 1, h = def.h ?? 1;
@@ -555,7 +555,7 @@ export class NestScene implements NestHost {
     lc.setTransform(1, 0, 0, 1, 0, 0);
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, L.width, L.height);
-    lc.fillStyle = night > 0.05 ? `rgba(22,26,64,${0.5 * night})` : `rgba(255,150,80,${0.12 * dusk})`;
+    lc.fillStyle = night > 0.05 ? `rgba(30,30,70,${0.44 * night})` : `rgba(255,150,80,${0.12 * dusk})`;
     lc.fillRect(0, 0, L.width, L.height);
     const z = v.zoom * v.dpr;
     lc.setTransform(z, 0, 0, z, v.dpr * (v.w / 2 - v.camX * v.zoom), v.dpr * (v.midY - v.camY * v.zoom));
@@ -574,7 +574,7 @@ export class NestScene implements NestHost {
       else if (def?.light) lights.push([(wi.wx + (def.w ?? 1) / 2) * CELL, -WALL_H + 30, def.light * (0.9 + Math.sin(T * 2) * 0.1), 0.8]);
     }
     // the cat glows a tiny bit so it never disappears
-    lights.push([this.cat.x, this.cat.y - this.cat.z - 20, 46, 0.5]);
+    if (!this.away) lights.push([this.cat.x, this.cat.y - this.cat.z - 20, 46, 0.5]);
     for (const [x, y, r, a] of lights) {
       const g = lc.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, `rgba(0,0,0,${a})`);

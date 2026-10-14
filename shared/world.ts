@@ -356,14 +356,15 @@ export function zoneAt(w: World, x: number, y: number): string {
   if (t === Ter.Hill) return 'hill';
   if (t === Ter.Sand || t === Ter.Wood && ty > 70) return 'pier';
   if (distPolyline(tx, ty, RIVER) < 4.5) return 'river';
-  if (t === Ter.Field || (ty > 62 && tx < 70)) return 'meadow';
+  if (t === Ter.Field) return 'field';
+  if (ty > 62 && tx < 70) return 'meadow';
   if (tx > 13 && tx < 46 && ty > 5 && ty < 30) return 'park';
   if (tx < 38 && ty > 37 && ty < 64) return 'residential';
   return 'town';
 }
 
 export const ZONE_NAME: Record<string, string> = {
-  plaza: '喷泉广场', town: '小镇街道', residential: '住宅区', park: '公园', forest: '森林', river: '河边', meadow: '草地', hill: '小山坡', pier: '码头',
+  plaza: '喷泉广场', town: '小镇街道', residential: '住宅区', park: '公园', forest: '森林', river: '河边', meadow: '草地', field: '花田', hill: '小山坡', pier: '码头',
 };
 
 /** Random walkable point within radius r (tiles) of a POI. */

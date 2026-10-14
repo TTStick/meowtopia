@@ -218,3 +218,14 @@ export const ISnow = (p: P) => (
     <path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9" />
   </S>
 );
+export const ICamera = (p: P) => (
+  <S {...p}>
+    <path d="M4 8h3l2-2.5h6L17 8h3v11H4z" />
+    <circle cx="12" cy="13.5" r="3.5" />
+  </S>
+);
+export const IDownload = (p: P) => (
+  <S {...p}>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+  </S>
+);

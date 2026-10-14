@@ -349,7 +349,7 @@ async function meet(a: Ent, b: Ent, now: number) {
   broadcast({ t: 'act', id: a.st.id, anim: 'sit', x: a.st.x, y: a.st.y, dir: a.st.dir });
   broadcast({ t: 'act', id: b.st.id, anim: 'sit', x: b.st.x, y: b.st.y, dir: b.st.dir });
   broadcast({ t: 'emote', id: a.st.id, kind: 'heart' });
-  const place = a.poi ? POI_MAP[a.poi]?.name ?? ZONE_NAME[zoneAt(world, a.st.x, a.st.y)] : ZONE_NAME[zoneAt(world, a.st.x, a.st.y)];
+  const place = placeName(a.st.x, a.st.y);
   const pa: CatRecord | NpcPersona = a.cat ?? personaOf(a.npc!), pb: CatRecord | NpcPersona = b.cat ?? personaOf(b.npc!);
   // friendship bookkeeping (cats only)
   if (a.cat && b.cat) {
@@ -380,6 +380,11 @@ async function meet(a: Ent, b: Ent, now: number) {
     delay += 2600 + l.text.length * 90;
   }
   for (const x of [a, b]) x.until = Date.now() + delay + 1500;
+}
+
+function placeName(x: number, y: number): string {
+  const poi = POIS.find((p) => Math.hypot(p.x * TILE - x, p.y * TILE - y) < (p.r + 1.5) * TILE);
+  return poi?.name ?? ZONE_NAME[zoneAt(world, x, y)];
 }
 
 function personaOf(n: NpcDef): NpcPersona {
@@ -489,7 +494,9 @@ function tickNpc(n: NpcDef, now: number) {
     // chatter
     if (now > e.nextSay && clients.size) {
       e.nextSay = now + 25_000 + Math.random() * 50_000;
-      say(e, npcLine(personaOf(n), `在${poi.name}${actWord(s.act)}`, n.lines));
+      const friend = [...npcEnts.values()].find((o) => o !== e && ents.has(o.st.id) && o.mode === 'idle' && Math.hypot(o.st.x - e.st.x, o.st.y - e.st.y) < 160 && (meetCooldown.get(pairKey(e.st.id, o.st.id)) ?? 0) < now);
+      if (friend && Math.random() < 0.6) void npcChat(e, friend, now);
+      else say(e, npcLine(personaOf(n), `在${poi.name}${actWord(s.act)}`, n.lines));
     }
     return;
   }
@@ -515,6 +522,23 @@ function tickNpc(n: NpcDef, now: number) {
     return;
   }
   setAct(e, s.act, 20_000 + Math.random() * 30_000, now);
+}
+
+async function npcChat(a: Ent, b: Ent, now: number) {
+  meetCooldown.set(pairKey(a.st.id, b.st.id), now + 6 * 60_000);
+  a.st.dir = b.st.x > a.st.x ? 1 : -1;
+  b.st.dir = a.st.x > b.st.x ? 1 : -1;
+  broadcast({ t: 'act', id: a.st.id, anim: a.st.anim, x: a.st.x, y: a.st.y, dir: a.st.dir });
+  broadcast({ t: 'act', id: b.st.id, anim: b.st.anim, x: b.st.x, y: b.st.y, dir: b.st.dir });
+  const lines = await catDialogue(personaOf(a.npc!), personaOf(b.npc!), placeName(a.st.x, a.st.y));
+  let delay = 300;
+  for (const l of lines) {
+    const who = l.who === 0 ? a : b;
+    setTimeout(() => ents.has(who.st.id) && say(who, l.text), delay);
+    delay += 2600 + l.text.length * 90;
+  }
+  a.until = Math.max(a.until, Date.now() + delay);
+  b.until = Math.max(b.until, Date.now() + delay);
 }
 
 function actWord(a: string) {

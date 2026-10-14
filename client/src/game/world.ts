@@ -4,11 +4,12 @@ import { Pen, rgba, mix } from '../engine/pen';
 import { CatActor, type AnimName } from './actor';
 import { drawProp, BOUNDS, type PropCtx } from '../art/props';
 import { drawNpc } from '../art/npc';
-import { drawBubble, drawNameTag, drawEmote, type EmoteKind } from '../art/fx';
+import { drawBubble, drawNameTag, drawEmote, measureBubble, type EmoteKind } from '../art/fx';
 import { getWorld, TILE, WW, WH, Ter, POIS, POI_MAP, BUILDINGS, walkable, zoneAt, ZONE_NAME, type Prop, type PropKind } from '../../../shared/world';
 import { findPath, smoothPath } from '../../../shared/path';
 import { hashf, noise2 } from '../../../shared/rng';
-import { clockAt, daylight, sunset, weatherAt } from '../../../shared/time';
+import { daylight, sunset } from '../../../shared/time';
+import * as clock from './clock';
 import type { EntState, ServerMsg } from '../../../shared/protocol';
 import { NPC_MAP } from '../../../shared/npcs';
 import { ui, activeCat, toast } from './state';
@@ -518,10 +519,9 @@ export class WorldScene implements Scene {
   private updateCritters(dt: number) {
     const v = this.v;
     if (!v) return;
-    const now = Date.now();
-    const ck = clockAt(now);
+    const ck = clock.worldClock();
     const day = daylight(ck.hour);
-    const wthr = weatherAt(now);
+    const wthr = clock.weather();
     const [x0, y0, x1, y1] = v.bounds(40);
     const want = (k: Critter['k']) => this.critters.filter((c) => c.k === k).length;
     const rnd = () => [x0 + Math.random() * (x1 - x0), y0 + Math.random() * (y1 - y0)] as const;
@@ -779,11 +779,10 @@ export class WorldScene implements Scene {
     v.camX = this.camX;
     v.camY = this.camY;
     const ctx = v.ctx;
-    const now = Date.now();
-    const ck = clockAt(now);
+    const ck = clock.worldClock();
     const day = daylight(ck.hour);
     const night = 1 - day;
-    const wthr = weatherAt(now);
+    const wthr = clock.weather();
     const season = ck.season;
     const scale = this.bucket(v);
     if (scale !== this.chunkScale) {
@@ -865,6 +864,8 @@ export class WorldScene implements Scene {
     // depth sorted props & entities
     const pc: PropCtx = { season, night, t: T };
     const items: { y: number; f: () => void }[] = [];
+    // things that may hide my cat get faded
+    const focus = this.follow ? this.ents.get(this.follow) : this.myCatId ? this.ents.get(this.myCatId) : undefined;
     const wind = 0.6 + wthr.wind;
     for (const p of this.w.props) {
       const b = BOUNDS[p.k] ?? [-40, -80, 40, 10];
@@ -876,6 +877,10 @@ export class WorldScene implements Scene {
         f: () => {
           const sp = this.getSprite(p, scale, pc);
           ctx.save();
+          if (focus && focus.y < p.y - 4 && (p.k === 'tree' || p.k === 'sakura' || p.k === 'pine' || p.k === 'bigtree' || p.k === 'house' || p.k === 'shop' || p.k === 'windmill' || p.k === 'lighthouse')) {
+            const fx = focus.x, fy = focus.y - 16;
+            if (fx > p.x + b[0] * pw && fx < p.x + b[2] * pw && fy > p.y + b[1] * pw) ctx.globalAlpha = 0.42;
+          }
           ctx.translate(p.x, p.y);
           if (p.k === 'boat') ctx.translate(0, Math.sin(T * 1.4 + p.id) * 2);
           if (p.k === 'lily') ctx.translate(Math.sin(T * 0.5 + p.id) * 1.5, 0);
@@ -949,18 +954,35 @@ export class WorldScene implements Scene {
     // labels & bubbles in screen space
     v.screen();
     const showNames = this.zoom > 0.7;
+    const placed: [number, number, number, number][] = [];
+    const bubbles: { e: WEnt; sx: number; sy: number }[] = [];
     for (const e of this.ents.values()) {
       const top = e.actor ? e.actor.headTop() : e.y - 66;
       const [sx, sy] = v.toScreen(e.x, top);
       if (sx < -100 || sx > v.w + 100 || sy < -60 || sy > v.h + 100) continue;
       const bub = e.actor?.bubble ?? e.bubble;
-      if (bub) {
-        const a = Math.min(1, (T - bub.start) * 5, (bub.until - T) * 2);
-        drawBubble(ctx, sx, sy - 2, bub.text, Math.max(0, a), e.st.kind === 'npc' ? e.st.name : e.mine ? undefined : e.st.name, e.st.kind === 'npc' ? 'npc' : 'cat');
-      } else if (showNames && (e.mine || this.hoverId === e.st.id || this.zoom > 1.05)) {
+      if (bub) bubbles.push({ e, sx, sy });
+      else if (showNames && (e.mine || this.hoverId === e.st.id || this.zoom > 1.05)) {
         const [nx, ny] = v.toScreen(e.x, e.y + 6);
         drawNameTag(ctx, nx, ny + 10, e.mine ? `${e.st.name} ★` : e.st.kind === 'npc' ? `${e.st.name}·${e.st.owner}` : e.st.name, e.mine ? '#c0846a' : '#4a3a34', e.mine ? 0.95 : 0.75);
       }
+    }
+    // stack bubbles bottom-up so close neighbours don't overlap
+    bubbles.sort((a, b) => b.sy - a.sy);
+    for (const { e, sx, sy } of bubbles) {
+      const bub = (e.actor?.bubble ?? e.bubble)!;
+      const name = e.st.kind === 'npc' ? e.st.name : e.mine ? undefined : e.st.name;
+      const m = measureBubble(ctx, bub.text, name);
+      let lift = 0;
+      for (let k = 0; k < 6; k++) {
+        const x0 = sx - m.w / 2, y1 = sy - 2 - lift, y0 = y1 - m.h;
+        const hit = placed.find((r) => x0 < r[2] && x0 + m.w > r[0] && y0 < r[3] && y1 > r[1]);
+        if (!hit) break;
+        lift += y1 - hit[1] + 4;
+      }
+      placed.push([sx - m.w / 2, sy - 2 - lift - m.h, sx + m.w / 2, sy - 2 - lift]);
+      const a = Math.min(1, (T - bub.start) * 5, (bub.until - T) * 2);
+      drawBubble(ctx, sx, sy - 2, bub.text, Math.max(0, a), name, e.st.kind === 'npc' ? 'npc' : 'cat', lift);
     }
     // joystick
     if (this.joy) {
@@ -1152,7 +1174,7 @@ export class WorldScene implements Scene {
     lc.setTransform(1, 0, 0, 1, 0, 0);
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, L.width, L.height);
-    lc.fillStyle = night > 0.05 ? `rgba(20,26,66,${0.56 * night})` : `rgba(255,140,70,${0.14 * dusk})`;
+    lc.fillStyle = night > 0.05 ? `rgba(18,26,78,${0.62 * night})` : `rgba(255,140,70,${0.14 * dusk})`;
     lc.fillRect(0, 0, L.width, L.height);
     if (night > 0.05) {
       const z = v.zoom * v.dpr;
@@ -1170,7 +1192,7 @@ export class WorldScene implements Scene {
           lights.push([p.x - off * s, p.y - 50 * s, 70, 0.8], [p.x + off * s, p.y - 50 * s, 70, 0.8], [p.x, p.y - 20 * s, 60, 0.6]);
         } else if (p.k === 'fountain') lights.push([p.x, p.y - 20, 80, 0.4]);
       }
-      for (const e of this.ents.values()) lights.push([e.x, e.y - 20, e.mine ? 90 : 50, e.mine ? 0.8 : 0.5]);
+      for (const e of this.ents.values()) lights.push([e.x, e.y - 20, e.mine ? 80 : 34, e.mine ? 0.7 : 0.35]);
       for (const c of this.critters) if (c.k === 'firefly') lights.push([c.x, c.y - c.z, 22, 0.5]);
       for (const [x, y, r, a] of lights) {
         const g = lc.createRadialGradient(x, y, 0, x, y, r);
@@ -1205,7 +1227,7 @@ export class WorldScene implements Scene {
     for (const e of this.ents.values()) {
       const top = e.actor ? e.actor.headTop() : e.y - 64;
       if (x < e.x - 26 || x > e.x + 26 || y < top - 6 || y > e.y + 8) continue;
-      const d = Math.abs(e.x - x) + Math.abs(e.y - y);
+      const d = Math.abs(e.x - x) + Math.abs(e.y - y) + (e.mine ? 60 : 0);
       if (d < bd) {
         bd = d;
         best = e;

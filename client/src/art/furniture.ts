@@ -1,5 +1,6 @@
 import { Pen, shade, rgba } from '../engine/pen';
 import { hashf } from '../../../shared/rng';
+import { now as clockNow } from '../game/clock';
 
 export const CELL = 44;
 export const WALL_H = 156;
@@ -588,7 +589,7 @@ const wallDraws: Record<string, WDraw> = {
     pen.shape([cx + 12, cy - 6, cx + 11, cy - 20, cx + 4, cy - 12], '#4f4a4c');
     pen.ellipse(cx, cy, 14, 14, '#4f4a4c');
     pen.ellipse(cx, cy, 10, 10, '#fffaf0', 1);
-    const now = new Date();
+    const now = new Date(clockNow());
     const hr = ((now.getHours() % 12) + now.getMinutes() / 60) / 12;
     const mn = now.getMinutes() / 60;
     ctx.strokeStyle = '#4a3a34';

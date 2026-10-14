@@ -110,6 +110,8 @@ class Game {
     this.ws.connect();
     await this.openNest();
     this.loadUnread();
+    if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
+    else this.tip();
     api('POST', '/api/daily')
       .then((r) => {
         if (r.got > 0) {
@@ -136,6 +138,7 @@ class Game {
       onPet: () => {
         const c = activeCat();
         audio.purr();
+        this.doneTip('pet');
         if (c && !ui.state.visiting) this.act(c.id, 'pet');
       },
       onPlay: () => {
@@ -159,6 +162,7 @@ class Game {
     if (r.cat.location === 'world') ui.set({ hint: `${r.cat.name}正在外面探险，可以去小镇看看它` });
     else {
       ui.set({ hint: null });
+      this.tip();
       setTimeout(() => this.nest?.say('greet'), 1400);
     }
   }
@@ -263,7 +267,10 @@ class Game {
     const on = !ui.state.play;
     this.nest.setPlay(on);
     ui.set({ play: on, build: false });
-    if (on) toast('移动鼠标或手指，逗逗它吧', '🪶', 2500);
+    if (on) {
+      toast('移动鼠标或手指，逗逗它吧', '🪶', 2500);
+      this.doneTip('play');
+    }
   }
 
   callCat() {
@@ -278,6 +285,8 @@ class Game {
     this.nest.setPlay(false);
     this.nest.setBuild(true);
     ui.set({ build: true, play: false, panel: null });
+    this.view.insetBottom = 190;
+    this.nest.fit(this.view);
   }
 
   async finishBuild(save: boolean) {
@@ -296,6 +305,8 @@ class Game {
     } else if (this.savedLayout) this.nest.setLayout(this.savedLayout);
     this.nest.setBuild(false);
     ui.set({ build: false });
+    this.view.insetBottom = 92;
+    this.nest.fit(this.view);
   }
 
   async buy(item: string, qty = 1) {
@@ -342,6 +353,7 @@ class Game {
   goOut() {
     const c = activeCat();
     if (!c) return;
+    this.doneTip('out');
     this.ws.send({ t: 'enter', catId: c.id });
     patchCat(c.id, { location: 'world' });
     ui.set({ catOut: true });
@@ -361,6 +373,7 @@ class Game {
     if (!c) return;
     const where = ui.state.scene === 'world' && ui.state.catOut ? 'world' : 'nest';
     ui.set({ busy: true });
+    this.doneTip('talk');
     try {
       const r = await api<{ action: string; place: string | null; reply: string }>('POST', `/api/cat/${c.id}/command`, { text, where });
       if (where === 'world') this.world?.command(r.action, r.place, r.reply);
@@ -375,6 +388,85 @@ class Game {
     } finally {
       ui.set({ busy: false });
     }
+  }
+
+  // ---------- gentle first-time tips ----------
+  private tipFlag(k: string) {
+    try {
+      return localStorage.getItem(`catnest.tip.${k}`) === '1';
+    } catch {
+      return true;
+    }
+  }
+  doneTip(k: string) {
+    try {
+      if (this.tipFlag(k)) return;
+      localStorage.setItem(`catnest.tip.${k}`, '1');
+    } catch {
+      return;
+    }
+    this.tip();
+  }
+  tip() {
+    if (ui.state.scene !== 'nest' || ui.state.visiting || ui.state.catOut) return;
+    const c = activeCat();
+    const n = c?.name ?? '猫猫';
+    const order: [string, string][] = [
+      ['pet', `轻轻点一下${n}，摸摸它～（按住拖动是顺毛）`],
+      ['play', `点「逗猫」，用羽毛陪${n}玩一会儿吧`],
+      ['talk', `右边的对话按钮可以跟${n}说话，比如“去睡觉”`],
+      ['out', `想看它探险的话，点「出门」去小镇逛逛`],
+    ];
+    const next = order.find(([k]) => !this.tipFlag(k));
+    ui.set({ hint: next ? next[1] : null });
+  }
+
+  // ---------- photo ----------
+  takePhoto() {
+    const src = this.view.canvas;
+    const c = activeCat();
+    const v = this.view;
+    // frame: the room in the nest, or a 4:3 window around the cat in town
+    let [fx, fy, fw, fh] = [0, 0, v.w, v.h];
+    if (ui.state.scene === 'nest' && this.nest) {
+      const [x0, y0] = v.toScreen(-12, -168);
+      const [x1, y1] = v.toScreen(this.nest.W + 12, this.nest.H + 24);
+      [fx, fy, fw, fh] = [x0, y0, x1 - x0, y1 - y0];
+    } else if (this.world && c) {
+      const e = this.world.ents.get(c.id);
+      if (e) {
+        const [sx, sy] = v.toScreen(e.x, e.y - 24);
+        fw = Math.min(v.w, 520);
+        fh = Math.min(v.h, fw * 0.75);
+        fx = Math.max(0, Math.min(v.w - fw, sx - fw / 2));
+        fy = Math.max(0, Math.min(v.h - fh, sy - fh / 2));
+      }
+    }
+    const k = v.dpr;
+    const pad = 28, bottom = 92;
+    const w = Math.max(640, Math.min(1400, fw * k * 1.4)), h = Math.round((fh / fw) * w);
+    const out = document.createElement('canvas');
+    out.width = w + pad * 2;
+    out.height = h + pad + bottom;
+    const ctx = out.getContext('2d')!;
+    ctx.fillStyle = '#fffdf6';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, fx * k, fy * k, fw * k, fh * k, pad, pad, w, h);
+    ctx.strokeStyle = '#4a3a34';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(pad, pad, w, h);
+    const d = new Date();
+    ctx.fillStyle = '#4a3a34';
+    ctx.font = `bold ${Math.round(w / 34)}px "PingFang SC","Microsoft YaHei",system-ui`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${c?.name ?? '猫猫'} · ${ui.state.scene === 'world' ? '在小镇' : '在猫窝'}`, pad, h + pad + bottom / 2);
+    ctx.textAlign = 'right';
+    ctx.font = `${Math.round(w / 44)}px "PingFang SC","Microsoft YaHei",system-ui`;
+    ctx.fillStyle = 'rgba(74,58,52,0.6)';
+    ctx.fillText(`${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}  猫窝`, w + pad, h + pad + bottom / 2);
+    audio.blip(1200, 0.08);
+    ui.set({ photo: out.toDataURL('image/png'), panel: 'photo' });
   }
 
   private onServer(m: ServerMsg) {
@@ -411,3 +503,6 @@ class Game {
 
 export const game = new Game();
 (window as any).__game = game;
+
+// The game is a stateful singleton bound to a canvas: reload fully on code changes.
+if (import.meta.hot) import.meta.hot.accept(() => location.reload());

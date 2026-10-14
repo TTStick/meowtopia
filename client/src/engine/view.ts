@@ -22,7 +22,7 @@ export class Viewport {
   }
 
   resize() {
-    this.dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    this.dpr = Math.min(2, window.devicePixelRatio || 1);
     const r = this.canvas.getBoundingClientRect();
     this.w = Math.max(1, r.width);
     this.h = Math.max(1, r.height);

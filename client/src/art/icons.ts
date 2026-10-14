@@ -247,8 +247,9 @@ export function itemIcon(id: string, size = 56): string {
   if (!def) return '';
   if (def.cat === 'furniture') {
     const w = def.w ?? 1, h = def.h ?? 1;
-    const span = Math.max(w, h) * CELL;
-    const s = (size * 0.86) / Math.max(span, 70);
+    const tall: Record<string, number> = { lamp: 112, bookshelf: 90, tree_small: 76, tree_big: 104, scratch_post: 82, collection_shelf: 84, teepee: 70, piano: 62, fish_tank: 58, hammock: 52, sofa: 56, kotatsu: 80 };
+    const span = Math.max(w * CELL, (tall[id] ?? 0) + 8, h * CELL * 0.8);
+    const s = (size * 0.86) / Math.max(span, 60);
     ctx.translate(size / 2, size * 0.86);
     ctx.scale(s, s);
     const d = { pen, t: 0, night: 0, flip: false };

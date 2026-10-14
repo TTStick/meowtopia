@@ -2,7 +2,7 @@ import { Store } from './store';
 import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
 
 export type Panel =
-  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help';
+  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo';
 
 export interface Toast {
   id: number;
@@ -38,6 +38,7 @@ export interface UIState {
   worldTarget: { id: string; name: string; kind: 'cat' | 'npc'; owner?: string; shop?: string } | null;
   llm: boolean;
   busy: boolean;
+  photo: string | null;
 }
 
 export const ui = new Store<UIState>({
@@ -61,6 +62,7 @@ export const ui = new Store<UIState>({
   worldTarget: null,
   llm: false,
   busy: false,
+  photo: null,
 });
 
 let toastId = 1;

@@ -45,7 +45,18 @@ route('POST', '/api/login', (r) => {
   return { token: u.token, me: game.me(u) };
 }, false);
 
-route('GET', '/api/me', (r) => game.me(r.user));
+route('GET', '/api/me', (r) => {
+  const me = game.me(r.user);
+  const gap = Date.now() - r.user.last_seen;
+  if (gap > 3 * 3600_000 && me.cats.length) {
+    const entries = me.cats
+      .flatMap((c) => db.getJournal(c.id, Date.now() + 1, 12).filter((e) => e.ts > r.user.last_seen))
+      .sort((a, b) => a.ts - b.ts)
+      .slice(-8);
+    me.away = { since: r.user.last_seen, entries };
+  }
+  return me;
+});
 
 route('POST', '/api/settings', (r) => {
   const cur = game.settingsOf(r.user);

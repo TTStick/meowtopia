@@ -144,8 +144,22 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: numb
   return lines.slice(0, 4);
 }
 
-/** Speech bubble in screen space. (x, y) = point the tail points at. */
-export function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, alpha: number, name?: string, tone: 'cat' | 'npc' | 'me' = 'cat') {
+export function measureBubble(ctx: CanvasRenderingContext2D, text: string, name?: string): { w: number; h: number } {
+  ctx.save();
+  ctx.font = `14px ${FONT}`;
+  const lines = wrapText(ctx, text, 168);
+  let w = 0;
+  for (const l of lines) w = Math.max(w, ctx.measureText(l).width);
+  if (name) {
+    ctx.font = `bold 11px ${FONT}`;
+    w = Math.max(w, ctx.measureText(name).width);
+  }
+  ctx.restore();
+  return { w: w + 22, h: lines.length * 19 + 16 + (name ? 14 : 0) + 10 };
+}
+
+/** Speech bubble in screen space. (x, y) = point the tail points at. `lift` raises the box (stacking). */
+export function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, alpha: number, name?: string, tone: 'cat' | 'npc' | 'me' = 'cat', lift = 0) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.font = `14px ${FONT}`;
@@ -161,7 +175,7 @@ export function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, 
   const bw = w + padX * 2, bh = lines.length * lh + padY * 2 + (name ? 14 : 0);
   let bx = x - bw / 2;
   bx = Math.max(6, Math.min(ctx.canvas.clientWidth - bw - 6, bx));
-  const by = y - bh - 10;
+  const by = y - bh - 10 - lift;
   const fill = tone === 'npc' ? '#fff8e8' : tone === 'me' ? '#eef6ff' : '#ffffff';
   ctx.fillStyle = 'rgba(74,58,52,0.12)';
   roundRect(ctx, bx + 2, by + 3, bw, bh, 12);
@@ -178,7 +192,7 @@ export function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, 
   ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - r, by + bh);
   const tx = Math.max(bx + 14, Math.min(bx + bw - 14, x));
   ctx.lineTo(tx + 6, by + bh);
-  ctx.lineTo(tx - 1, by + bh + 9);
+  ctx.lineTo(tx - 1, by + bh + 9 + Math.min(lift, 30));
   ctx.lineTo(tx - 6, by + bh);
   ctx.lineTo(bx + r, by + bh);
   ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - r);

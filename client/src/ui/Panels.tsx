@@ -957,6 +957,71 @@ function HelpPanel() {
   );
 }
 
+// ---------------- while you were away ----------------
+function AwayPanel() {
+  const me = useStore(ui, (s) => s.me)!;
+  const cat = activeCat()!;
+  const away = me.away;
+  if (!away) return null;
+  const hours = Math.round((Date.now() - away.since) / 3600000);
+  return (
+    <Sheet title="欢迎回来" onClose={() => (ui.set({ panel: null }), game.tip())}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <img src={catPortrait(cat.genes, cat.outfit, 72, ageOf(cat.born), 'happy')} alt="" style={{ width: 72, height: 72 }} />
+        <div style={{ lineHeight: 1.7 }}>
+          你不在的这 {hours >= 24 ? `${Math.round(hours / 24)} 天` : `${Math.max(1, hours)} 个小时`}里，
+          <br />
+          {cat.name}过得很好，还想告诉你这些事：
+        </div>
+      </div>
+      <div class="list">
+        {away.entries.map((e) => (
+          <div key={e.id} class="entry">
+            <div class="when">{when(e.ts)}</div>
+            {e.text}
+          </div>
+        ))}
+      </div>
+      <button class="btn primary" style={{ width: '100%', marginTop: 14 }} onClick={() => (ui.set({ panel: null }), game.tip())}>
+        摸摸它的头
+      </button>
+    </Sheet>
+  );
+}
+
+// ---------------- photo ----------------
+function PhotoPanel() {
+  const photo = useStore(ui, (s) => s.photo);
+  const cat = activeCat();
+  if (!photo) return null;
+  const name = `猫窝-${cat?.name ?? 'cat'}-${new Date().toISOString().slice(0, 10)}.png`;
+  const share = async () => {
+    try {
+      const blob = await (await fetch(photo)).blob();
+      const file = new File([blob], name, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: '猫窝' });
+        return;
+      }
+    } catch {
+      /* fall back to download */
+    }
+    const a = document.createElement('a');
+    a.href = photo;
+    a.download = name;
+    a.click();
+  };
+  return (
+    <Sheet title="咔嚓！" onClose={() => ui.set({ panel: null, photo: null })}>
+      <img src={photo} alt="照片" style={{ width: '100%', borderRadius: 12, border: '2px solid var(--ink)', display: 'block' }} />
+      <button class="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={share}>
+        <I.IDownload size={18} />
+        保存 / 分享
+      </button>
+    </Sheet>
+  );
+}
+
 export function Panels() {
   const panel = useStore(ui, (s) => s.panel);
   switch (panel) {
@@ -984,6 +1049,10 @@ export function Panels() {
       return <NotePanel />;
     case 'help':
       return <HelpPanel />;
+    case 'away':
+      return <AwayPanel />;
+    case 'photo':
+      return <PhotoPanel />;
     default:
       return null;
   }

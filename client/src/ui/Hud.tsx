@@ -7,7 +7,8 @@ import { catPortrait, itemIcon } from '../art/icons';
 import { moodWord, ageOf } from '../../../shared/stats';
 import { ITEMS, ITEM_MAP } from '../../../shared/items';
 import { placedCounts } from '../../../shared/nest';
-import { phaseOf, PHASE_NAME, weatherAt, clockAt, SEASON_NAME } from '../../../shared/time';
+import { phaseOf, PHASE_NAME, SEASON_NAME } from '../../../shared/time';
+import * as clock from '../game/clock';
 import { NPC_MAP } from '../../../shared/npcs';
 import * as I from './icons';
 
@@ -22,13 +23,13 @@ function Weather() {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const d = new Date(now);
-  const h = d.getHours() + d.getMinutes() / 60;
-  const w = weatherAt(now);
+  void now;
+  const h = clock.localHour();
+  const w = clock.weather();
   const night = h < 6 || h >= 19;
   const Icon = w.kind === 'rain' ? I.IRain : w.kind === 'snow' ? I.ISnow : w.kind === 'cloudy' ? I.ICloud : night ? I.IMoon : I.ISun;
   return (
-    <span class="pill" title={SEASON_NAME[clockAt(now).season]}>
+    <span class="pill" title={SEASON_NAME[clock.season()]}>
       <Icon size={16} />
       {PHASE_NAME[phaseOf(h)]}
     </span>
@@ -136,6 +137,9 @@ export function NestBar() {
             <I.ICall />
           </button>
         )}
+        <button class="iconbtn" aria-label="拍照" onClick={() => game.takePhoto()}>
+          <I.ICamera />
+        </button>
       </div>
       <div class="bar">
         <div class="dock">
@@ -207,6 +211,9 @@ export function WorldBar() {
             <I.IChat />
           </button>
         )}
+        <button class="iconbtn" aria-label="拍照" onClick={() => game.takePhoto()}>
+          <I.ICamera />
+        </button>
       </div>
       <div class="bar">
         <div class="dock">

@@ -126,4 +126,5 @@ export interface MeResponse {
   cats: CatRecord[];
   activeCatId: string | null;
   inventory: InventoryMap;
+  away?: { since: number; entries: JournalEntry[] };
 }

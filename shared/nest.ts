@@ -14,6 +14,7 @@ export function starterLayout(): NestLayout {
       { uid: 's6', item: 'cushion', gx: 6, gy: 4 },
       { uid: 's7', item: 'yarn', gx: 4, gy: 2 },
       { uid: 's8', item: 'plant', gx: 8, gy: 0 },
+      { uid: 's9', item: 'lamp', gx: 0, gy: 0 },
     ],
     wall: [
       { uid: 'w1', item: 'window', wx: 3 },
@@ -23,7 +24,7 @@ export function starterLayout(): NestLayout {
 }
 
 export const STARTER_ITEMS: InventoryMap = {
-  bed_round: 1, bowl_food: 1, bowl_water: 1, box: 1, scratch_post: 1, cushion: 1, yarn: 1, plant: 1,
+  bed_round: 1, bowl_food: 1, bowl_water: 1, box: 1, scratch_post: 1, cushion: 1, yarn: 1, plant: 1, lamp: 1,
   window: 1, photo: 1, wp_cream: 1, fl_wood: 1,
   treat_fish: 6, treat_stick: 3, treat_can: 1,
 };
