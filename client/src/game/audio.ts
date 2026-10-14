@@ -1,5 +1,7 @@
 // Tiny synthesized sound kit (no audio files): purrs, meows, blips and a soft
-// generative music-box melody.
+// generative music-box melody. In the app, purrs and finds are also felt (haptics).
+import { haptic } from './platform';
+
 class Audio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -53,15 +55,18 @@ class Audio {
   }
 
   coin() {
+    haptic('soft');
     this.blip(988, 0.08);
     setTimeout(() => this.blip(1318, 0.14), 80);
   }
 
   sparkle() {
+    haptic('happy');
     [1046, 1318, 1568, 2093].forEach((f, i) => setTimeout(() => this.blip(f, 0.1), i * 70));
   }
 
   purr() {
+    haptic('purr');
     if (!this.sound) return;
     const c = this.ensure();
     if (!c || !this.master) return;

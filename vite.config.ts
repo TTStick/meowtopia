@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   root: 'client',
+  envDir: import.meta.dirname, // .env.ios etc. live at the project root
   plugins: [preact()],
   optimizeDeps: { include: ['preact', 'preact/hooks', 'preact/jsx-runtime'] },
   server: {

@@ -1,6 +1,7 @@
 // Account protection and sign-in: passkeys, recovery codes, devices, export, delete.
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
-import { api } from './net';
+import { api, setBearer } from './net';
+import { isNative, saveToken, saveFile } from './platform';
 import { ui } from './state';
 import type { MeResponse } from '../../../shared/types';
 
@@ -11,7 +12,26 @@ export interface AuthState {
   sessions: { id: string; agent: string; created: number; lastUsed: number; current: boolean; kind: string }[];
 }
 
-export const passkeysSupported = () => typeof window !== 'undefined' && window.isSecureContext && browserSupportsWebAuthn();
+// In the app the page isn't served from our domain, so WebAuthn can't bind to it (yet).
+export const passkeysSupported = () => !isNative && typeof window !== 'undefined' && window.isSecureContext && browserSupportsWebAuthn();
+
+/** Sign-in responses carry a token for the app (the website gets a cookie instead). */
+async function adopt(r: { me: MeResponse; token?: string }): Promise<MeResponse> {
+  if (r.token) {
+    setBearer(r.token);
+    await saveToken(r.token);
+  }
+  return r.me;
+}
+const client = isNative ? 'app' : 'web';
+
+export async function guestLogin(body: Record<string, unknown>): Promise<MeResponse> {
+  return adopt(await api('POST', '/api/auth/guest', { ...body, client }));
+}
+
+export function registerApns(token: string, env: string) {
+  return api('POST', '/api/push/apns', { token, env });
+}
 
 export function authState() {
   return api<AuthState>('GET', '/api/auth/state');
@@ -55,13 +75,11 @@ export async function passkeyLogin(): Promise<MeResponse> {
   } catch (e) {
     throw friendly(e);
   }
-  const r = await api<{ me: MeResponse }>('POST', '/api/auth/passkey/login', { cid, response });
-  return r.me;
+  return adopt(await api('POST', '/api/auth/passkey/login', { cid, response, client }));
 }
 
 export async function codeLogin(code: string): Promise<MeResponse> {
-  const r = await api<{ me: MeResponse }>('POST', '/api/auth/code', { code });
-  return r.me;
+  return adopt(await api('POST', '/api/auth/code', { code, client }));
 }
 
 export async function newRecoveryCode(): Promise<string> {
@@ -72,22 +90,23 @@ export async function newRecoveryCode(): Promise<string> {
 export async function exportData() {
   const data = await api('GET', '/api/account/export');
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `猫窝-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  await saveFile(`猫窝-${new Date().toISOString().slice(0, 10)}.json`, blob);
+}
+
+async function forgetSession() {
+  setBearer(null);
+  await saveToken(null);
 }
 
 export async function logout() {
   await api('POST', '/api/auth/logout').catch(() => {});
+  await forgetSession();
   location.reload();
 }
 
 export async function deleteAccount() {
   await api('POST', '/api/account/delete', { confirm: '删除' });
+  await forgetSession();
   location.reload();
 }
 

@@ -144,11 +144,18 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 24px 16px calc(24px + var(--safe-bottom));
+  justify-content: flex-start;
+  padding: calc(24px + var(--safe-top)) 16px calc(24px + var(--safe-bottom));
   background: radial-gradient(circle at 50% 30%, #fff8ea, var(--cream) 60%, var(--cream-2));
   overflow-y: auto;
   touch-action: pan-y;
+}
+/* centred when it fits, scrollable from the top when it doesn't (plain centring would clip the top) */
+.onboard > :first-child {
+  margin-top: auto;
+}
+.onboard > :last-child {
+  margin-bottom: auto;
 }
 .onboard h1 {
   font-size: 40px;
@@ -873,6 +880,51 @@ textarea {
     opacity: 1;
   }
   100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- in-game dialogs ---------- */
+.scrim.dialog-scrim {
+  z-index: 60;
+  align-items: center;
+  padding: 16px;
+}
+.dialog {
+  width: min(360px, 100%);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 4px 0 rgba(74, 58, 52, 0.12);
+  animation: pop 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.dialog p {
+  margin: 0 0 14px;
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.dialog .field {
+  margin-bottom: 14px;
+}
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.dialog-actions .btn {
+  flex: 1;
+}
+.btn.danger {
+  background: #e07a5f;
+  color: #fff;
+}
+.btn.danger:disabled {
+  opacity: 0.45;
+}
+@keyframes pop {
+  from {
+    transform: scale(0.92);
     opacity: 0;
   }
 }

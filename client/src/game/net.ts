@@ -1,4 +1,5 @@
 import type { ClientMsg, ServerMsg } from '../../../shared/protocol';
+import { API_BASE, wsUrl } from './platform';
 
 // Browsers are signed in with an HttpOnly cookie the page can't read. The native
 // app (no shared cookie jar with the server) holds a bearer token instead.
@@ -40,7 +41,7 @@ export async function api<T = any>(method: string, path: string, body?: unknown,
   if (body !== undefined) headers['content-type'] = 'application/json';
   let res: Response;
   try {
-    res = await fetch(path, { method, headers, credentials: 'same-origin', body: body !== undefined ? JSON.stringify(body) : undefined });
+    res = await fetch(API_BASE + path, { method, headers, credentials: 'same-origin', body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
     throw new ApiError(0, '网络好像断开了');
   }
@@ -69,8 +70,7 @@ export class WorldSocket {
 
   connect() {
     this.closed = false;
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const ws = new WebSocket(wsUrl());
     this.ws = ws;
     ws.onopen = () => {
       if (bearer) ws.send(JSON.stringify({ t: 'auth', token: bearer }));
@@ -104,6 +104,13 @@ export class WorldSocket {
       const d = Math.min(10_000, 800 * 2 ** this.retry++);
       setTimeout(() => !this.closed && this.connect(), d);
     };
+  }
+
+  /** Drop the current connection and reconnect right away (after the app was asleep). */
+  refresh() {
+    if (this.closed || !this.ws) return;
+    this.retry = 0;
+    this.ws.close();
   }
 
   close() {

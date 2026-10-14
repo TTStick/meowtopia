@@ -64,14 +64,44 @@ export const LIMITS = {
 };
 
 // ---------- origins ----------
+/**
+ * The native apps load the game from their own bundle (capacitor://localhost on
+ * iOS, https://localhost on Android) and talk to us cross-origin with a bearer
+ * token. Requests from these origins never get cookie sessions.
+ */
+export const APP_ORIGINS = ['capacitor://localhost', 'ionic://localhost', 'https://localhost'];
+export function isAppOrigin(origin: string | undefined): boolean {
+  return !!origin && APP_ORIGINS.includes(origin);
+}
+
+/** Is this request coming from a native app (and not from our own site, which might be https://localhost)? */
+export function fromApp(req: IncomingMessage): boolean {
+  const origin = req.headers.origin as string | undefined;
+  if (!isAppOrigin(origin)) return false;
+  const host = requestHost(req);
+  return origin !== `https://${host}` && origin !== `http://${host}`;
+}
+
+/** CORS for the native app: no credentials, only our own headers. */
+export function corsHeaders(req: IncomingMessage, res: ServerResponse): boolean {
+  const origin = req.headers.origin as string | undefined;
+  if (!fromApp(req)) return false;
+  res.setHeader('Access-Control-Allow-Origin', origin!);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type, x-catnest');
+  res.setHeader('Access-Control-Max-Age', '600');
+  return true;
+}
+
 function requestHost(req: IncomingMessage): string {
   return String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '').split(',')[0].trim().toLowerCase();
 }
 
 /** Same-origin, an explicitly configured origin, or localhost during development. */
 export function originAllowed(req: IncomingMessage, origin: string | undefined): boolean {
-  if (!origin) return true; // non-browser clients (native app, curl) send no Origin
-  if (EXTRA_ORIGINS.includes(origin)) return true;
+  if (!origin) return true; // non-browser clients (curl, scripts) send no Origin
+  if (EXTRA_ORIGINS.includes(origin) || APP_ORIGINS.includes(origin)) return true;
   let u: URL;
   try {
     u = new URL(origin);

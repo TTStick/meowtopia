@@ -178,6 +178,59 @@ server/   Node HTTP + WebSocket；SQLite 存储、REST API、小镇模拟、居�
 - `client/src/game/nestBrain.ts`：猫在窝里的效用 AI。
 - `server/src/world.ts`：小镇模拟（路径、探险行程、发现与拾取、相遇与对话、居民作息）。
 
-## 手机 App
+## iOS App
 
-目前是可安装的 PWA（添加到主屏幕即可全屏、收通知）。上架 iOS / Android 时，计划用 Capacitor 套壳同一份网页，把 Web Push 换成原生推送（APNs / FCM），其余代码不用改。
+`ios/` 是用 Capacitor 8 做的原生壳：游戏网页打包在 App 里，联网时连 `.env.ios` 里 `VITE_API_BASE` 指定的服务器。和网页版相比，App 里多了这些：
+
+- 登录凭证存在 iOS 钥匙串（Keychain）里，删掉重装 App 也还在；
+- 通知走苹果的 APNs 推送，点通知会直接打开信箱；
+- 呼噜、发现宝贝时有震动反馈；
+- 导出数据、保存照片走系统的分享面板（可以存到「文件」）；
+- 留出了刘海和灵动岛的安全区域，启动画面和图标就是游戏里画的那只三花猫。
+
+### 在本机用 Docker + 模拟器调试
+
+1. `.env` 里写 `CAT_DOMAIN=localhost`，然后启动服务（Caddy 会给 localhost 签一张本机证书）：
+
+```bash
+docker compose up -d --build
+```
+
+2. 让模拟器信任这张本机证书（只需做一次）：
+
+```bash
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+```
+
+```bash
+xcrun simctl keychain booted add-root-cert ./caddy-root.crt
+```
+
+3. 配置并构建 App 里的网页（`.env.ios` 里写 `VITE_API_BASE=https://localhost`）：
+
+```bash
+cp .env.ios.example .env.ios
+```
+
+```bash
+npm run build:ios
+```
+
+4. 用 Xcode 打开 `ios/App/App.xcodeproj`，选一台模拟器运行（也可以 `npm run ios`，它会构建好再打开 Xcode）。改了网页代码后，重新 `npm run build:ios`，再在 Xcode 里运行一次即可。
+
+### 上架 TestFlight / App Store 前
+
+1. **开发者账号**：在 Xcode 的 Signing & Capabilities 里选择你的 Team；把 Bundle ID `com.catnest.app` 换成你自己的（同时改 `capacitor.config.json` 里的 `appId`）。
+2. **推送**：在 Apple 开发者后台给这个 App ID 打开 Push Notifications，然后创建一个 APNs 密钥（`.p8` 文件）。把 `.p8` 放到服务器的 `secrets/` 目录，在 `.env` 里填 `CAT_APNS_KEY_ID`、`CAT_APNS_TEAM_ID`、`CAT_APNS_BUNDLE_ID`，再打开 `docker-compose.yml` 里挂载密钥的那几行注释。正式包的 `.env.ios` 要写 `VITE_APNS_ENV=production`。
+3. **服务器地址**：`.env.ios` 里的 `VITE_API_BASE` 改成你的正式域名，再 `npm run build:ios`。
+4. **通行密钥**：App 里暂时只支持找回码登录（网页版可以添加通行密钥，App 里也能显示）。如果要在 App 里直接用面容 / 指纹登录，需要在域名上放 `apple-app-site-association` 文件并配置 Associated Domains，有了开发者账号以后可以接着做。
+
+模拟器里可以这样模拟一条推送，看看样式和点开后的效果：
+
+```bash
+xcrun simctl push booted com.catnest.app push.apns
+```
+
+其中 `push.apns` 的内容是 `{"aps":{"alert":{"title":"汤圆探险回来啦","body":"带回了一片枫叶"}}}`。
+
+`client/appicon.html` 是生成图标和启动图的小工具：开发服务器跑起来后，访问 `/appicon.html?pick=1` 可以挑猫，访问 `/appicon.html?seed=951` 会渲染出图标和启动图。

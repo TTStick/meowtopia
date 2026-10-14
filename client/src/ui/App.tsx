@@ -6,6 +6,7 @@ import { audio } from '../game/audio';
 import { Welcome, Adopt } from './Onboarding';
 import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge, WishPill, GoodnightOverlay } from './Hud';
 import { Panels } from './Panels';
+import { DialogHost } from './Dialog';
 
 export function App() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -16,8 +17,14 @@ export function App() {
   const me = useStore(ui, (s) => s.me);
   useEffect(() => {
     void game.boot(ref.current!);
-    const unlock = () => audio.unlock();
-    window.addEventListener('pointerdown', unlock, { once: true });
+    // Audio may only start inside a user activation. On touch screens that is the
+    // end of a tap (pointerup / touchend), not pointerdown.
+    const kinds = ['pointerup', 'touchend', 'keydown'] as const;
+    const unlock = () => {
+      audio.unlock();
+      for (const k of kinds) window.removeEventListener(k, unlock);
+    };
+    for (const k of kinds) window.addEventListener(k, unlock, { passive: true });
   }, []);
   useEffect(() => {
     if (!me) return;
@@ -46,6 +53,7 @@ export function App() {
         </>
       )}
       <Toasts />
+      <DialogHost />
     </>
   );
 }

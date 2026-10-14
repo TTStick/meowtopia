@@ -11,7 +11,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const { DATA_DIR, PROD } = await import('./config');
 const { handleApi } = await import('./http');
 const { migrateLegacyAccounts, sessionFromRequest, sessionFromToken } = await import('./sessions');
-const { allow, clientIp, LIMITS, originAllowed, securityHeaders } = await import('./security');
+const { allow, clientIp, fromApp, LIMITS, originAllowed, securityHeaders } = await import('./security');
 await import('./api');
 const { onBan, onAccountDeleted } = await import('./auth');
 const { startPush } = await import('./push');
@@ -109,7 +109,7 @@ server.on('upgrade', (req, socket, head) => {
   if (!allow(`ws:${ip}`, ...LIMITS.wsConnect) || (perIp.get(ip) ?? 0) >= MAX_PER_IP) return reject(429);
   if (wss.clients.size >= MAX_CONNECTIONS) return reject(503);
   const origin = req.headers.origin as string | undefined;
-  const sameSite = originAllowed(req, origin);
+  const sameSite = originAllowed(req, origin) && !fromApp(req);
   const found = sameSite ? sessionFromRequest(req) : null;
   wss.handleUpgrade(req, socket, head, (ws) => {
     perIp.set(ip, (perIp.get(ip) ?? 0) + 1);

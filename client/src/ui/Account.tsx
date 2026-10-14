@@ -6,7 +6,9 @@ import { useStore } from '../game/store';
 import { game } from '../game/game';
 import * as acc from '../game/account';
 import { api } from '../game/net';
+import { isNative } from '../game/platform';
 import { Sheet, when } from './Sheet';
+import { confirmBox, promptBox } from './Dialog';
 
 async function attempt(f: () => Promise<unknown>, setBusy?: (b: boolean) => void) {
   setBusy?.(true);
@@ -81,7 +83,7 @@ export function SecuritySection() {
             添加
           </button>
         ) : (
-          <span class="muted" style={{ fontSize: 12 }}>这个浏览器不支持</span>
+          <span class="muted" style={{ fontSize: 12, textAlign: 'right' }}>{isNative ? '可以在网页版添加' : '这个浏览器不支持'}</span>
         )}
       </div>
       {st?.passkeys.map((k) => (
@@ -95,8 +97,8 @@ export function SecuritySection() {
           </div>
           <button
             class="btn small ghost"
-            onClick={() => {
-              if (!confirm('删除这个通行密钥？之后就不能用它登录了。')) return;
+            onClick={async () => {
+              if (!(await confirmBox('删除这个通行密钥？之后就不能用它登录了。', { ok: '删除', danger: true }))) return;
               void attempt(async () => (await api('DELETE', `/api/auth/passkey/${encodeURIComponent(k.id)}`), load(), game.refreshMe()));
             }}
           >
@@ -115,8 +117,8 @@ export function SecuritySection() {
         <button
           class="btn small"
           disabled={busy}
-          onClick={() => {
-            if (st?.hasCode && !confirm('重新生成后，旧的找回码就不能用了。继续吗？')) return;
+          onClick={async () => {
+            if (st?.hasCode && !(await confirmBox('重新生成后，旧的找回码就不能用了。继续吗？', { ok: '重新生成' }))) return;
             void attempt(async () => (setCode(await acc.newRecoveryCode()), markSecured()), setBusy);
           }}
         >
@@ -167,9 +169,9 @@ export function SecuritySection() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
         <button
           class="btn ghost"
-          onClick={() => {
+          onClick={async () => {
             const warn = me.user.secured ? '要退出登录吗？之后可以用通行密钥或找回码回来。' : '猫窝还没上锁，退出后就回不来了！真的要退出吗？';
-            if (confirm(warn)) void acc.logout();
+            if (await confirmBox(warn, { ok: '退出', danger: !me.user.secured })) void acc.logout();
           }}
         >
           退出登录
@@ -177,8 +179,8 @@ export function SecuritySection() {
         <button
           class="btn ghost"
           style={{ color: '#b4553a' }}
-          onClick={() => {
-            const typed = prompt('删除账号后，你的猫猫、猫窝和所有记录都会永久消失，无法恢复。\n（和别人共养的猫会留给对方照顾）\n\n如果确定，请输入“删除”：');
+          onClick={async () => {
+            const typed = await promptBox('删除账号后，你的猫猫、猫窝和所有记录都会永久消失，无法恢复。\n（和别人共养的猫会留给对方照顾）\n\n如果确定，请输入“删除”：', { placeholder: '删除', mustEqual: '删除' }, { ok: '永久删除', danger: true });
             if (typed?.trim() === '删除') void attempt(acc.deleteAccount);
           }}
         >
@@ -269,8 +271,8 @@ export function ReportLink(p: { kind: 'cat' | 'note' | 'diary' | 'user'; target:
       class="btn small ghost"
       style={{ fontSize: 12, minHeight: 28, padding: '0 8px', opacity: 0.7 }}
       disabled={sent}
-      onClick={() => {
-        const reason = prompt('哪里让你不舒服？（可不填）');
+      onClick={async () => {
+        const reason = await promptBox('哪里让你不舒服？（可不填）', { placeholder: '比如：名字不友善' }, { ok: '举报' });
         if (reason === null) return;
         void attempt(async () => {
           await acc.report(p.kind, p.target, reason.slice(0, 100));

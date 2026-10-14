@@ -4,6 +4,7 @@ import webpush from 'web-push';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR } from './config';
+import { apnsEnabled, sendApns } from './apns';
 import { route, HttpError } from './http';
 import * as db from './db';
 import * as game from './game';
@@ -45,6 +46,23 @@ route('POST', '/api/push/subscribe', (r) => {
   return { ok: true };
 });
 
+// iOS app: an APNs device token instead of a web push subscription
+route('POST', '/api/push/apns', (r) => {
+  const token = String(r.body.token ?? '');
+  if (!/^[0-9a-f]{64,200}$/i.test(token)) throw new HttpError(400, '设备标识不对');
+  const env = r.body.env === 'production' ? 'production' : 'sandbox';
+  db.db.prepare('UPDATE users SET apns_token = NULL WHERE apns_token = ? AND id != ?').run(token, r.user.id); // one phone, one account
+  db.updateUser(r.user.id, { apns_token: token, apns_env: env });
+  const s = game.settingsOf(r.user);
+  db.updateUser(r.user.id, { settings: JSON.stringify({ ...s, push: true }) });
+  return { ok: true, delivering: apnsEnabled() };
+});
+
+route('DELETE', '/api/push/apns', (r) => {
+  db.updateUser(r.user.id, { apns_token: null, apns_env: null });
+  return { ok: true };
+});
+
 route('DELETE', '/api/push/subscribe', (r) => {
   db.updateUser(r.user.id, { push_sub: null });
   return { ok: true };
@@ -52,22 +70,29 @@ route('DELETE', '/api/push/subscribe', (r) => {
 
 route('POST', '/api/push/test', async (r) => {
   const u = db.getUser(r.user.id)!;
-  if (!u.push_sub) throw new HttpError(400, '还没有开启通知');
+  if (!u.push_sub && !u.apns_token) throw new HttpError(400, '还没有开启通知');
   const cat = game.catsOf(u.id)[0];
   const ok = await sendPush(u, { title: cat ? `${cat.name}的小纸条` : '猫窝', body: cat ? fallbackLine('greet', { name: cat.name, p: cat.personality }) : '通知已开启～', tag: 'test' });
   return { ok };
 });
 
 async function sendPush(u: db.UserRow, payload: { title: string; body: string; tag?: string; url?: string }): Promise<boolean> {
-  if (!u.push_sub) return false;
-  try {
-    await webpush.sendNotification(JSON.parse(u.push_sub), JSON.stringify({ url: '/', ...payload }), { TTL: 6 * 3600 });
-    return true;
-  } catch (e: any) {
-    if (e?.statusCode === 404 || e?.statusCode === 410) db.updateUser(u.id, { push_sub: null });
-    else console.warn('[push] failed', e?.statusCode ?? e?.message);
-    return false;
+  let sent = false;
+  if (u.apns_token && apnsEnabled()) {
+    const r = await sendApns(u.apns_token, u.apns_env ?? 'sandbox', payload);
+    if (r === 'gone') db.updateUser(u.id, { apns_token: null, apns_env: null });
+    sent ||= r === 'ok';
   }
+  if (u.push_sub) {
+    try {
+      await webpush.sendNotification(JSON.parse(u.push_sub), JSON.stringify({ url: '/', ...payload }), { TTL: 6 * 3600 });
+      sent = true;
+    } catch (e: any) {
+      if (e?.statusCode === 404 || e?.statusCode === 410) db.updateUser(u.id, { push_sub: null });
+      else console.warn('[push] failed', e?.statusCode ?? e?.message);
+    }
+  }
+  return sent;
 }
 
 function inQuiet(h: number, a: number, b: number) {
@@ -80,7 +105,7 @@ const MAX_PER_DAY = 4;
 
 async function tick() {
   const now = Date.now();
-  const users = db.db.prepare('SELECT * FROM users WHERE push_sub IS NOT NULL AND banned = 0').all() as unknown as db.UserRow[];
+  const users = db.db.prepare('SELECT * FROM users WHERE (push_sub IS NOT NULL OR apns_token IS NOT NULL) AND banned = 0').all() as unknown as db.UserRow[];
   for (const u of users) {
     const s = game.settingsOf(u);
     if (!s.push) continue;

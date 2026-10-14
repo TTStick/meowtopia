@@ -1,0 +1,36 @@
+{
+  "appId": "com.catnest.app",
+  "appName": "猫窝",
+  "webDir": "dist",
+  "backgroundColor": "#f6eedf",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "preferredContentMode": "mobile",
+    "backgroundColor": "#f6eedf",
+    "appendUserAgent": "CatNestApp/1.0"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#f6eedf",
+      "showSpinner": false
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    },
+    "PushNotifications": {
+      "presentationOptions": [
+        "banner",
+        "sound",
+        "list"
+      ]
+    },
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "LIGHT"
+    }
+  },
+  "loggingBehavior": "debug"
+}

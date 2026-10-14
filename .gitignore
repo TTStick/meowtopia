@@ -2,5 +2,10 @@ node_modules
 dist
 build
 data/
+secrets/
+caddy-root.crt
 .env
+.env.*
+!.env.example
+!.env.ios.example
 *.log

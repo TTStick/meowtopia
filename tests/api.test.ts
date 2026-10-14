@@ -322,3 +322,28 @@ test('passkeys: bind on one device, sign in on another', async () => {
   await p.call('DELETE', `/api/auth/passkey/${encodeURIComponent(keys[0].id)}`);
   assert.equal((await login(5)).status, 404, 'deleted passkeys stop working');
 });
+
+test('native app origin: CORS without credentials, bearer only, APNs tokens', async () => {
+  const app = 'capacitor://localhost';
+  const pre = await fetch(BASE + '/api/me', { method: 'OPTIONS', headers: { origin: app, 'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' } });
+  assert.equal(pre.status, 204);
+  assert.equal(pre.headers.get('access-control-allow-origin'), app);
+  assert.equal(pre.headers.get('access-control-allow-credentials'), null, 'never with credentials');
+  assert.equal((await fetch(BASE + '/api/me', { method: 'OPTIONS', headers: { origin: 'https://evil.example' } })).status, 403);
+
+  const web = new Player();
+  await web.join();
+  assert.equal((await web.call('GET', '/api/me', undefined, { origin: app })).status, 401, 'cookies do not count from the app origin');
+
+  const phone = new Player('app');
+  await phone.join('手机');
+  const me = await phone.call('GET', '/api/me', undefined, { origin: app });
+  assert.equal(me.status, 200);
+  assert.equal(me.data.user.nickname, '手机');
+  assert.equal((await phone.call('POST', '/api/push/apns', { token: 'nope' }, { origin: app })).status, 400);
+  const token = 'ab'.repeat(32);
+  const reg = await phone.call('POST', '/api/push/apns', { token, env: 'sandbox' }, { origin: app });
+  assert.equal(reg.status, 200);
+  assert.equal(reg.data.delivering, false, 'no APNs key configured in tests');
+  assert.equal((await phone.call('GET', '/api/me')).data.user.settings.push, true);
+});

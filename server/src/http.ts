@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { updateUser, type UserRow } from './db';
-import { allow, clientIp, LIMITS, originAllowed, securityHeaders } from './security';
+import { allow, clientIp, corsHeaders, fromApp, LIMITS, originAllowed, securityHeaders } from './security';
 import { sessionFromRequest, touchSession, type SessionRow } from './sessions';
 
 import { HttpError } from './errors';
@@ -75,6 +75,11 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   securityHeaders(req, res, false);
   const method = req.method ?? 'GET';
   const ip = clientIp(req);
+  const cors = corsHeaders(req, res);
+  if (method === 'OPTIONS') {
+    res.writeHead(cors ? 204 : 403).end();
+    return true;
+  }
   try {
     if (!allow(`ip:${ip}`, ...LIMITS.ipGlobal)) throw new HttpError(429, '太快啦，歇一会儿再来');
     const r = routes.find((x) => x.method === method && x.re.test(url.pathname));
@@ -89,7 +94,9 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     const params: Record<string, string> = {};
     r.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1])));
     const auth = r.o.auth !== false;
-    const found = sessionFromRequest(req);
+    // the app authenticates with its bearer token only; cookies never count cross-origin
+    let found = sessionFromRequest(req);
+    if (found && found.via === 'cookie' && fromApp(req)) found = null;
     if (auth && !found) throw new HttpError(401, '请先登录');
     if (auth && found && found.user.banned && !r.o.allowBanned) throw new HttpError(403, `账号已被暂停${found.user.ban_reason ? `：${found.user.ban_reason}` : ''}`);
     if (found) {

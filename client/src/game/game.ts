@@ -2,9 +2,10 @@ import { Viewport } from '../engine/view';
 import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
-import { api, takeLegacyToken, clearLegacyToken, WorldSocket, ApiError } from './net';
+import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError } from './net';
+import { isNative, loadToken, saveToken, hideSplash, statusBarOver, onResume, initNativePush } from './platform';
 import { takeGuestPow } from './pow';
-import { codeLogin, passkeyLogin, scheduleProtectNudge } from './account';
+import { codeLogin, passkeyLogin, scheduleProtectNudge, guestLogin, registerApns } from './account';
 import { ui, toast, activeCat, patchCat } from './state';
 import { audio } from './audio';
 import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
@@ -55,6 +56,21 @@ class Game {
       }
     });
     this.ws.on((m) => this.onServer(m));
+    // app chrome: splash until we know where to go, status bar text readable over the scene
+    const chrome = () => {
+      const s = ui.state;
+      if (s.phase !== 'loading') hideSplash();
+      statusBarOver(s.phase === 'game' && this.isNight());
+    };
+    ui.subscribe(chrome);
+    setInterval(chrome, 30_000);
+    onResume(() => {
+      if (ui.state.phase !== 'game') return;
+      // a phone that slept may hold a dead socket that hasn't noticed yet
+      this.ws.refresh();
+      void this.refreshMe().catch(() => {});
+      void this.loadUnread();
+    });
     try {
       const st = await api<{ llm: boolean; worldTz: number }>('GET', '/api/status');
       setWorldTz(st.worldTz);
@@ -66,8 +82,10 @@ class Game {
       this.running = true;
       requestAnimationFrame((t) => this.frame(t));
     }
-    // older versions kept the login token in localStorage: trade it for a cookie once
-    const legacy = takeLegacyToken();
+    // the app keeps its session token in the Keychain; the website uses a cookie,
+    // and older website versions kept the token in localStorage: trade it for a cookie once
+    const legacy = isNative ? null : takeLegacyToken();
+    if (isNative) setBearer(await loadToken());
     if (legacy) {
       try {
         await api('POST', '/api/auth/upgrade', {}, legacy);
@@ -84,6 +102,10 @@ class Game {
         return;
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
+          if (isNative) {
+            setBearer(null);
+            await saveToken(null);
+          }
           ui.set({ phase: 'welcome' });
           return;
         }
@@ -123,8 +145,7 @@ class Game {
 
   async register(nickname: string) {
     const pow = await takeGuestPow();
-    const r = await api<{ me: MeResponse }>('POST', '/api/auth/guest', { nickname, tzOffset: new Date().getTimezoneOffset(), pow });
-    this.setMe(r.me);
+    this.setMe(await guestLogin({ nickname, tzOffset: new Date().getTimezoneOffset(), pow }));
     ui.set({ phase: 'adopt' });
   }
 
@@ -158,6 +179,7 @@ class Game {
     this.loadUnread();
     this.loadWish();
     if (!me.user.secured) scheduleProtectNudge();
+    void initNativePush(registerApns, () => ui.set({ panel: 'letters' })).catch(() => {});
     if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
     else this.tip();
     api('POST', '/api/daily')
@@ -606,7 +628,8 @@ class Game {
   private onServer(m: ServerMsg) {
     this.world?.onServer(m);
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
-    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'friend')) ui.set((s) => ({ unread: s.unread + 1 }));
+    // only kinds the server also files as letters; live-only toasts (friend, home) would leave an empty mailbox with a badge
+    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond')) ui.set((s) => ({ unread: s.unread + 1 }));
     if (m.t === 'event' && m.kind === 'bond') this.refreshMe().catch(() => {});
     if (m.t === 'event' && m.kind === 'wish') {
       this.loadWish();

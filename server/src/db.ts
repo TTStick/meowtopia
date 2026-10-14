@@ -157,6 +157,8 @@ addColumn('users', 'code_at', 'INTEGER');
 addColumn('users', 'banned', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'ban_reason', 'TEXT');
 addColumn('reports', 'target_user', 'TEXT');
+addColumn('users', 'apns_token', 'TEXT');
+addColumn('users', 'apns_env', 'TEXT');
 db.exec('CREATE INDEX IF NOT EXISTS users_code_hash ON users(code_hash)');
 
 export interface UserRow {
@@ -171,6 +173,8 @@ export interface UserRow {
   fish: number;
   settings: string;
   push_sub: string | null;
+  apns_token: string | null;
+  apns_env: string | null;
   created: number;
   last_seen: number;
   active_cat: string | null;

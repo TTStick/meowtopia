@@ -4,6 +4,8 @@ import { ui, activeCat, toast, patchCat, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
 import { api } from '../game/net';
+import { isNative, enableNativePush, saveFile } from '../game/platform';
+import { registerApns } from '../game/account';
 import { audio } from '../game/audio';
 import { itemIcon, catPortrait } from '../art/icons';
 import { LiveCat } from './LiveCat';
@@ -15,6 +17,7 @@ import type { CatRecord, JournalEntry } from '../../../shared/types';
 import * as I from './icons';
 import { Sheet, Tabs, when } from './Sheet';
 import { SecuritySection, ProtectPanel, PrivacyPanel, ReportLink } from './Account';
+import { confirmBox } from './Dialog';
 
 const go = (panel: Panel) => ui.set({ panel });
 
@@ -444,7 +447,7 @@ function Bond() {
             <button
               class="btn small ghost"
               onClick={async () => {
-                if (!confirm(`真的要结束共养吗？${b.cat?.name ?? '它'}会搬去小镇生活，你们仍然能在街上遇见它。`)) return;
+                if (!(await confirmBox(`真的要结束共养吗？${b.cat?.name ?? '它'}会搬去小镇生活，你们仍然能在街上遇见它。`, { ok: '结束共养', danger: true }))) return;
                 await api('POST', `/api/bond/${b.id}/leave`);
                 await game.refreshMe();
                 load();
@@ -795,6 +798,16 @@ function SettingsPanel() {
   };
   const enablePush = async () => {
     try {
+      if (isNative) {
+        if (!(await enableNativePush(registerApns))) {
+          toast('没有拿到通知权限，可以在系统「设置 → 通知」里打开', 'ℹ️', 5000);
+          return;
+        }
+        await save({ push: true });
+        await api('POST', '/api/push/test').catch(() => {});
+        toast('开好啦，猫猫偶尔会给你写小纸条', '💌');
+        return;
+      }
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         toast('这个浏览器暂时收不到通知。iPhone 需要先「添加到主屏幕」再打开哦', 'ℹ️', 5000);
         return;
@@ -947,19 +960,10 @@ function PhotoPanel() {
   const name = `猫窝-${cat?.name ?? 'cat'}-${new Date().toISOString().slice(0, 10)}.png`;
   const share = async () => {
     try {
-      const blob = await (await fetch(photo)).blob();
-      const file = new File([blob], name, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: '猫窝' });
-        return;
-      }
-    } catch {
-      /* fall back to download */
+      await saveFile(name, await (await fetch(photo)).blob());
+    } catch (e) {
+      toast((e as Error).message);
     }
-    const a = document.createElement('a');
-    a.href = photo;
-    a.download = name;
-    a.click();
   };
   return (
     <Sheet title="咔嚓！" onClose={() => ui.set({ panel: null, photo: null })}>
