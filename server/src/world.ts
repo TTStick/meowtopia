@@ -324,7 +324,7 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
       giveItem(c, 'fish', n);
       e.trip?.finds.push(`${n}条小鱼干`);
       toOwners(c, { t: 'event', kind: 'find', text: `${c.name}在${poi.name}捡到了${n}条小鱼干！`, item: 'fish', catId: c.id });
-      broadcast({ t: 'emote', id: c.id, kind: 'fish' });
+      broadcastNear({ t: 'emote', id: c.id, kind: 'fish' }, e.st.x, e.st.y);
     } else {
       const it = rollFind(poi.zone, now, rng);
       if (it) {
@@ -333,7 +333,7 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
         e.trip?.findIds.push(it.id);
         db.addJournal(c.id, 'find', `在${poi.name}捡到了「${it.name}」。${it.desc}`, { item: it.id });
         toOwners(c, { t: 'event', kind: 'find', text: `${c.name}在${poi.name}捡到了「${it.name}」！`, item: it.id, catId: c.id });
-        broadcast({ t: 'emote', id: c.id, kind: it.rarity && it.rarity >= 3 ? 'star' : 'sparkle' });
+        broadcastNear({ t: 'emote', id: c.id, kind: it.rarity && it.rarity >= 3 ? 'star' : 'sparkle' }, e.st.x, e.st.y);
         if (watchedNear(e)) say(e, catLine(c, 'find', { item: it.name, place: poi.name }));
         if (it.rarity && it.rarity >= 3) game.remember(c, `在${poi.name}找到了稀有的${it.name}`);
         return;
@@ -393,7 +393,7 @@ async function meet(a: Ent, b: Ent, now: number, forced = false) {
   }
   broadcast({ t: 'act', id: a.st.id, anim: 'sit', x: a.st.x, y: a.st.y, dir: a.st.dir });
   broadcast({ t: 'act', id: b.st.id, anim: 'sit', x: b.st.x, y: b.st.y, dir: b.st.dir });
-  broadcast({ t: 'emote', id: a.st.id, kind: 'heart' });
+  broadcastNear({ t: 'emote', id: a.st.id, kind: 'heart' }, a.st.x, a.st.y);
   const place = placeName(a.st.x, a.st.y);
   const pa: CatRecord | NpcPersona = a.cat ?? personaOf(a.npc!), pb: CatRecord | NpcPersona = b.cat ?? personaOf(b.npc!);
   // friendship bookkeeping (cats only)
@@ -942,7 +942,7 @@ function talkNpc(e: Ent, o: Ent, c: Client, now: number) {
         db.kvSet(key, 1);
         db.invAdd(c.uid, n.gift.item, 1);
         send(c, { t: 'event', kind: 'gift', text: n.gift.text, item: n.gift.item });
-        broadcast({ t: 'emote', id: o.st.id, kind: 'heart' });
+        broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
       }
     }
   }, 2200);
