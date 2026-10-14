@@ -464,28 +464,19 @@ function tailPoints(base: [number, number], ang0: number, segLen: number, curl: 
 }
 
 function drawTail(pen: Pen, g: CatGenes, pal: Pal, pts: number[], R: number) {
-  const w = R * 0.34 * (1 + g.fluff * 0.45);
+  const fluff = 1 + g.fluff * 0.5;
+  const w0 = R * 0.4 * fluff, w1 = R * 0.26 * fluff;
   const patched = g.pattern === 'calico' || g.pattern === 'tortie';
   const color = pal.points ?? (patched ? ((g.seed & 1) ? pal.accent : pal.accent2) : pal.base);
-  const path = pen.tube(pts, w, color);
-  if (g.pattern === 'tabby' || g.pattern === 'mackerel' || (g.pattern === 'spotted')) {
-    pen.tubeOverlay(path, w, pal.accent, [R * 0.18, R * 0.24], R * 0.1);
-  }
-  if (patched) {
-    pen.tubeOverlay(path, w, (g.seed & 1) ? pal.accent2 : pal.accent, [R * 0.7, R * 1.6], R * 0.5);
-  }
-  if (g.white > 0.6) {
-    const n = pts.length;
-    pen.ctx.save();
-    pen.ctx.lineCap = 'round';
-    pen.ctx.strokeStyle = WHITE;
-    pen.ctx.lineWidth = w;
-    pen.ctx.beginPath();
-    pen.ctx.moveTo(pts[n - 4], pts[n - 3]);
-    pen.ctx.lineTo(pts[n - 2], pts[n - 1]);
-    pen.ctx.stroke();
-    pen.ctx.restore();
-  }
+  const striped = g.pattern === 'tabby' || g.pattern === 'mackerel' || g.pattern === 'spotted';
+  pen.taperTube(pts, w0, w1, color, {
+    stripe: striped
+      ? { color: pal.accent, on: R * 0.2, off: R * 0.26, phase: R * 0.1 }
+      : patched
+        ? { color: (g.seed & 1) ? pal.accent2 : pal.accent, on: R * 0.8, off: R * 1.5, phase: R * 0.6 }
+        : undefined,
+    tip: g.white > 0.6 ? { color: WHITE, len: R * 0.6 } : striped ? { color: pal.accent, len: R * 0.3 } : undefined,
+  });
 }
 
 function paw(pen: Pen, x: number, y: number, R: number, color: string, toes = true, rot = 0) {
@@ -652,8 +643,10 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   const T = R * 0.7 * c * bodyK * (1 + pose.breathe * 0.02);
   const air = pose.air * R;
   const by = -(legLen + T * 0.62) - air;
-  const halfLen = L * 0.92 * (run ? 1.1 : 1);
-  const tilt = pose.tilt + pose.standUp * 1.15;
+  const moving = Math.min(1, pose.gait);
+  // gallop: the body stretches and bunches; walk: a gentle rocking
+  const halfLen = L * 0.92 * (run ? 1.1 + Math.sin(pose.phase) * 0.07 : 1);
+  const tilt = pose.tilt + pose.standUp * 1.15 + Math.sin(pose.phase * 2) * 0.03 * moving * (run ? 2 : 1);
   const ct = Math.cos(tilt), st = Math.sin(tilt);
   // body local -> world (pivot at hip when standing up, center otherwise)
   const pivotX = -halfLen * pose.standUp, pivotY = by;
@@ -722,22 +715,14 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
     const f = footOf(leg.front, leg.off);
     const fxp = f[0] + (leg.near ? 0 : (leg.front ? -L * 0.1 : L * 0.08));
     const fyp = f[1] - R * 0.1;
-    const mx = (jx + fxp) / 2 + (leg.front ? L * 0.02 : -L * 0.16);
+    // knees: rear legs bend backwards at the hock, front legs bend a little forward while lifting
+    const lift = Math.max(0, -(fyp + R * 0.1)) / (R * 0.4);
+    const mx = (jx + fxp) / 2 + (leg.front ? L * (0.02 + lift * 0.12) : -L * 0.17);
     const my = (jy + fyp) / 2;
     const col = leg.near ? legColor : farColor;
-    pen.tube([jx, jy, mx, my, fxp, fyp], legW, col);
     const pc = g.socks ? (leg.near ? WHITE : shade(WHITE, -0.1)) : col;
-    if (g.socks) {
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = pc;
-      ctx.lineWidth = legW;
-      ctx.beginPath();
-      ctx.moveTo(fxp + (mx - fxp) * 0.35, fyp + (my - fyp) * 0.35);
-      ctx.lineTo(fxp, fyp);
-      ctx.stroke();
-      ctx.restore();
-    }
+    const legLenNow = Math.hypot(mx - jx, my - jy) + Math.hypot(fxp - mx, fyp - my);
+    pen.taperTube([jx, jy, mx, my, fxp, fyp], legW * 1.12, legW * 0.8, col, { tip: g.socks ? { color: pc, len: legLenNow * 0.4 } : undefined });
     pen.ellipse(fxp + R * 0.08, fyp + R * 0.03, R * 0.24, R * 0.14, pc, pen.lw * 0.9);
   };
   drawLeg(legs[0]);
@@ -786,11 +771,13 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
 
   // head
   const hx0 = S[0] + L * 0.55 + pose.headDX * R;
-  const hy0 = S[1] - T * 0.65 - R * 0.42 + pose.headDY * R + pose.crouch * R * 0.35 + pose.reach * R * 0.5;
+  // head bobs on every step, a beat after the body
+  const bob = Math.sin(pose.phase * 2 + 0.6) * R * (run ? 0.07 : 0.045) * moving;
+  const hy0 = S[1] - T * 0.65 - R * 0.42 + pose.headDY * R + pose.crouch * R * 0.35 + pose.reach * R * 0.5 + bob;
   drawNeckwear(pen, outfit, S[0] + L * 0.3, S[1] - T * 0.55, R * bodyK, 0.6);
   ctx.save();
   ctx.translate(hx0, hy0);
-  ctx.rotate(pose.headTilt - tilt * 0.4);
+  ctx.rotate(pose.headTilt - tilt * 0.4 + Math.sin(pose.phase * 2) * 0.03 * moving);
   drawHead(pen, g, pal, R, pose);
   drawHeadwear(pen, outfit, R, false);
   drawFacewear(pen, outfit, R, pose.turn);

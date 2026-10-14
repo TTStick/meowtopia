@@ -162,6 +162,69 @@ export class Pen {
     ctx.restore();
   }
 
+  /**
+   * Tapered outlined tube (tails, legs). Width goes from w0 at the start to w1
+   * at the end. Optional stripes alternate the fill colour along the length,
+   * and an optional tip colour paints the last `tip.len` units.
+   */
+  taperTube(
+    pts: ArrayLike<number>,
+    w0: number,
+    w1: number,
+    color: string,
+    opts: { stripe?: { color: string; on: number; off: number; phase?: number }; tip?: { color: string; len: number }; lw?: number } = {},
+  ) {
+    const lw = opts.lw ?? this.lw;
+    const p = this.jitter(pts, this.wob * 0.5);
+    const n = pts.length >> 1;
+    // sample the Catmull-Rom spline
+    const sx: number[] = [], sy: number[] = [];
+    const per = 5;
+    for (let i = 0; i < n - 1; i++) {
+      const i0 = Math.max(0, i - 1), i2 = i + 1, i3 = Math.min(n - 1, i + 2);
+      const x0 = p[i0 * 2], y0 = p[i0 * 2 + 1], x1 = p[i * 2], y1 = p[i * 2 + 1];
+      const x2 = p[i2 * 2], y2 = p[i2 * 2 + 1], x3 = p[i3 * 2], y3 = p[i3 * 2 + 1];
+      for (let k = 0; k < per; k++) {
+        const t = k / per, t2 = t * t, t3 = t2 * t;
+        sx.push(0.5 * (2 * x1 + (-x0 + x2) * t + (2 * x0 - 5 * x1 + 4 * x2 - x3) * t2 + (-x0 + 3 * x1 - 3 * x2 + x3) * t3));
+        sy.push(0.5 * (2 * y1 + (-y0 + y2) * t + (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 + (-y0 + 3 * y1 - 3 * y2 + y3) * t3));
+      }
+    }
+    sx.push(p[(n - 1) * 2]);
+    sy.push(p[(n - 1) * 2 + 1]);
+    const m = sx.length;
+    const acc = [0];
+    for (let i = 1; i < m; i++) acc.push(acc[i - 1] + Math.hypot(sx[i] - sx[i - 1], sy[i] - sy[i - 1]));
+    const total = acc[m - 1] || 1;
+    const ctx = this.ctx;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = this.ink;
+    for (let i = 0; i < m - 1; i++) {
+      const t = acc[i] / total;
+      ctx.lineWidth = w0 + (w1 - w0) * t + lw * 2;
+      ctx.beginPath();
+      ctx.moveTo(sx[i], sy[i]);
+      ctx.lineTo(sx[i + 1], sy[i + 1]);
+      ctx.stroke();
+    }
+    for (let i = 0; i < m - 1; i++) {
+      const d = acc[i], t = d / total;
+      let c = color;
+      if (opts.stripe) {
+        const per2 = opts.stripe.on + opts.stripe.off;
+        if ((d + (opts.stripe.phase ?? 0)) % per2 < opts.stripe.on) c = opts.stripe.color;
+      }
+      if (opts.tip && total - d < opts.tip.len) c = opts.tip.color;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w0 + (w1 - w0) * t;
+      ctx.beginPath();
+      ctx.moveTo(sx[i], sy[i]);
+      ctx.lineTo(sx[i + 1], sy[i + 1]);
+      ctx.stroke();
+    }
+  }
+
   /** A few short parallel strokes for shading / texture. */
   hatch(x: number, y: number, w: number, h: number, n: number, angle: number, color = INK_SOFT, lw = this.lw * 0.6) {
     const ctx = this.ctx;
