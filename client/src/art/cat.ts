@@ -165,6 +165,12 @@ function drawEar(pen: Pen, g: CatGenes, pal: Pal, R: number, side: number, pose:
       ix + px * bw * k, iy + py * bw * k,
     ];
     pen.shape(inner, pal.points ? mix(pal.points, EAR_PINK, 0.35) : EAR_PINK, pen.lw * 0.6, rgba('#4a3a34', 0.5));
+    // two wisps of ear fur
+    const fc = rgba('#4a3a34', 0.35);
+    for (const k of [-0.25, 0.2]) {
+      const sx = ix + px * bw * k, sy = iy + py * bw * k;
+      pen.line([sx, sy, sx + dx * len * 0.3 - px * bw * 0.1, sy + dy * len * 0.3 - py * bw * 0.1], pen.lw * 0.5, fc, 0.2);
+    }
   }
 }
 
@@ -585,7 +591,14 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
         const hw = legW / 2;
-        ctx.fillStyle = legColor;
+        if (pal.points) {
+          // colour points darken toward the paws
+          const grd = ctx.createLinearGradient(0, topY, 0, fy);
+          grd.addColorStop(0, shade(pal.base, 0.1));
+          grd.addColorStop(0.55, mix(pal.base, pal.points, 0.55));
+          grd.addColorStop(1, pal.points);
+          ctx.fillStyle = grd;
+        } else ctx.fillStyle = legColor;
         ctx.fill(pen.path([tx - nx * hw, topY - ny * hw, tx + nx * hw, topY + ny * hw, fx2 + nx * hw, fy + ny * hw, fx2 - nx * hw, fy - ny * hw], true, 0.2, 0));
         if (g.socks && !pal.points) {
           ctx.fillStyle = WHITE;
@@ -605,7 +618,26 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
         pen.ellipse(fx2, fy + R * 0.04, R * 0.2, R * 0.17, pawColor, pen.lw * 0.9, pen.ink, 0, 8);
       } else {
         paw(pen, fx2, fy, R * bodyK, pawColor, true);
+        // a raised paw shows its pink toe beans
+        if (raise > 0.35) {
+          const k = Math.min(1, (raise - 0.35) * 2);
+          ctx.fillStyle = rgba(PAD_PINK, 0.9 * k);
+          ctx.beginPath();
+          ctx.ellipse(fx2, fy + R * 0.02, R * 0.09, R * 0.06, 0, 0, Math.PI * 2);
+          ctx.fill();
+          for (const ox of [-0.12, 0, 0.12]) {
+            ctx.beginPath();
+            ctx.arc(fx2 + ox * R, fy - R * 0.08, R * 0.035, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
       }
+    }
+    // a little tuft of chest fur
+    if (sit >= 0.4 && beg < 0.3) {
+      const fc = rgba('#4a3a34', 0.4);
+      pen.line([-R * 0.12, -bh * 0.82, -R * 0.05, -bh * 0.76, 0, -bh * 0.83], pen.lw * 0.6, fc, 0.3);
+      pen.line([0, -bh * 0.83, R * 0.06, -bh * 0.76, R * 0.13, -bh * 0.82], pen.lw * 0.6, fc, 0.3);
     }
   }
 
