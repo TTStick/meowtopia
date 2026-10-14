@@ -59,6 +59,19 @@ interface Client {
   nickname: string;
   cats: Set<string>;
   lastPos: number;
+  view: { x: number; y: number } | null; // camera centre; null = not watching the world
+}
+
+/** Cosmetic, high-frequency messages only travel to players looking nearby. */
+const AOI = 1600;
+function broadcastNear(m: ServerMsg, x: number, y: number, except?: Client, radius = AOI) {
+  const s = JSON.stringify(m);
+  for (const c of clients) {
+    if (c === except || c.ws.readyState !== 1) continue;
+    const mine = c.uid && 'id' in m && c.cats.has((m as { id: string }).id);
+    if (!mine && (!c.view || Math.abs(c.view.x - x) > radius || Math.abs(c.view.y - y) > radius * 0.8)) continue;
+    c.ws.send(s);
+  }
 }
 
 const ents = new Map<string, Ent>();
@@ -67,6 +80,7 @@ const meetCooldown = new Map<string, number>();
 setInterval(() => {
   const now = Date.now();
   for (const [k, t] of meetCooldown) if (t < now) meetCooldown.delete(k);
+  for (const [k, t] of chatterCells) if (t < now) chatterCells.delete(k);
 }, 10 * 60_000).unref();
 
 // ---------- broadcast ----------
@@ -151,8 +165,18 @@ function setAct(e: Ent, anim: string, dur: number, now: number) {
   broadcast({ t: 'act', id: e.st.id, anim, x: e.st.x, y: e.st.y, dir: e.st.dir });
 }
 
-function say(e: Ent, text: string) {
-  broadcast({ t: 'say', id: e.st.id, text });
+const chatterCells = new Map<number, number>();
+/** Idle chatter is rationed per ~600-unit area so crowded places stay readable. */
+function chatterAllowed(x: number, y: number, now: number): boolean {
+  const key = Math.floor(x / 600) * 1000 + Math.floor(y / 600);
+  if ((chatterCells.get(key) ?? 0) > now) return false;
+  chatterCells.set(key, now + 7000);
+  return true;
+}
+
+function say(e: Ent, text: string, idle = false) {
+  if (idle && !chatterAllowed(e.st.x, e.st.y, Date.now())) return;
+  broadcastNear({ t: 'say', id: e.st.id, text }, e.st.x, e.st.y, undefined, 900);
 }
 
 // ---------- spawning ----------
@@ -316,7 +340,7 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
       }
     }
   }
-  if (watchedNear(e) && rng.chance(0.55)) say(e, catLine(c, 'place', { place: poi.name }));
+  if (watchedNear(e) && rng.chance(0.55)) say(e, catLine(c, 'place', { place: poi.name }), true);
 }
 
 function finishTrip(e: Ent, now: number) {
@@ -356,8 +380,9 @@ function watchedNear(e: Ent): boolean {
   return clients.size > 0;
 }
 
-async function meet(a: Ent, b: Ent, now: number) {
+async function meet(a: Ent, b: Ent, now: number, forced = false) {
   const key = pairKey(a.st.id, b.st.id);
+  const talk = forced || chatterAllowed(a.st.x, a.st.y, now);
   meetCooldown.set(key, now + 12 * 60_000);
   for (const [x, y] of [[a, b], [b, a]] as const) {
     x.path = [];
@@ -390,6 +415,11 @@ async function meet(a: Ent, b: Ent, now: number) {
         if (!ownerOnline(mc)) for (const uid of game.ownersOf(mc)) game.notify(uid, 'friend', `${mc.name}交到了新朋友`, `在${place}遇到了${oc.name}，它们碰了碰鼻子。`);
       }
     }
+  }
+  if (!talk) {
+    // a quiet nose-boop: no words, just a heart
+    for (const x of [a, b]) x.until = Date.now() + 5000;
+    return;
   }
   const lines = await catDialogue(pa, pb, place);
   let delay = 600;
@@ -474,7 +504,7 @@ function tickCat(e: Ent, now: number) {
   const poi = choosePoi(e, now);
   const [tx, ty] = poiPoint(world, poi, (now / 1000) | 0);
   if (!walkTo(e, tx, ty, now, Math.random() < 0.08 * (1 + c.personality.playful), () => arriveAtPoi(e, poi, Date.now()))) setAct(e, 'sit', 5000, now);
-  if (Math.random() < 0.15) setTimeout(() => ents.has(e.st.id) && say(e, catLine(c, 'explore')), 1500);
+  if (Math.random() < 0.15) setTimeout(() => ents.has(e.st.id) && say(e, catLine(c, 'explore'), true), 1500);
 }
 
 // NPC behaviour
@@ -520,7 +550,7 @@ function tickNpc(n: NpcDef, now: number) {
       e.nextSay = now + 25_000 + Math.random() * 50_000;
       const friend = [...npcEnts.values()].find((o) => o !== e && ents.has(o.st.id) && o.mode === 'idle' && Math.hypot(o.st.x - e.st.x, o.st.y - e.st.y) < 160 && (meetCooldown.get(pairKey(e.st.id, o.st.id)) ?? 0) < now);
       if (friend && Math.random() < 0.6) void npcChat(e, friend, now);
-      else say(e, npcLine(personaOf(n), `在${poi.name}${actWord(s.act)}`, n.lines));
+      else say(e, npcLine(personaOf(n), `在${poi.name}${actWord(s.act)}`, n.lines), true);
     }
     return;
   }
@@ -577,7 +607,7 @@ function chatter(now: number) {
     e.nextSay = now + 30_000 + Math.random() * 60_000;
     if (Math.random() < 0.5) {
       const ctx = e.st.anim === 'sleep' || e.st.anim === 'nap' ? 'sleepy' : e.st.anim === 'belly' ? 'sun' : 'idle';
-      say(e, catLine(e.cat, ctx, { place: e.poi ? POI_MAP[e.poi]?.name : undefined }));
+      say(e, catLine(e.cat, ctx, { place: e.poi ? POI_MAP[e.poi]?.name : undefined }), true);
     }
   }
 }
@@ -716,7 +746,8 @@ function snapshot(now: number): EntState[] {
 }
 
 export function onConnection(ws: WebSocket, uid: string | null, nickname: string) {
-  const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0 };
+  const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0, view: null };
+  if (uid) for (const cat of game.catsOf(uid)) c.cats.add(cat.id);
   let budget = 40, budgetAt = Date.now();
   clients.add(c);
   send(c, { t: 'welcome', you: uid, ents: snapshot(Date.now()), now: Date.now(), online: clients.size });
@@ -766,6 +797,9 @@ function handle(c: Client, m: ClientMsg) {
   const now = Date.now();
   switch (m.t) {
     case 'ping':
+      return;
+    case 'view':
+      if (Number.isFinite(m.x) && Number.isFinite(m.y)) c.view = { x: m.x, y: m.y };
       return;
     case 'watch':
       send(c, { t: 'welcome', you: c.uid, ents: snapshot(now), now, online: clients.size });
@@ -828,7 +862,7 @@ function handle(c: Client, m: ClientMsg) {
       e.st.y = m.y;
       e.st.dir = m.dir === -1 ? -1 : 1;
       e.st.anim = String(m.anim).slice(0, 16);
-      broadcast({ t: 'pos', id: e.st.id, x: m.x, y: m.y, dir: e.st.dir, anim: e.st.anim }, c);
+      broadcastNear({ t: 'pos', id: e.st.id, x: m.x, y: m.y, dir: e.st.dir, anim: e.st.anim }, m.x, m.y, c);
       // discovering places by walking there yourself
       for (const poi of POIS) {
         if (Math.hypot(poi.x * TILE - m.x, poi.y * TILE - m.y) < poi.r * TILE && e.poi !== poi.id) {
@@ -858,7 +892,7 @@ function handle(c: Client, m: ClientMsg) {
       const cat = ownCat(c, m.catId);
       const e = cat && ents.get(cat.id);
       if (!e) return;
-      if (m.t === 'emote') broadcast({ t: 'emote', id: e.st.id, kind: String(m.kind).slice(0, 12) });
+      if (m.t === 'emote') broadcastNear({ t: 'emote', id: e.st.id, kind: String(m.kind).slice(0, 12) }, e.st.x, e.st.y);
       else {
         const anim = String(m.anim).slice(0, 16);
         if (!e.controlledBy) {
@@ -886,7 +920,7 @@ function handle(c: Client, m: ClientMsg) {
         if (o.npc) talkNpc(e, o, c, t);
         else {
           meetCooldown.delete(pairKey(e.st.id, o.st.id));
-          void meet(e, o, t);
+          void meet(e, o, t, true);
         }
       });
       return;

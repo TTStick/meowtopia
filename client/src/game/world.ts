@@ -91,6 +91,8 @@ export class WorldScene implements Scene {
   private lastPoi = '';
   private hoverId: string | null = null;
   private welcomed = false;
+  private sentView: [number, number] = [-1e9, -1e9];
+  private sentViewAt = -100;
 
   constructor(g: GameLike) {
     this.g = g;
@@ -452,6 +454,12 @@ export class WorldScene implements Scene {
     }
     this.zoom += (this.targetZoom - this.zoom) * (1 - Math.exp(-dt * 8));
     if (v) this.clampCam(v);
+    // tell the server where we're looking (for area-of-interest filtering)
+    if (Math.hypot(this.camX - this.sentView[0], this.camY - this.sentView[1]) > 240 || T - this.sentViewAt > 5) {
+      this.sentView = [this.camX, this.camY];
+      this.sentViewAt = T;
+      this.g.ws.send({ t: 'view', x: Math.round(this.camX), y: Math.round(this.camY) });
+    }
     this.updateCritters(dt);
     // where is my cat
     const me = myId ? this.ents.get(myId) : undefined;

@@ -51,4 +51,5 @@ export type ClientMsg =
   | { t: 'act'; catId: string; anim: string }
   | { t: 'interact'; catId: string; target: string }
   | { t: 'explore'; catId: string }
+  | { t: 'view'; x: number; y: number } // camera centre, for area-of-interest filtering
   | { t: 'ping' };
