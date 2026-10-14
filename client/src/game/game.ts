@@ -43,26 +43,30 @@ class Game {
     this.ws.onState = (c) => ui.set({ connected: c });
     this.ws.on((m) => this.onServer(m));
     api('GET', '/api/status').then((s) => ui.set({ llm: !!s.llm })).catch(() => {});
+    if (!this.running) {
+      this.running = true;
+      requestAnimationFrame((t) => this.frame(t));
+    }
     if (!getToken()) {
       ui.set({ phase: 'welcome' });
-    } else {
+      return;
+    }
+    for (let attempt = 0; ; attempt++) {
       try {
         const me = await api<MeResponse>('GET', '/api/me');
         this.setMe(me);
         await this.enterGame();
+        return;
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
           setToken(null);
           ui.set({ phase: 'welcome' });
-        } else {
-          ui.set({ phase: 'welcome' });
-          toast((e as Error).message);
+          return;
         }
+        // server unreachable or a hiccup: keep the player's place and retry quietly
+        if (attempt === 1) toast('正在连接猫窝…', '🐾', 2500);
+        await new Promise((r) => setTimeout(r, Math.min(8000, 1500 * (attempt + 1))));
       }
-    }
-    if (!this.running) {
-      this.running = true;
-      requestAnimationFrame((t) => this.frame(t));
     }
   }
 

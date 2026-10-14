@@ -426,7 +426,10 @@ function tickCat(e: Ent, now: number) {
   const w = weatherAt(now);
   const isTown = c.ownerId === 'town';
   if (!isTown && e.trip) {
-    const late = ck.hour >= 21 || ck.hour < 5.5;
+    // while the owner is out with the cat, it stays as long as they like (even late at night)
+    const accompanied = e.trip.userSent && ownerOnline(c);
+    if (accompanied) e.trip.ends = Math.max(e.trip.ends, now + 10 * 60_000);
+    const late = (ck.hour >= 21 || ck.hour < 5.5) && !accompanied;
     if (!e.trip.goingHome && (now > e.trip.ends || late || (w.kind === 'rain' && !e.trip.userSent && now - e.trip.started > 5 * 60_000))) {
       e.trip.goingHome = true;
       if (watchedNear(e)) say(e, catLine(c, 'home'));

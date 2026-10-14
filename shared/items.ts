@@ -53,7 +53,7 @@ export const ITEMS: ItemDef[] = [
   F({ id: 'fish_tank', name: '小鱼缸', cat: 'furniture', price: 300, w: 1, h: 1, desc: '可以看一整天的猫猫电视。', spots: [{ kind: 'watch', x: 0.5, y: 1.05, z: 0 }] }),
   F({ id: 'hammock', name: '猫吊床', cat: 'furniture', price: 280, w: 2, h: 1, desc: '摇啊摇，摇到外婆桥。', spots: [{ kind: 'sleep', x: 1, y: 0.55, z: 24 }] }),
   F({ id: 'tunnel', name: '猫隧道', cat: 'furniture', price: 120, w: 2, h: 1, desc: '钻进去就是另一个世界。', spots: [{ kind: 'hide', x: 1, y: 0.6, z: 0 }, { kind: 'play', x: 0.1, y: 0.6, z: 0 }] }),
-  F({ id: 'kotatsu', name: '暖桌', cat: 'furniture', price: 420, w: 2, h: 2, light: 40, desc: '冬天的终极答案，进去了就不想出来。', spots: [{ kind: 'warm', x: 1, y: 1.5, z: 0 }, { kind: 'perch', x: 1, y: 0.9, z: 30 }] }),
+  F({ id: 'kotatsu', name: '暖桌', cat: 'furniture', price: 420, w: 2, h: 2, light: 40, desc: '冬天的终极答案，进去了就不想出来。', spots: [{ kind: 'warm', x: 1.1, y: 2.12, z: 0 }, { kind: 'perch', x: 1, y: 0.9, z: 30 }] }),
   F({ id: 'teepee', name: '小帐篷', cat: 'furniture', price: 200, w: 1, h: 1, desc: '秘密基地，闲猫免进。', spots: [{ kind: 'hide', x: 0.5, y: 0.65, z: 0 }] }),
   F({ id: 'radio', name: '收音机', cat: 'furniture', price: 160, w: 1, h: 1, desc: '放着软软的音乐，猫猫会跟着摇尾巴。', spots: [{ kind: 'sit', x: 0.5, y: 0.95, z: 0 }] }),
   F({ id: 'table', name: '小圆桌', cat: 'furniture', price: 150, w: 1, h: 1, desc: '桌上的杯子危在旦夕。', spots: [{ kind: 'perch', x: 0.5, y: 0.55, z: 34 }] }),

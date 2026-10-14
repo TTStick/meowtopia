@@ -135,7 +135,7 @@ export const NPCS: NpcDef[] = [
     outfit: 'musician',
     schedule: [
       { from: 10, to: 14, poi: 'riverbank', act: 'sit' },
-      { from: 16, to: 22.5, poi: 'fountain', act: 'music' },
+      { from: 16, to: 23.5, poi: 'fountain', act: 'music' },
     ],
     lines: ['这首歌叫《晒太阳》', '啦啦啦～喵喵喵～', '想听什么，我都会一点点', '音乐是看不见的小鱼干', '跟着节奏摇尾巴吧'],
   },
@@ -155,6 +155,17 @@ export const NPCS: NpcDef[] = [
     outfit: 'tailor', shop: 'tailor',
     schedule: [{ from: 9, to: 20, poi: 'tailor', act: 'work' }],
     lines: ['这个颜色，很衬你', '时尚就是要有一点点不一样', '哼，我的手艺可是全镇第一', '试试这顶帽子？', '美丽的猫猫值得美丽的衣服'],
+  },
+  {
+    id: 'npc_night', name: '阿月', role: '深夜热奶摊', desc: '只在夜里出摊的灰白猫，给晚归的猫猫温一杯热羊奶，话不多但很会听。', voice: '轻声细语，像在说悄悄话',
+    genes: g(113, { base: '#dfe3e6', accent: '#8f969d', pattern: 'bicolor', white: 0.5, eye: '#e9b54a', chonk: 1.05 }),
+    outfit: 'apron',
+    schedule: [
+      { from: 20.5, to: 24, poi: 'board', act: 'work' },
+      { from: 0, to: 1.5, poi: 'board', act: 'work' },
+    ],
+    lines: ['夜里风凉，喝口热的吧', '今天辛苦了', '月亮今晚很圆呢', '慢慢来，不着急', '睡不着的话，坐一会儿再走', '星星都出来陪你啦'],
+    gift: { item: 'treat_milk', chance: 0.4, text: '阿月递给你一小杯温羊奶' },
   },
 ];
 

@@ -112,7 +112,10 @@ export class NestScene implements NestHost {
       if (!def.flat) for (let y = p.gy; y < p.gy + h; y++) for (let x = p.gx; x < p.gx + w; x++) this.grid.blocked[y * ROOM_W + x] = 1;
       for (const s of def.spots ?? []) {
         const sx = p.flip ? (p.gx + w - s.x) * CELL : (p.gx + s.x) * CELL;
-        this.spots.push({ kind: s.kind, x: sx, y: (p.gy + s.y) * CELL, z: s.z, uid: p.uid, item: p.item, sortY: pl.bottom + 0.2, face: s.face ? ((p.flip ? -s.face : s.face) as 1 | -1) : undefined });
+        const sy = (p.gy + s.y) * CELL;
+        // spots in front of the footprint sort by their own depth; inside it, between the item's layers
+        const sortY = s.y >= h ? sy + 1 : pl.bottom + 0.2;
+        this.spots.push({ kind: s.kind, x: sx, y: sy, z: s.z, uid: p.uid, item: p.item, sortY, face: s.face ? ((p.flip ? -s.face : s.face) as 1 | -1) : undefined });
       }
     }
     for (const wi of this.layout.wall) {

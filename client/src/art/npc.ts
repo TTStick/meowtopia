@@ -135,6 +135,17 @@ export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, ki
       pen.shape([10, by - 26, 22, by - 26, 20, by - 16, 12, by - 16], '#8fc3e8', 1.1);
       arm(1, 12, by - 24 + k);
       if (Math.sin(t * 3) > 0) pen.line([22, by - 22, 28, by - 14], 1, '#8fc3e8');
+    } else if (outfit === 'apron') {
+      // a warm cup of milk, steaming
+      arm(-1, -6, by - 24);
+      arm(1, 6, by - 24);
+      pen.shape([-5, by - 30, 5, by - 30, 4, by - 22, -4, by - 22], '#ffffff', 1.1);
+      for (let i = 0; i < 2; i++) {
+        const k = (t * 0.6 + i * 0.5) % 1;
+        ctx.globalAlpha = 1 - k;
+        pen.line([-2 + i * 4, by - 32 - k * 6, -3 + i * 4 + Math.sin(k * 6) * 2, by - 38 - k * 8], 1, rgba(INK, 0.45));
+        ctx.globalAlpha = 1;
+      }
     } else if (outfit === 'tailor') {
       arm(-1, -6, by - 26);
       arm(1, 6 + k * 3, by - 26);
