@@ -8,6 +8,7 @@ import { coatName, traitWords } from '../../shared/genes';
 import { fallbackLine, fallbackDialogue, fallbackJournal, type SpeechCtx, type SpeechInfo } from '../../shared/speech';
 import { clockAt, phaseOf, PHASE_NAME, weatherAt, WEATHER_NAME, SEASON_NAME } from '../../shared/time';
 import { ageOf } from '../../shared/stats';
+import { POI_ALIASES } from '../../shared/world';
 
 const MODEL = process.env.CAT_LLM_MODEL || 'claude-opus-5-5';
 const RPM = Number(process.env.CAT_LLM_RPM || 40);
@@ -276,9 +277,15 @@ export async function interpretCommand(cat: CatRecord, text: string, places: { i
 
 function keywordCommand(text: string, places: { id: string; name: string }[]): Omit<CommandResult, 'reply'> {
   const t = text.toLowerCase();
-  for (const p of places) {
-    const short = p.name.replace(/[的小]/g, '');
-    if (t.includes(p.name) || (short.length >= 2 && t.includes(short))) return { action: 'goto', place: p.id };
+  if (!/回家|回窝/.test(t)) {
+    // longest matching alias wins ("去码头看看大海" → pier, not the generic "海")
+    let best: { id: string; len: number } | null = null;
+    for (const p of places) {
+      for (const w of [p.name, ...(POI_ALIASES[p.id] ?? [])]) {
+        if (t.includes(w) && (!best || w.length > best.len)) best = { id: p.id, len: w.length };
+      }
+    }
+    if (best) return { action: 'goto', place: best.id };
   }
   const rules: [RegExp, CommandAction][] = [
     [/回家|回窝|回来/, 'home'],

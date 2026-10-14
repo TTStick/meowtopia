@@ -82,6 +82,17 @@ export const POIS: Poi[] = [
 ];
 
 export const POI_MAP: Record<string, Poi> = Object.fromEntries(POIS.map((p) => [p.id, p]));
+
+/** Everyday words people use for each place (for understanding commands without a model). */
+export const POI_ALIASES: Record<string, string[]> = {
+  fountain: ['喷泉', '广场'], board: ['公告栏', '布告'], bakery: ['面包', '烤'], cafe: ['咖啡'], library: ['图书馆', '看书', '书'],
+  store: ['杂货', '商店', '买东西'], postoffice: ['邮局', '寄信', '信'], flowershop: ['花店', '买花'], tailor: ['裁缝', '衣服'],
+  home_lane: ['小巷', '巷子', '门口'], pond: ['池塘', '看鱼', '锦鲤'], playground: ['游乐场', '滑梯', '秋千', '沙坑'],
+  park_tree: ['公园', '大树下'], bench_park: ['长椅', '湖边'], forest_stump: ['森林', '树林', '树桩'], mushroom: ['蘑菇'],
+  bridge_n: ['木桥', '桥'], riverbank: ['河边', '小河', '河'], flowerfield: ['花田', '蝴蝶', '花丛'], windmill: ['风车'],
+  hilltop: ['山顶', '山坡', '看星星', '星星', '山'], meadow: ['草地', '草坪', '打滚'], picnic: ['野餐'],
+  pier: ['码头', '海边', '大海', '海', '钓鱼', '渔夫'], beach: ['沙滩', '海滩', '贝壳'], lighthouse: ['灯塔'],
+};
 export const HOME_SPAWN: [number, number] = [24 * TILE, 47.6 * TILE];
 
 // ---------- geometry helpers ----------

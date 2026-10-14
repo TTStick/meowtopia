@@ -825,7 +825,20 @@ textarea {
   top: calc(100px + var(--safe-top));
 }
 .toasts {
-  top: calc(136px + var(--safe-top));
+  top: auto;
+  bottom: calc(150px + var(--safe-bottom));
+}
+.catchip {
+  flex-shrink: 0;
+  max-width: 48%;
+}
+@media (max-width: 420px) {
+  .wx .wx-t {
+    display: none;
+  }
+  .hud-top {
+    gap: 6px;
+  }
 }
 .goodnight {
   position: absolute;

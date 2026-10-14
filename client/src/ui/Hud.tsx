@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ui, activeCat, toast, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
@@ -29,9 +29,9 @@ function Weather() {
   const night = h < 6 || h >= 19;
   const Icon = w.kind === 'rain' ? I.IRain : w.kind === 'snow' ? I.ISnow : w.kind === 'cloudy' ? I.ICloud : night ? I.IMoon : I.ISun;
   return (
-    <span class="pill" title={SEASON_NAME[clock.season()]}>
+    <span class="pill wx" title={SEASON_NAME[clock.season()]}>
       <Icon size={16} />
-      {PHASE_NAME[phaseOf(h)]}
+      <span class="wx-t">{PHASE_NAME[phaseOf(h)]}</span>
     </span>
   );
 }
@@ -152,6 +152,11 @@ export function Toasts() {
 
 function Speak({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('');
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => ref.current?.focus(), 30);
+    return () => clearTimeout(t);
+  }, []);
   const busy = useStore(ui, (s) => s.busy);
   const cat = activeCat();
   const send = async () => {
@@ -163,8 +168,8 @@ function Speak({ onClose }: { onClose: () => void }) {
   return (
     <div class="speak">
       <input
+        ref={ref}
         class="field"
-        autoFocus
         maxLength={60}
         placeholder={`对${cat?.name ?? '猫猫'}说…（如：去河边看看、睡一会儿）`}
         value={text}
