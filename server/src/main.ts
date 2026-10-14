@@ -3,6 +3,10 @@ import { createServer } from 'node:http';
 import { extname, join, resolve } from 'node:path';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
+{
+  const { setWorldTz } = await import('../../shared/time');
+  setWorldTz(process.env.CAT_WORLD_TZ !== undefined ? Number(process.env.CAT_WORLD_TZ) : -new Date().getTimezoneOffset() / 60);
+}
 
 const { handleApi, authUser } = await import('./http');
 await import('./api');
@@ -12,7 +16,7 @@ const { flushCats } = await import('./game');
 const { WebSocketServer } = await import('ws');
 const { llmEnabled } = await import('./llm');
 
-const PORT = Number(process.env.PORT || 8787);
+const PORT = Number(process.env.PORT || 8737);
 const DIST = resolve('dist');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -59,7 +63,8 @@ server.on('upgrade', (req, socket, head) => {
 
 startWorld();
 startPush();
-server.listen(PORT, () => console.log(`[cat] server on http://localhost:${PORT}  llm=${llmEnabled() ? 'on' : 'off (fallback speech)'}`));
+const { WORLD_TZ } = await import('../../shared/time');
+server.listen(PORT, () => console.log(`[cat] server on http://localhost:${PORT}  llm=${llmEnabled() ? 'on' : 'off (fallback speech)'}  world clock UTC${WORLD_TZ >= 0 ? '+' : ''}${WORLD_TZ}`));
 
 const shutdown = () => {
   flushCats();

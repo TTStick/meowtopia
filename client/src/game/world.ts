@@ -806,7 +806,7 @@ export class WorldScene implements Scene {
       for (let cx = cx0; cx <= cx1; cx++) {
         const key = `${cx},${cy}`;
         if (!this.chunks.has(key) && built >= 2) {
-          ctx.fillStyle = '#cfe6ae';
+          ctx.fillStyle = ['#cfe6ae', '#cfe6ae', '#d9e6b2', '#e4ebde'][season];
           ctx.fillRect(cx * CPX, cy * CPX, CPX, CPX);
           continue;
         }
@@ -868,6 +868,7 @@ export class WorldScene implements Scene {
     const focus = this.follow ? this.ents.get(this.follow) : this.myCatId ? this.ents.get(this.myCatId) : undefined;
     const wind = 0.6 + wthr.wind;
     for (const p of this.w.props) {
+      if (p.season !== undefined && p.season !== season) continue;
       const b = BOUNDS[p.k] ?? [-40, -80, 40, 10];
       const pw = p.k === 'house' || p.k === 'shop' ? p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136) : p.s;
       if (p.x + b[2] * pw < bx0 || p.x + b[0] * pw > bx1 || p.y + b[1] * pw > by1 || p.y + b[3] * pw < by0) continue;
@@ -1184,7 +1185,9 @@ export class WorldScene implements Scene {
       const lights: [number, number, number, number][] = [];
       for (const p of this.w.props) {
         if (p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) continue;
+        if (p.season !== undefined && p.season !== clock.season()) continue;
         if (p.k === 'lamp') lights.push([p.x, p.y - 66, 120, 1]);
+        else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
         else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
         else if (p.k === 'house' || p.k === 'shop') {
           const s = p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136);

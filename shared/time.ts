@@ -1,7 +1,13 @@
 import { hashf } from './rng';
 
-/** The shared world runs on UTC+8. */
-export const WORLD_TZ = 8;
+/**
+ * The shared world runs on one clock (hours offset from UTC). The server sets it
+ * from CAT_WORLD_TZ or its own timezone, and tells clients via /api/status.
+ */
+export let WORLD_TZ = 8;
+export function setWorldTz(hours: number) {
+  if (Number.isFinite(hours)) WORLD_TZ = hours;
+}
 
 export interface Clock {
   hour: number; // 0..24 float

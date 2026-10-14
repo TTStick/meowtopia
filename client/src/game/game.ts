@@ -9,7 +9,7 @@ import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
 import type { SpeechCtx } from '../../../shared/speech';
 import { fallbackLine } from '../../../shared/speech';
 import { ITEM_MAP } from '../../../shared/items';
-import { clockAt, phaseOf } from '../../../shared/time';
+import { clockAt, phaseOf, setWorldTz } from '../../../shared/time';
 import { now as clockNow } from './clock';
 import type { ServerMsg } from '../../../shared/protocol';
 
@@ -42,8 +42,22 @@ class Game {
     });
     ro.observe(canvas);
     this.ws.onState = (c) => ui.set({ connected: c });
+    let lastInv: unknown = null;
+    ui.subscribe(() => {
+      const inv = ui.state.me?.inventory;
+      if (inv !== lastInv) {
+        lastInv = inv;
+        this.syncCollect();
+      }
+    });
     this.ws.on((m) => this.onServer(m));
-    api('GET', '/api/status').then((s) => ui.set({ llm: !!s.llm })).catch(() => {});
+    try {
+      const st = await api<{ llm: boolean; worldTz: number }>('GET', '/api/status');
+      setWorldTz(st.worldTz);
+      ui.set({ llm: !!st.llm });
+    } catch {
+      /* the boot loop below retries */
+    }
     if (!this.running) {
       this.running = true;
       requestAnimationFrame((t) => this.frame(t));
@@ -73,6 +87,16 @@ class Game {
 
   private setMe(me: MeResponse) {
     ui.set({ me });
+    this.syncCollect();
+  }
+
+  /** Feed owned treasures (rarest first) to the nest's collection cabinet. */
+  syncCollect() {
+    const me = ui.state.me;
+    if (!me || !this.nest || ui.state.visiting) return;
+    this.nest.collect = Object.keys(me.inventory)
+      .filter((k) => ITEM_MAP[k]?.cat === 'collect' && me.inventory[k] > 0)
+      .sort((a, b) => (ITEM_MAP[b].rarity ?? 1) - (ITEM_MAP[a].rarity ?? 1));
   }
 
   async refreshMe() {
@@ -196,6 +220,7 @@ class Game {
     const r = await api<{ layout: NestLayout; cat: CatRecord }>('GET', `/api/nest/${cat.id}`);
     patchCat(cat.id, r.cat);
     this.nest = new NestScene(r.cat, r.layout, this.nestEnv());
+    this.syncCollect();
     ui.set({ nest: r.layout, visiting: null, scene: 'nest', catOut: r.cat.location === 'world', build: false, play: false });
     this.setScene(this.nest);
     if (ui.state.phase === 'game') this.loadWish();

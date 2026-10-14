@@ -11,8 +11,8 @@ export default defineConfig({
     port: 5199,
     strictPort: true,
     proxy: {
-      '/api': 'http://localhost:8787',
-      '/ws': { target: 'ws://localhost:8787', ws: true },
+      '/api': 'http://127.0.0.1:8737',
+      '/ws': { target: 'ws://127.0.0.1:8737', ws: true },
     },
   },
   build: {

@@ -11,7 +11,7 @@ import type { CatRecord, NestLayout, UserSettings } from '../../shared/types';
 import type { SpeechCtx } from '../../shared/speech';
 import { catLine, interpretCommand, llmEnabled } from './llm';
 import { progressWish, wishState, addBond } from './wish';
-import { localClock } from '../../shared/time';
+import { localClock, WORLD_TZ } from '../../shared/time';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function code(n: number) {
@@ -227,7 +227,7 @@ route('POST', '/api/cat/:id/command', async (r) => {
   return interpretCommand(c, text, places, where);
 });
 
-route('GET', '/api/status', () => ({ llm: llmEnabled() }), false);
+route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ }), false);
 
 // ---------- nest ----------
 route('GET', '/api/nest/:catId', (r) => {

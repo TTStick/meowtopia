@@ -37,8 +37,12 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   } catch {
     throw new ApiError(0, '网络好像断开了');
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? '出了点小问题');
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    // Only trust auth failures that come from our own server (JSON {error}); anything else is a hiccup.
+    const ours = data && typeof data.error === 'string';
+    throw new ApiError(ours ? res.status : res.status === 401 ? 502 : res.status, ours ? data.error : '服务器暂时连不上');
+  }
   return data as T;
 }
 

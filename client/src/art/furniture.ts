@@ -1,6 +1,7 @@
 import { Pen, shade, rgba } from '../engine/pen';
 import { hashf } from '../../../shared/rng';
 import { now as clockNow } from '../game/clock';
+import { collectIcon } from './collect';
 
 export const CELL = 44;
 export const WALL_H = 156;
@@ -20,6 +21,7 @@ export interface DrawCtx {
   t: number;
   night: number; // 0..1
   flip: boolean;
+  collect?: string[]; // treasures to show in the collection cabinet
 }
 
 type Layer = 'back' | 'front';
@@ -469,10 +471,24 @@ const draws: Record<string, FDraw> = {
     box3(pen, x0, top, x1 - x0, by - top, 8, '#f0e2c8', shade('#f0e2c8', 0.1));
     pen.shape([x0 + 4, top + 4, x1 - 4, top + 4, x1 - 4, by - 6, x0 + 4, by - 6], 'rgba(200,230,245,0.45)', 1);
     for (const sy of [top + 24, top + 45]) pen.line([x0 + 4, sy, x1 - 4, sy], 1.2);
-    const cols = ['#f7c75a', '#9ccf86', '#f2a1a1', '#9fc3e8', '#d1b3e6'];
+    const items = d.collect ?? [];
+    const ctx = pen.ctx;
     for (let r = 0; r < 3; r++) {
       const sy = r === 0 ? top + 24 : r === 1 ? top + 45 : by - 6;
-      for (let i = 0; i < 3; i++) pen.ellipse(x0 + 9 + i * 9, sy - 4, 3, 3, cols[(r + i) % cols.length], 0.8);
+      for (let i = 0; i < 3; i++) {
+        const id = items[r * 3 + i];
+        const ix = x0 + 9 + i * 9.5;
+        if (id) {
+          ctx.save();
+          ctx.translate(ix, sy - 6);
+          ctx.scale(0.3, 0.3);
+          collectIcon(pen, id);
+          ctx.restore();
+        } else if (!items.length) {
+          const cols = ['#f7c75a', '#9ccf86', '#f2a1a1', '#9fc3e8', '#d1b3e6'];
+          pen.ellipse(ix, sy - 4, 3, 3, cols[(r + i) % cols.length], 0.8);
+        }
+      }
     }
   },
 };

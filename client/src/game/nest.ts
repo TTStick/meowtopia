@@ -64,6 +64,8 @@ export class NestScene implements NestHost {
   private dragFrom: { uid: string; gx: number; gy: number; wx: number } | null = null;
   private lookTimer = 0;
   private light: HTMLCanvasElement | null = null;
+  /** Treasures shown in the collection cabinet (rarest first). */
+  collect: string[] = [];
 
   constructor(rec: CatRecord, layout: NestLayout, env: NestEnv, readonly = false) {
     this.rec = rec;
@@ -301,7 +303,7 @@ export class NestScene implements NestHost {
     v.world();
     const lw = Math.max(1.3, 2.1 / Math.max(0.6, v.zoom));
     pen.begin(boil * 31 + 5, 0.45, lw);
-    const d: DrawCtx = { pen, t: T, night, flip: false };
+    const d: DrawCtx = { pen, t: T, night, flip: false, collect: this.collect };
 
     // room shell shadow
     ctx.fillStyle = 'rgba(74,58,52,0.12)';

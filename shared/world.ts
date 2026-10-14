@@ -25,7 +25,7 @@ export type PropKind =
   | 'tree' | 'pine' | 'sakura' | 'bush' | 'flower' | 'flowers' | 'rock' | 'mushroom' | 'stump' | 'reed' | 'lily'
   | 'lamp' | 'bench' | 'fence' | 'mailbox' | 'board' | 'sign' | 'fountain' | 'house' | 'shop' | 'slide' | 'swing'
   | 'sandbox' | 'windmill' | 'lighthouse' | 'boat' | 'picnic' | 'telescope' | 'bigtree' | 'table' | 'well' | 'crop'
-  | 'post' | 'cart' | 'hive' | 'kite';
+  | 'post' | 'cart' | 'hive' | 'kite' | 'snowman' | 'flowerarch' | 'parasol' | 'pumpkins' | 'lanterns';
 
 export interface Prop {
   id: number;
@@ -36,6 +36,7 @@ export interface Prop {
   s: number; // scale
   label?: string;
   block?: [number, number, number, number]; // tile rect blocked (x,y,w,h)
+  season?: number; // only shown in this season (decorations)
 }
 
 export interface Poi {
@@ -331,6 +332,21 @@ export function getWorld(): World {
         if (h < 0.025) add('rock', jx, jy, 2, 0.7);
       }
     }
+  // seasonal decorations (never block walking)
+  const deco = (k: PropKind, tx: number, ty: number, season: number, v = 0) => props.push({ id: id++, k, x: tx * T, y: ty * T, v, s: 1, season });
+  deco('flowerarch', 60, 54.2, 0);
+  deco('flowerarch', 52.6, 46.6, 0, 1);
+  deco('parasol', 96, 79, 1);
+  deco('parasol', 100.5, 77.5, 1, 1);
+  deco('parasol', 93, 82, 1, 2);
+  deco('pumpkins', 51.2, 39.6, 2);
+  deco('pumpkins', 69.4, 39.8, 2, 1);
+  deco('pumpkins', 46.2, 46.4, 2, 2);
+  deco('lanterns', 60, 41.2, 2);
+  deco('lanterns', 60, 41.2, 3, 1);
+  deco('snowman', 56.2, 50.6, 3);
+  deco('snowman', 64.2, 50.8, 3, 1);
+  deco('snowman', 26, 49.2, 3, 2);
   props.sort((a, b) => a.y - b.y);
   cached = { ter, grid, props };
   return cached;

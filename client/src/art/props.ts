@@ -25,6 +25,7 @@ export const BOUNDS: Partial<Record<PropKind, [number, number, number, number]>>
   windmill: [-80, -190, 80, 10], lighthouse: [-40, -200, 40, 10], boat: [-34, -26, 34, 12], picnic: [-36, -24, 36, 16],
   telescope: [-16, -44, 16, 6], table: [-26, -56, 26, 6], well: [-26, -64, 26, 8], crop: [-12, -26, 12, 4], post: [-6, -26, 6, 4],
   cart: [-32, -64, 32, 8], hive: [-14, -28, 14, 4], kite: [-20, -20, 20, 20],
+  snowman: [-22, -62, 22, 6], flowerarch: [-50, -96, 50, 8], parasol: [-34, -66, 34, 14], pumpkins: [-26, -30, 26, 6], lanterns: [-130, -110, 130, 6],
 };
 
 function canopyColors(season: number, v: number): [string, string] {
@@ -533,6 +534,89 @@ export function drawProp(pen: Pen, kind: PropKind, v: number, c: PropCtx) {
     }
     case 'kite':
       return;
+    case 'snowman': {
+      pen.ellipse(0, -12, 17, 13, '#ffffff');
+      pen.ellipse(0, -34, 12, 11, '#ffffff');
+      pen.ellipse(0, -51, 9, 8.5, '#ffffff');
+      // tiny cat ears, because it's a cat town
+      pen.shape([-7, -56, -6, -64, -2, -58], '#ffffff', 1.2);
+      pen.shape([7, -56, 6, -64, 2, -58], '#ffffff', 1.2);
+      ctx.fillStyle = INK;
+      for (const ex of [-3, 3]) {
+        ctx.beginPath();
+        ctx.arc(ex, -52, 1.3, 0, 7);
+        ctx.fill();
+      }
+      pen.shape([0, -49, 7, -48, 0, -46.5], '#f08a5d', 0.8);
+      pen.line([-8, -41, 0, -38.5, 8, -41], 4, ['#e0605e', '#5b8fd6', '#9ccf86'][v % 3]);
+      pen.line([-11, -34, -22, -42, -24, -48], 1.4, '#8a6440');
+      pen.line([11, -34, 22, -40, 25, -45], 1.4, '#8a6440');
+      for (const by of [-30, -36]) {
+        ctx.beginPath();
+        ctx.arc(0, by, 1.2, 0, 7);
+        ctx.fill();
+      }
+      return;
+    }
+    case 'flowerarch': {
+      pen.tube([-40, 2, -40, -62], 4, '#b98d61');
+      pen.tube([40, 2, 40, -62], 4, '#b98d61');
+      pen.line([-40, -60, -30, -84, 0, -92, 30, -84, 40, -60], 5, '#7fb36b');
+      const cols = ['#f49ab0', '#ffd666', '#ffffff', '#c7a8f0'];
+      for (let i = 0; i <= 12; i++) {
+        const a = Math.PI + (i / 12) * Math.PI;
+        const fx = Math.cos(a) * 40, fy = -60 + Math.sin(a) * 30;
+        for (let k = 0; k < 5; k++) {
+          const pa = (k / 5) * Math.PI * 2;
+          ctx.fillStyle = cols[(i + v) % 4];
+          ctx.beginPath();
+          ctx.arc(fx + Math.cos(pa) * 3, fy + Math.sin(pa) * 3, 2.6, 0, 7);
+          ctx.fill();
+        }
+      }
+      for (let i = 0; i < 6; i++) {
+        pen.ellipse(-40 + (i % 2) * 2, -10 - i * 9, 3, 2.4, cols[i % 4], 0.6);
+        pen.ellipse(40 - (i % 2) * 2, -14 - i * 9, 3, 2.4, cols[(i + 1) % 4], 0.6);
+      }
+      return;
+    }
+    case 'parasol': {
+      const col = ['#f08a5d', '#8fc3e8', '#ffd45e'][v % 3];
+      pen.shape([-24, 6, 26, 2, 30, 12, -20, 14], ['#ffffff', '#fde3e3', '#e1f1d6'][v % 3], 1.2);
+      pen.line([2, 4, -2, -50], 2.2, '#b98d61');
+      const p = pen.shape([-32, -40, -12, -58, -2, -62, 12, -58, 32, -40], col);
+      pen.clip(p, () => {
+        for (let i = -3; i <= 3; i++) if (i % 2 === 0) pen.line([-2, -62, i * 11, -40], 7, '#ffffff', 0.3);
+      });
+      pen.fillStroke(p, null);
+      return;
+    }
+    case 'pumpkins': {
+      const big = (x: number, y: number, r: number) => {
+        pen.ellipse(x, y - r * 0.7, r, r * 0.75, '#f39a45');
+        pen.line([x, y - r * 1.45, x, y - r * 0.05], 1, rgba(INK, 0.45));
+        pen.line([x - r * 0.5, y - r * 1.3, x - r * 0.55, y - r * 0.15], 1, rgba(INK, 0.45));
+        pen.line([x + r * 0.5, y - r * 1.3, x + r * 0.55, y - r * 0.15], 1, rgba(INK, 0.45));
+        pen.tube([x, y - r * 1.4, x + 2, y - r * 1.75], 2.4, '#7a9a4a');
+      };
+      big(-10, 0, 12);
+      big(10, 2, 9);
+      big(-2, -16, 7);
+      return;
+    }
+    case 'lanterns': {
+      pen.tube([-120, 2, -120, -96], 3, '#8a6440');
+      pen.tube([120, 2, 120, -96], 3, '#8a6440');
+      pen.line([-120, -92, -60, -78, 0, -74, 60, -78, 120, -92], 1, INK);
+      const cols = v === 1 ? ['#e0605e', '#ffd45e'] : ['#f39a45', '#e0605e'];
+      for (let i = 0; i < 7; i++) {
+        const tx = -90 + i * 30, ty = -82 + Math.abs(i - 3) * 2.5 + Math.sin(c.t * 1.5 + i) * 1;
+        pen.line([tx, ty - 6, tx, ty], 0.8, INK);
+        pen.ellipse(tx, ty + 6, 6, 8, c.night > 0.4 ? '#ffd27a' : cols[i % 2], 1.2);
+        pen.line([tx - 5, ty + 6, tx + 5, ty + 6], 0.7, rgba(INK, 0.4));
+      }
+      return;
+    }
   }
 }
 
