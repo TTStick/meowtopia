@@ -165,6 +165,7 @@ section { margin-bottom: 28px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .grid3 label { display: grid; font-size: 13px; color: var(--soft); }
 .grid3 .span2 { grid-column: span 2; }
+.grid3.price { margin: -4px 0 16px; }
 @media (max-width: 720px) { .grid3 { grid-template-columns: 1fr; } .grid3 .span2 { grid-column: auto; } }
 .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 12px; }
 .test .quote { font-size: 20px; margin: 0 0 4px; }

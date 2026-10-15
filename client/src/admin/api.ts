@@ -32,7 +32,7 @@ export interface Overview {
   reports: number;
   days: { day: string; newUsers: number; active: number | null; peak: number | null }[];
   server: { startedAt: number; uptime: number; rss: number; dbBytes: number; node: string; worldTz: number };
-  llm: { active: boolean; model: string; calls: number; failed: number; costUsd: number | null };
+  llm: { active: boolean; model: string; calls: number; failed: number; cost: number | null; currency: string };
 }
 
 export interface WorldEnt {
@@ -72,6 +72,9 @@ export interface LlmSettings {
   rpm: number;
   daily: number;
   userDaily: number;
+  priceIn: number;
+  priceOut: number;
+  currency: '$' | '¥';
   active: boolean;
   defaults: { model: string; rpm: number; daily: number; userDaily: number };
 }
@@ -84,7 +87,8 @@ export interface LlmUsage {
   cacheRead: number;
   cacheWrite: number;
   avgMs: number | null;
-  costUsd: number | null;
+  cost: number | null;
+  currency: string;
   lastError: string | null;
   lastErrorAt: number | null;
   budget: { minute: number; rpm: number; today: number; daily: number };

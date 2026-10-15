@@ -23,6 +23,9 @@ export interface LlmSettings {
   rpm: number; // whole server, per minute
   daily: number; // whole server, per day
   userDaily: number; // per player, per day
+  priceIn: number; // per million tokens, for the panel's estimate when the model isn't a known Claude model (0 = unknown)
+  priceOut: number;
+  currency: '$' | '¥';
 }
 const ENV: LlmSettings = {
   enabled: true,
@@ -33,6 +36,9 @@ const ENV: LlmSettings = {
   rpm: Number(process.env.CAT_LLM_RPM || 40),
   daily: Number(process.env.CAT_LLM_DAILY || 4000),
   userDaily: Number(process.env.CAT_LLM_USER_DAILY || 120),
+  priceIn: 0,
+  priceOut: 0,
+  currency: '$',
 };
 let saved: Partial<LlmSettings> = kvGet<Partial<LlmSettings>>('llm') ?? {};
 let cfg: LlmSettings = ENV;
@@ -70,13 +76,18 @@ function cleanSettings(patch: Record<string, unknown>): Partial<LlmSettings> {
   if (typeof patch.model === 'string' && /^[\w.:@/-]{2,80}$/.test(patch.model.trim())) out.model = patch.model.trim();
   if (typeof patch.baseURL === 'string') {
     const u = patch.baseURL.trim();
-    if (u && !/^https:\/\/[^\s]+$/.test(u)) throw new Error('API 地址需要以 https:// 开头');
+    // https, or a relay on this machine
+    if (u && !/^(https:\/\/[^\s]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/[^\s]*)?)$/.test(u)) throw new Error('API 地址需要以 https:// 开头');
     out.baseURL = u.replace(/\/+$/, '');
   }
   if (EFFORTS.includes(patch.effort as Effort)) out.effort = patch.effort as Effort;
   if (patch.rpm != null) out.rpm = int(patch.rpm, 1, 2000);
   if (patch.daily != null) out.daily = int(patch.daily, 0, 1_000_000);
   if (patch.userDaily != null) out.userDaily = int(patch.userDaily, 0, 10_000);
+  const price = (v: unknown) => Math.max(0, Math.min(1000, Number(v) || 0));
+  if (patch.priceIn != null) out.priceIn = price(patch.priceIn);
+  if (patch.priceOut != null) out.priceOut = price(patch.priceOut);
+  if (patch.currency === '$' || patch.currency === '¥') out.currency = patch.currency;
   return out;
 }
 
@@ -188,52 +199,119 @@ const PRICES: Record<string, [number, number, number]> = {
 };
 export function llmUsage() {
   const u = usageToday();
-  const p = PRICES[cfg.model];
-  const cost = p ? (u.input * p[0] + u.cacheWrite * p[0] * 1.25 + u.cacheRead * p[2] + u.output * p[1]) / 1e6 : null;
-  return { ...u, avgMs: u.ok ? Math.round(u.ms / u.ok) : null, costUsd: cost, budget: { minute: windowCount, rpm: cfg.rpm, today: dayCount, daily: cfg.daily } };
+  const known = PRICES[cfg.model];
+  // a known Claude model in dollars; otherwise the price entered in the panel, in its currency
+  const p: [number, number, number] | null = known ?? (cfg.priceIn || cfg.priceOut ? [cfg.priceIn, cfg.priceOut, cfg.priceIn] : null);
+  const cost = p ? (u.input * p[0] + u.cacheWrite * p[0] * (known ? 1.25 : 1) + u.cacheRead * p[2] + u.output * p[1]) / 1e6 : null;
+  return { ...u, avgMs: u.ok ? Math.round(u.ms / u.ok) : null, cost, currency: known ? '$' : cfg.currency, budget: { minute: windowCount, rpm: cfg.rpm, today: dayCount, daily: cfg.daily } };
 }
 
 /**
  * Request options that depend on the model: server-side refusal fallback where the
  * model has one (not Claude Haiku 5.5), and effort only on the Claude 5 family.
+ * Claude models get structured output; other models behind an Anthropic-compatible
+ * API (MiniMax and the like) are shown the JSON format in the prompt instead.
  */
 function modelOptions(model: string, effort: Effort) {
   const five = /^claude-(opus|sonnet|haiku|fable|mythos)-5/.test(model);
   const fallback = five && !model.startsWith('claude-haiku');
-  return { fallback, effort: five ? effort : undefined };
+  return { fallback, effort: five ? effort : undefined, structured: model.startsWith('claude-') };
+}
+
+class FormatError extends Error {}
+
+/** A sample of the JSON a schema asks for, for models without structured output. */
+function sample(s: any): unknown {
+  if (s.enum) return s.enum.find((v: unknown) => v !== null) ?? null;
+  const t = Array.isArray(s.type) ? s.type.find((x: string) => x !== 'null') : s.type;
+  if (t === 'object') return Object.fromEntries(Object.entries(s.properties ?? {}).map(([k, v]) => [k, sample(v)]));
+  if (t === 'array') return [sample(s.items ?? {}), sample(s.items ?? {})];
+  if (t === 'integer' || t === 'number') return 0;
+  if (t === 'boolean') return false;
+  return '……';
+}
+function formatHint(schema: object) {
+  return `\n\n只输出一个 JSON 对象，不要输出任何别的文字、解释或代码块标记。格式：${JSON.stringify(sample(schema))}`;
+}
+
+/** Does a parsed answer have the shape the schema asks for? (Enough of JSON Schema for ours.) */
+function fits(v: any, s: any): boolean {
+  if (s.enum && !s.enum.includes(v)) return false;
+  const types: string[] = Array.isArray(s.type) ? s.type : s.type ? [s.type] : [];
+  if (!types.length) return true;
+  return types.some((t) => {
+    if (t === 'null') return v === null;
+    if (t === 'string') return typeof v === 'string';
+    if (t === 'integer') return Number.isInteger(v);
+    if (t === 'number') return typeof v === 'number';
+    if (t === 'boolean') return typeof v === 'boolean';
+    if (t === 'array') return Array.isArray(v) && (!s.items || v.every((x) => fits(x, s.items)));
+    if (t === 'object') {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+      if (!(s.required ?? []).every((k: string) => k in v)) return false;
+      return Object.entries(s.properties ?? {}).every(([k, ps]) => !(k in v) || fits(v[k], ps));
+    }
+    return false;
+  });
+}
+
+/**
+ * Read an answer leniently: code fences, <think> blocks and chatter around the JSON
+ * are dropped, and a model that simply wrote the lines still counts for a lines schema.
+ */
+function parseAnswer(text: string, schema: any): unknown {
+  const t = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/gi, '').trim();
+  const tries = [t];
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) tries.push(t.slice(a, b + 1));
+  for (const x of tries) {
+    try {
+      return JSON.parse(x);
+    } catch {
+      /* next */
+    }
+  }
+  const props = schema.properties ?? {};
+  if (Object.keys(props).length === 1 && props.lines?.items?.type === 'string') {
+    const lines = t.split(/\n+/).map((l) => l.replace(/^\s*(?:[-*•]|\d+[.、)）])\s*/, '').replace(/^["“「]|["”」]$/g, '').trim()).filter(Boolean);
+    if (lines.length) return { lines };
+  }
+  throw new FormatError(`模型没有按要求的格式回答：“${t.slice(0, 40)}”`);
 }
 
 async function request(c: Anthropic, s: LlmSettings, user: string, schema: object, maxTokens: number) {
   const o = modelOptions(s.model, s.effort);
-  const t0 = Date.now();
-  const res = await c.beta.messages.create({
-    model: s.model,
-    max_tokens: maxTokens,
-    ...(o.fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
-    system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-    output_config: { ...(o.effort ? { effort: o.effort } : {}), format: { type: 'json_schema', schema: schema as any } },
-    messages: [{ role: 'user', content: user }],
-  });
   const u = usageToday();
+  const t0 = Date.now();
   u.calls++;
-  u.input += res.usage.input_tokens ?? 0;
-  u.output += res.usage.output_tokens ?? 0;
-  u.cacheRead += res.usage.cache_read_input_tokens ?? 0;
-  u.cacheWrite += res.usage.cache_creation_input_tokens ?? 0;
-  if (res.stop_reason === 'refusal' || res.stop_reason === 'max_tokens') {
+  try {
+    const res = await c.beta.messages.create({
+      model: s.model,
+      // models that think out loud before answering need room for it
+      max_tokens: o.structured ? maxTokens : Math.max(maxTokens * 2, 1600),
+      ...(o.fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+      ...(o.structured ? { output_config: { ...(o.effort ? { effort: o.effort } : {}), format: { type: 'json_schema' as const, schema: schema as any } } } : {}),
+      messages: [{ role: 'user', content: o.structured ? user : user + formatHint(schema) }],
+    });
+    u.input += res.usage.input_tokens ?? 0;
+    u.output += res.usage.output_tokens ?? 0;
+    u.cacheRead += res.usage.cache_read_input_tokens ?? 0;
+    u.cacheWrite += res.usage.cache_creation_input_tokens ?? 0;
+    if (res.stop_reason === 'refusal') throw new FormatError('模型拒绝了这次请求');
+    if (res.stop_reason === 'max_tokens') throw new FormatError('回答太长被截断');
+    const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
+    const out = parseAnswer(text, schema);
+    if (!fits(out, schema)) throw new FormatError(`模型返回的 JSON 格式不对：${JSON.stringify(out).slice(0, 60)}`);
+    u.ok++;
+    u.ms += Date.now() - t0;
+    return out;
+  } catch (e) {
     u.failed++;
-    u.lastError = res.stop_reason === 'refusal' ? '模型拒绝了这次请求' : '回答太长被截断';
+    u.lastError = describe(e);
     u.lastErrorAt = Date.now();
-    return null;
+    throw e;
   }
-  for (const b of res.content) {
-    if (b.type === 'text') {
-      u.ok++;
-      u.ms += Date.now() - t0;
-      return JSON.parse(b.text);
-    }
-  }
-  return null;
 }
 
 function describe(e: unknown): string {
@@ -250,14 +328,9 @@ function describe(e: unknown): string {
 async function callJSON<T>(user: string, schema: object, maxTokens = 1200): Promise<T | null> {
   if (!client || !takeBudget()) return null;
   try {
-    return (await request(client, cfg, user, schema, maxTokens)) as T | null;
+    return (await request(client, cfg, user, schema, maxTokens)) as T;
   } catch (e) {
-    const u = usageToday();
-    u.calls++;
-    u.failed++;
-    u.lastError = describe(e);
-    u.lastErrorAt = Date.now();
-    console.warn('[llm]', u.lastError);
+    console.warn('[llm]', describe(e));
     return null;
   }
 }

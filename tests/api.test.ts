@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
 import WebSocket from 'ws';
 
 const PORT = 18000 + Math.floor(Math.random() * 1000);
@@ -463,4 +464,58 @@ test('admin panel: sign in, numbers, the town, model settings', async () => {
 
   assert.equal((await admin.call('POST', '/api/admin/logout')).status, 200);
   assert.equal((await admin.call('GET', '/api/admin/me')).status, 404);
+});
+
+test('model settings: an Anthropic-compatible model without structured output (e.g. MiniMax)', async () => {
+  // a stand-in for a third-party Anthropic-compatible API
+  const seen: any[] = [];
+  let reply = (body: any): any[] => [{ type: 'text', text: '主人，我刚睡醒，窗台上的太阳好暖喵。' }];
+  const fake = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      const body = JSON.parse(raw);
+      seen.push(body);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: body.model, content: reply(body), stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 20, output_tokens: 12 } }));
+    });
+  });
+  await new Promise<void>((r) => fake.listen(0, '127.0.0.1', r));
+  const port = (fake.address() as { port: number }).port;
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  const settings = { model: 'MiniMax-M3.1-Flash-Preview', baseURL: `http://127.0.0.1:${port}`, apiKey: 'test-key-for-the-fake-server' };
+  try {
+    // plain text instead of JSON still gives a line
+    let t = (await admin.call('POST', '/api/admin/llm/test', settings)).data;
+    assert.equal(t.ok, true, JSON.stringify(t));
+    assert.equal(t.text, '主人，我刚睡醒，窗台上的太阳好暖喵。');
+    assert.equal(seen[0].output_config, undefined, 'no Claude-only structured output');
+    assert.equal(seen[0].fallbacks, undefined);
+    assert.match(seen[0].messages[0].content, /只输出一个 JSON 对象/, 'the format is in the prompt instead');
+    // JSON in a code fence after some thinking out loud
+    reply = () => [{ type: 'thinking', thinking: '想一想', signature: 'x' }, { type: 'text', text: '<think>嗯</think>\n```json\n{"lines":["喵～今天也要晒太阳"]}\n```' }];
+    t = (await admin.call('POST', '/api/admin/llm/test', settings)).data;
+    assert.equal(t.text, '喵～今天也要晒太阳');
+    // the wrong shape is a clear failure, not a crash
+    reply = () => [{ type: 'text', text: '{"lines": [{"oops": 1}]}' }];
+    t = (await admin.call('POST', '/api/admin/llm/test', settings)).data;
+    assert.equal(t.ok, false);
+    assert.match(t.error, /格式不对/);
+    // a Claude model still gets structured output
+    reply = () => [{ type: 'text', text: '{"lines":["咕噜"]}' }];
+    t = (await admin.call('POST', '/api/admin/llm/test', { ...settings, model: 'claude-opus-5-5' })).data;
+    assert.equal(t.text, '咕噜');
+    assert.equal(seen.at(-1).output_config.format.type, 'json_schema');
+    assert.equal(seen.at(-1).fallbacks, 'default');
+    // plain http only for a relay on this machine
+    assert.equal((await admin.call('PUT', '/api/admin/llm', { baseURL: 'http://api.example.com' })).status, 400);
+    // with its price filled in, the panel estimates what another model costs
+    const priced = (await admin.call('PUT', '/api/admin/llm', { ...settings, priceIn: 1, priceOut: 8, currency: '¥' })).data;
+    assert.equal(priced.usage.currency, '¥');
+    assert.ok(priced.usage.cost > 0, JSON.stringify(priced.usage));
+  } finally {
+    fake.close();
+    await admin.call('POST', '/api/admin/llm/reset');
+  }
 });

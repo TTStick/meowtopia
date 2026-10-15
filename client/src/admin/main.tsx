@@ -135,7 +135,7 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
         <div class="card">
           <h3>猫猫的语言模型</h3>
           <p>{o.llm.active ? <span class="ok">● 正在使用 {o.llm.model}</span> : <span class="off">● 没有开启（用内置的句子）</span>}</p>
-          <p class="muted">今天调用 {fmt(o.llm.calls)} 次{o.llm.failed ? `，失败 ${o.llm.failed} 次` : ''}{o.llm.costUsd != null ? `，约 $${o.llm.costUsd.toFixed(2)}` : ''}</p>
+          <p class="muted">今天调用 {fmt(o.llm.calls)} 次{o.llm.failed ? `，失败 ${o.llm.failed} 次` : ''}{o.llm.cost != null ? `，约 ${o.llm.currency}${o.llm.cost.toFixed(2)}` : ''}</p>
           <button class="btn small" onClick={() => go('model')}>去配置</button>
         </div>
         <div class="card">
@@ -207,7 +207,7 @@ function ModelTab() {
     setS(x.settings);
     setU(x.usage);
     const known = MODELS.some((m) => m.id === x.settings.model);
-    setForm({ enabled: x.settings.enabled, model: known ? x.settings.model : 'custom', custom: known ? '' : x.settings.model, baseURL: x.settings.baseURL, effort: x.settings.effort, rpm: x.settings.rpm, daily: x.settings.daily, userDaily: x.settings.userDaily, newKey: '' });
+    setForm({ enabled: x.settings.enabled, model: known ? x.settings.model : 'custom', custom: known ? '' : x.settings.model, baseURL: x.settings.baseURL, effort: x.settings.effort, rpm: x.settings.rpm, daily: x.settings.daily, userDaily: x.settings.userDaily, priceIn: x.settings.priceIn, priceOut: x.settings.priceOut, currency: x.settings.currency, newKey: '' });
   };
   useEffect(() => {
     adminApi<{ settings: LlmSettings; usage: LlmUsage }>('GET', '/llm').then(load, (e) => setMsg({ ok: false, text: e.message }));
@@ -224,6 +224,9 @@ function ModelTab() {
     rpm: form.rpm,
     daily: form.daily,
     userDaily: form.userDaily,
+    priceIn: form.priceIn,
+    priceOut: form.priceOut,
+    currency: form.currency,
     ...(form.newKey?.trim() ? { apiKey: form.newKey.trim() } : {}),
   });
   const run = async (what: string, fn: () => Promise<void>) => {
@@ -294,18 +297,31 @@ function ModelTab() {
           <label class={form.model === 'custom' ? 'model-card on' : 'model-card'}>
             <input type="radio" name="model" checked={form.model === 'custom'} onChange={() => set({ model: 'custom' })} />
             <b>其他模型</b>
-            <input class="field" placeholder="模型 ID，例如 claude-sonnet-5" value={form.custom} onFocus={() => set({ model: 'custom' })} onInput={(e) => set({ custom: (e.target as HTMLInputElement).value })} />
+            <span>兼容 Anthropic API 的模型也可以，比如 MiniMax：下面的 API 地址填服务商给的地址</span>
+            <input class="field" placeholder="模型 ID，例如 MiniMax-M3.1" value={form.custom} onFocus={() => set({ model: 'custom' })} onInput={(e) => set({ custom: (e.target as HTMLInputElement).value })} />
           </label>
         </div>
+        {form.model === 'custom' && (
+          <div class="grid3 price">
+            <label><span>输入价格（每百万 tokens）</span><input class="field" type="number" min="0" step="0.01" value={form.priceIn || ''} placeholder="不填就不估算" onInput={(e) => set({ priceIn: Number((e.target as HTMLInputElement).value) })} /></label>
+            <label><span>输出价格（每百万 tokens）</span><input class="field" type="number" min="0" step="0.01" value={form.priceOut || ''} placeholder="不填就不估算" onInput={(e) => set({ priceOut: Number((e.target as HTMLInputElement).value) })} /></label>
+            <label><span>货币</span>
+              <select class="field" value={form.currency} onChange={(e) => set({ currency: (e.target as HTMLSelectElement).value as '$' | '¥' })}>
+                <option value="¥">人民币 ¥</option>
+                <option value="$">美元 $</option>
+              </select>
+            </label>
+          </div>
+        )}
         <div class="grid3">
           <label>
-            <span>思考力度（effort）</span>
+            <span>思考力度（effort，只对 Claude 生效）</span>
             <select class="field" value={form.effort} onChange={(e) => set({ effort: (e.target as HTMLSelectElement).value as Effort })}>
               {EFFORTS.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
             </select>
           </label>
           <label class="span2">
-            <span>API 地址（一般不用填）</span>
+            <span>API 地址（用 Claude 官方接口时不用填）</span>
             <input class="field" placeholder="https://api.anthropic.com" value={form.baseURL} onInput={(e) => set({ baseURL: (e.target as HTMLInputElement).value })} />
           </label>
         </div>
@@ -348,7 +364,7 @@ function ModelTab() {
           <div class="stat"><div class="v">{fmt(u.calls)}</div><div class="l">调用次数</div><div class="s">成功 {u.ok} · 失败 {u.failed}</div></div>
           <div class="stat"><div class="v">{fmt(u.input + u.cacheRead + u.cacheWrite)}</div><div class="l">输入 tokens</div><div class="s">其中缓存命中 {fmt(u.cacheRead)}</div></div>
           <div class="stat"><div class="v">{fmt(u.output)}</div><div class="l">输出 tokens</div><div class="s">{u.avgMs ? `平均 ${(u.avgMs / 1000).toFixed(1)} 秒一次` : '—'}</div></div>
-          <div class="stat"><div class="v">{u.costUsd != null ? `$${u.costUsd.toFixed(2)}` : '—'}</div><div class="l">估算花费</div><div class="s">按官网标价粗算</div></div>
+          <div class="stat"><div class="v">{u.cost != null ? `${u.currency}${u.cost.toFixed(2)}` : '—'}</div><div class="l">估算花费</div><div class="s">{u.cost != null ? '按标价粗算' : '其他模型：在上面填上价格就能估算'}</div></div>
         </div>
         <p class="muted small">这一分钟已用 {u.budget.minute}/{u.budget.rpm}，今天已用 {u.budget.today}/{u.budget.daily}。服务器重启后今天的用量从零开始算。</p>
         {u.lastError && <p class="error small">最近一次出错：{u.lastError}（{new Date(u.lastErrorAt!).toLocaleTimeString('zh-CN')}）</p>}
