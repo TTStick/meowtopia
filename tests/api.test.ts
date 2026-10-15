@@ -519,3 +519,23 @@ test('model settings: an Anthropic-compatible model without structured output (e
     await admin.call('POST', '/api/admin/llm/reset');
   }
 });
+
+test('admin: find a player and unlock everything for testing', async () => {
+  const p = new Player();
+  await p.join('测试主人');
+  const cat = (await p.call('POST', '/api/adopt', { name: '喵喵', seed: 5 })).data.cats[0].id;
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  const found = (await admin.call('GET', `/api/admin/players?q=${encodeURIComponent('喵喵')}`)).data;
+  assert.ok(found.some((r: { id: string; nickname: string }) => r.id === cat && r.nickname === '测试主人'));
+  assert.equal((await p.call('POST', '/api/admin/unlock', { cat })).status, 404, 'players cannot unlock');
+  const u = (await admin.call('POST', '/api/admin/unlock', { cat })).data;
+  assert.ok(u.items > 50 && u.places >= 26 && u.collectibles >= 30 && u.fish >= 9999, JSON.stringify(u));
+  const me = (await p.call('GET', '/api/me')).data;
+  assert.equal(me.cats[0].discovered.length, u.places);
+  assert.ok(me.inventory.crown >= 1 && me.inventory.piano >= 3 && me.inventory.treat_can >= 20);
+  const book = (await p.call('GET', '/api/collection')).data;
+  assert.equal(book.found.length, u.collectibles, 'the collection book is full');
+  // doing it again adds nothing new
+  assert.equal((await admin.call('POST', '/api/admin/unlock', { cat })).data.items, 0);
+});

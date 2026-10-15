@@ -176,3 +176,11 @@ section { margin-bottom: 28px; }
 .reports { display: grid; gap: 16px; }
 .report .quote { margin: 8px 0; font-size: 16px; }
 .empty { text-align: center; color: var(--soft); }
+
+/* players */
+.players .row { flex-wrap: nowrap; }
+.players .grow { flex: 1; }
+.player-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+.player .pname { font-size: 18px; }
+.player .kv { margin: 8px 0; }
+.player .mono { font-size: 11px; word-break: break-all; }

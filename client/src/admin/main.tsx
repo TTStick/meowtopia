@@ -2,11 +2,12 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import './admin.css';
-import { adminApi, signedOut, type LlmSettings, type LlmUsage, type Overview, type Report, type Effort } from './api';
+import { adminApi, signedOut, type LlmSettings, type LlmUsage, type Overview, type PlayerRow, type Report, type Effort } from './api';
 import { Sandbox } from './Sandbox';
+import { ageOf } from '../../../shared/stats';
 
-type Tab = 'overview' | 'sandbox' | 'model' | 'reports';
-const TABS: [Tab, string][] = [['overview', '概览'], ['sandbox', '沙盘'], ['model', '模型'], ['reports', '举报']];
+type Tab = 'overview' | 'sandbox' | 'players' | 'model' | 'reports';
+const TABS: [Tab, string][] = [['overview', '概览'], ['sandbox', '沙盘'], ['players', '玩家'], ['model', '模型'], ['reports', '举报']];
 
 function App() {
   const [state, setState] = useState<'checking' | 'out' | 'in'>('checking');
@@ -45,6 +46,7 @@ function App() {
       <main class={tab === 'sandbox' ? 'page wide' : 'page'}>
         {tab === 'overview' && <OverviewTab go={setTab} />}
         {tab === 'sandbox' && <Sandbox />}
+        {tab === 'players' && <PlayersTab />}
         {tab === 'model' && <ModelTab />}
         {tab === 'reports' && <ReportsTab />}
       </main>
@@ -183,6 +185,68 @@ function Chart({ days }: { days: Overview['days'] }) {
         <span><i class="peak" />最多同时在线</span>
       </div>
       <p class="muted small">“来过”和“同时在线”从开启管理面板后开始记录，更早的日子只有新玩家数。</p>
+    </div>
+  );
+}
+
+// ---------------- players ----------------
+const ago = (t: number) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? '刚刚' : m < 60 ? `${m} 分钟前` : m < 1440 ? `${Math.floor(m / 60)} 小时前` : `${Math.floor(m / 1440)} 天前`;
+};
+/** Same stages the game uses (see catInfo in server/src/llm.ts). */
+const ageOfCat = (born: number) => {
+  const a = ageOf(born);
+  return a < 0.6 ? '小奶猫' : a < 0.9 ? '少年猫' : '成年猫';
+};
+
+function PlayersTab() {
+  const [q, setQ] = useState('');
+  const [list, setList] = useState<PlayerRow[] | null>(null);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState<Record<string, string>>({});
+  const search = (query = q) => adminApi<PlayerRow[]>('GET', `/players?q=${encodeURIComponent(query.trim())}`).then((x) => (setList(x), setErr('')), (e) => setErr(e.message));
+  useEffect(() => {
+    void search('');
+  }, []);
+  const unlock = async (p: PlayerRow) => {
+    if (!confirm(`给「${p.name}」（主人：${p.nickname}）解锁全部内容？\n\n商店里所有东西放进背包、收藏册集满、小镇全部地点都去过、小鱼干补到 9999。\n这是给测试用的，做了就不能撤回。`)) return;
+    try {
+      const r = await adminApi<{ items: number; places: number; collectibles: number; fish: number }>('POST', '/unlock', { cat: p.id });
+      setDone((d) => ({ ...d, [p.id]: `已解锁：新增 ${r.items} 件物品，${r.collectibles} 种收藏品，${r.places} 个地点，小鱼干 ${fmt(r.fish)}。重新打开游戏就能看到。` }));
+      void search();
+    } catch (e) {
+      setDone((d) => ({ ...d, [p.id]: (e as Error).message }));
+    }
+  };
+  return (
+    <div class="players">
+      <form class="row" onSubmit={(e) => (e.preventDefault(), void search())}>
+        <input class="field grow" placeholder="猫的名字、主人的昵称，或者 ID" value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+        <button class="btn">搜索</button>
+      </form>
+      <p class="muted small">{q.trim() ? '搜索结果' : '最近来过的玩家'}，最多 30 位。</p>
+      {err && <p class="error">{err}</p>}
+      {list && !list.length && <div class="card empty">没有找到。</div>}
+      <div class="player-list">
+        {list?.map((p) => (
+          <div key={p.id} class="card player">
+            <div class="row between">
+              <b class="pname">{p.name}</b>
+              <span class="muted small">{ageOfCat(p.born)} · {p.location === 'world' ? '在小镇里' : '在窝里'}</span>
+            </div>
+            <dl class="kv">
+              <dt>主人</dt><dd>{p.nickname}{p.banned ? '（已封禁）' : ''}</dd>
+              <dt>最近来过</dt><dd>{ago(p.lastSeen)}</dd>
+              <dt>小鱼干</dt><dd>{fmt(p.fish)}</dd>
+              <dt>去过的地方</dt><dd>{p.discovered} / {p.places}</dd>
+            </dl>
+            <p class="mono muted">{p.id} · {p.uid}</p>
+            <button class="btn small" onClick={() => unlock(p)}>解锁全部内容（测试用）</button>
+            {done[p.id] && <p class="ok small">{done[p.id]}</p>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

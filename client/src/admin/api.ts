@@ -94,6 +94,21 @@ export interface LlmUsage {
   budget: { minute: number; rpm: number; today: number; daily: number };
 }
 
+export interface PlayerRow {
+  id: string;
+  name: string;
+  born: number;
+  location: string;
+  uid: string;
+  nickname: string;
+  fish: number;
+  lastSeen: number;
+  created: number;
+  banned: number;
+  discovered: number;
+  places: number;
+}
+
 export interface Report {
   id: number;
   ts: number;

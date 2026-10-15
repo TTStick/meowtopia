@@ -7,10 +7,13 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { route, HttpError, type Req } from './http';
+import { route, HttpError, str, type Req } from './http';
 import { ADMIN_TOKEN, DATA_DIR, HMAC_KEY } from './config';
 import { isHttps } from './security';
 import * as db from './db';
+import * as game from './game';
+import { ITEMS } from '../../shared/items';
+import { POIS } from '../../shared/world';
 import { worldSnapshot } from './world';
 import { llmSettings, llmUsage, resetLlmSettings, testLlm, updateLlmSettings, llmEnabled } from './llm';
 import { clockAt, phaseOf, weatherAt, PHASE_NAME, SEASON_NAME, WEATHER_NAME, WORLD_TZ } from '../../shared/time';
@@ -167,6 +170,57 @@ route('GET', '/api/admin/world', (r) => {
     ...worldSnapshot(),
     clock: { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, phase: PHASE_NAME[phaseOf(ck.hour)], season: SEASON_NAME[ck.season], weather: WEATHER_NAME[weatherAt(now).kind] },
   };
+}, { auth: false });
+
+// ---------- players ----------
+/** Cats by name, owner nickname or id; the most recently active first. */
+route('GET', '/api/admin/players', (r) => {
+  requireAdmin(r);
+  const q = String(r.query.get('q') ?? '').trim().slice(0, 40);
+  const like = `%${q.replace(/[%_]/g, '')}%`;
+  const rows = db.db
+    .prepare(
+      `SELECT c.id, json_extract(c.data, '$.name') name, json_extract(c.data, '$.born') born, json_extract(c.data, '$.location') location,
+              u.id uid, u.nickname, u.fish, u.last_seen lastSeen, u.created, u.banned
+         FROM cats c JOIN users u ON u.id = c.owner_id
+        WHERE c.owner_id != 'town' AND (? = '' OR json_extract(c.data, '$.name') LIKE ? OR u.nickname LIKE ? OR c.id = ? OR u.id = ?)
+        ORDER BY u.last_seen DESC LIMIT 30`,
+    )
+    .all(q, like, like, q, q) as { id: string; name: string }[];
+  // the live record knows things the saved row may not have yet
+  return rows.map((row) => {
+    const c = game.getCat(row.id);
+    return { ...row, name: c?.name ?? row.name, location: c?.location ?? (row as { location?: string }).location, discovered: c?.discovered.length ?? 0, places: POIS.length };
+  });
+}, { auth: false });
+
+/**
+ * For trying the game out: everything the shop sells and the town hides, on one
+ * cat's owner. Doesn't touch the cat's age or bond.
+ */
+route('POST', '/api/admin/unlock', (r) => {
+  requireAdmin(r);
+  const c = game.getCat(str(r.body.cat, 64, '猫'));
+  if (!c || c.ownerId === 'town') throw new HttpError(404, '没有这只猫');
+  const uid = c.ownerId;
+  const inv = db.getInventory(uid);
+  const want = (cat: string) => (cat === 'wear' || cat === 'wallpaper' || cat === 'floor' || cat === 'collect' ? 1 : cat === 'food' ? 20 : 3);
+  let items = 0;
+  db.tx(() => {
+    for (const it of ITEMS) {
+      const n = want(it.cat) - (inv[it.id] ?? 0);
+      if (n > 0) {
+        db.invAdd(uid, it.id, n);
+        items += n;
+      }
+      if (it.cat === 'collect') game.markFound(uid, it.id);
+    }
+  });
+  c.discovered = POIS.map((p) => p.id);
+  game.saveNow(c);
+  const user = db.getUser(uid)!;
+  const fish = user.fish < 9999 ? game.addFish(uid, 9999 - user.fish) : user.fish;
+  return { ok: true, cat: c.name, items, places: POIS.length, collectibles: ITEMS.filter((it) => it.cat === 'collect').length, fish };
 }, { auth: false });
 
 // ---------- the language model ----------
