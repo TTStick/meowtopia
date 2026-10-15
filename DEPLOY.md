@@ -143,6 +143,8 @@ docker compose up -d
 
 ### 管理面板
 
+![管理面板的小镇沙盘：像素地图上，玩家的猫、小镇的猫和居民实时走动；右边是选中的猫的详情](docs/images/admin-sandbox.png)
+
 打开 `https://你的域名/admin/`，输入 `.env` 里的 `CAT_ADMIN_TOKEN` 登录（在这台电脑上保持一天）。忘了口令可以在服务器上查：
 
 ```bash
