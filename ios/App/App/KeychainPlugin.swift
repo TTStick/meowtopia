@@ -1,13 +1,15 @@
 import Foundation
 import Security
 import Capacitor
+import WatchConnectivity
 
 /// The app's own native bits:
 /// - the session token in the iOS Keychain (encrypted, this device only; Keychain
 ///   items survive reinstalling the app, so the nest isn't lost with it)
 /// - sharing a file (data export, photos) through the system share sheet
+/// - handing the paired Apple Watch its own session, so it signs in by itself
 @objc(KeychainPlugin)
-public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
+public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate {
     public let identifier = "KeychainPlugin"
     public let jsName = "CatNative"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -15,7 +17,16 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "watchState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sendToWatch", returnType: CAPPluginReturnPromise),
     ]
+
+    override public func load() {
+        if WCSession.isSupported() {
+            WCSession.default.delegate = self
+            WCSession.default.activate()
+        }
+    }
 
     private let service = "com.catnest.session"
 
@@ -83,4 +94,31 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin {
             vc.present(sheet, animated: true)
         }
     }
+
+    // MARK: Apple Watch
+
+    @objc func watchState(_ call: CAPPluginCall) {
+        guard WCSession.isSupported() else { return call.resolve(["supported": false, "paired": false, "installed": false]) }
+        let s = WCSession.default
+        call.resolve(["supported": true, "paired": s.isPaired, "installed": s.isWatchAppInstalled])
+    }
+
+    /// { token, server } → the watch app (it keeps the latest context, even if it's not running now)
+    @objc func sendToWatch(_ call: CAPPluginCall) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isWatchAppInstalled else {
+            return call.reject("watch not available")
+        }
+        let info: [String: Any] = ["token": call.getString("token") ?? "", "server": call.getString("server") ?? "", "at": Date().timeIntervalSince1970]
+        do {
+            try WCSession.default.updateApplicationContext(info)
+            WCSession.default.transferUserInfo(info)
+            call.resolve()
+        } catch {
+            call.reject("could not reach the watch")
+        }
+    }
+
+    public func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {}
+    public func sessionDidBecomeInactive(_ session: WCSession) {}
+    public func sessionDidDeactivate(_ session: WCSession) { WCSession.default.activate() }
 }

@@ -207,7 +207,18 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 
 **页面能打开但小镇连不上**：通常是自己加的反向代理没有转发 WebSocket，见上面「80/443 已被占用」。
 
-## 11. 安全提醒
+## 11. 让各个 App 连到你的服务器
+
+服务器上线后，各客户端需要知道你的域名：
+
+| 客户端 | 在哪里改 |
+|---|---|
+| 网页版 | 不用改，直接访问 `https://你的域名` |
+| iPhone App | 项目根目录的 `.env.ios` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:ios` |
+| Mac App | `macos/project.yml` 里 Release 的 `CATNEST_SERVER`；装好的 App 也可以执行 `defaults write com.catnest.mac serverURL https://你的域名` |
+| Apple Watch | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
+
+## 12. 安全提醒
 
 - `.env` 里有管理口令，保持 `chmod 600`，不要提交或发给别人。
 - 不要把 8737 端口直接暴露到公网，所有流量都应经过 Caddy。

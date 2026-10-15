@@ -3,7 +3,7 @@ import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
 import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError } from './net';
-import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, statusBarOver, onResume, initNativePush } from './platform';
+import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, statusBarOver, onResume, initNativePush, handOffToWatch } from './platform';
 import { takeGuestPow } from './pow';
 import { codeLogin, passkeyLogin, scheduleProtectNudge, guestLogin, registerApns } from './account';
 import { ui, toast, activeCat, patchCat } from './state';
@@ -186,6 +186,7 @@ class Game {
     if (panel === 'letters' || panel === 'settings' || panel === 'shop') setTimeout(() => ui.set({ panel }), 600);
     if (isMacShell) toMac({ type: 'game', loggedIn: true });
     void initNativePush(registerApns, () => ui.set({ panel: 'letters' })).catch(() => {});
+    void handOffToWatch(me.user.id, async () => (await api<{ token: string }>('POST', '/api/auth/device/mint')).token).catch(() => {});
     if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
     else this.tip();
     api('POST', '/api/daily')

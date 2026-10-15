@@ -236,3 +236,39 @@ xcrun simctl push booted com.catnest.app push.apns
 其中 `push.apns` 的内容是 `{"aps":{"alert":{"title":"汤圆探险回来啦","body":"带回了一片枫叶"}}}`。
 
 `client/appicon.html` 是生成图标和启动图的小工具：开发服务器跑起来后，访问 `/appicon.html?pick=1` 可以挑猫，访问 `/appicon.html?seed=951` 会渲染出图标和启动图。
+
+## Mac 菜单栏 App
+
+`macos/` 是一个原生的 macOS App（Swift + AppKit + WKWebView，用 XcodeGen 生成工程，系统要求 macOS 14+）：
+
+- **菜单栏里常驻你的猫**：图标就是你自己的猫（服务器用游戏里同一套画法画好），它会眨眼、甩尾巴、舔毛、打哈欠。到了晚上蜷成一团睡觉，出门探险时变成小爪印，有新信时图标上会亮一个小红点。
+- **点一下打开陪伴面板**：可以看到会动的猫、它说的话、饱腹 / 精力 / 心情和今天的小心愿。能摸摸、喂食、逗猫、出门、叫它回家、说晚安，也能直接打字对它说话。右键图标有「开机时陪着你」和「退出」。
+- **「打开完整游戏」**：在独立窗口里玩完整版，和面板共用同一个登录。窗口打开时 App 出现在 Dock，关掉后又安静地回到菜单栏。
+- 有新信时会发系统通知（在游戏设置里打开「猫猫的小纸条」）。
+
+构建与运行：
+
+```bash
+cd macos && xcodegen generate
+```
+
+```bash
+open macos/CatNest.xcodeproj
+```
+
+调试版连接 `https://localhost`（本机 Docker）。正式版的服务器地址在 `macos/project.yml` 的 `CATNEST_SERVER`（Release）里改成你的域名；已经装好的 App 也可以这样改：
+
+```bash
+defaults write com.catnest.mac serverURL https://你的域名
+```
+
+## Apple Watch App
+
+`ios/App/CatNestWatch/` 是原生 SwiftUI 手表 App（watchOS 10+）。它随 iPhone App 一起安装（附属），但**可以完全脱离手机单独使用**：
+
+- **打开就能看到你的猫**：画法和游戏里一模一样，会呼吸、眨眼、舔毛、打哈欠。白天是暖色背景，夜里是星空，猫会蜷着睡觉。
+- **轻点猫猫是摸摸，转动表冠是顺毛**：每顺一下手腕会轻轻一震，顺够了会冒出小爱心，还能感觉到它呼噜呼噜。
+- 底栏可以喂食（列出背包里的食物）、逗猫（夜里变成说晚安）。「更多」里有三个状态圆环、今天的心愿、语音或随手写对它说话、出门 / 叫它回家、信箱、生成找回码和退出登录。
+- **登录方式**：装了 iPhone App 时，手机会自动把登录交给手表，什么都不用输；或者在手表上点「用手机或电脑登录」，把显示的 6 位码填到任意已登录设备的「设置 → 登录手表」；也可以直接在手表上开一个新猫窝，从三只小猫里领养一只。
+
+在模拟器里运行：用 Xcode 选择 `CatNestWatch` scheme 和一台手表模拟器。调试版连接 `https://localhost`；正式版的默认地址在 `CatNestWatch/Config.swift` 的 `defaultServer`。和 iPhone 一起使用时，手机会把自己的服务器地址一并告诉手表。

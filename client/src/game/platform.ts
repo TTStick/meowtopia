@@ -26,6 +26,8 @@ interface CatNativePlugin {
   set(o: { key: string; value: string }): Promise<void>;
   remove(o: { key: string }): Promise<void>;
   shareFile(o: { name: string; base64: string }): Promise<{ completed: boolean }>;
+  watchState(): Promise<{ supported: boolean; paired: boolean; installed: boolean }>;
+  sendToWatch(o: { token: string; server: string }): Promise<void>;
 }
 const Native = registerPlugin<CatNativePlugin>('CatNative');
 const TOKEN_KEY = 'session';
@@ -45,6 +47,30 @@ export async function saveToken(t: string | null) {
     else await Native.remove({ key: TOKEN_KEY });
   } catch (e) {
     console.warn('keychain', e);
+  }
+}
+
+// ---------- Apple Watch ----------
+const HANDOFF_KEY = 'catnest.watchHandoff';
+/**
+ * If the 猫窝 watch app is installed on a paired watch, give it its own session
+ * (minted by the server) so it signs in without typing a code. Once per account.
+ */
+export async function handOffToWatch(account: string, mint: () => Promise<string>) {
+  if (!isNative || platform !== 'ios') return;
+  const st = await Native.watchState().catch(() => null);
+  if (!st?.installed) return;
+  try {
+    if (localStorage.getItem(HANDOFF_KEY) === account) return;
+  } catch {
+    /* ignore */
+  }
+  const token = await mint();
+  await Native.sendToWatch({ token, server: API_BASE });
+  try {
+    localStorage.setItem(HANDOFF_KEY, account);
+  } catch {
+    /* ignore */
   }
 }
 
