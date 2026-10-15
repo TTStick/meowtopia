@@ -14,7 +14,8 @@ import * as db from './db';
 import * as game from './game';
 import { ITEMS } from '../../shared/items';
 import { POIS } from '../../shared/world';
-import { worldSnapshot } from './world';
+import { ageOf, bondLevel, moodWord } from '../../shared/stats';
+import { onlineUsers, worldSnapshot } from './world';
 import { llmSettings, llmUsage, resetLlmSettings, testLlm, updateLlmSettings, llmEnabled } from './llm';
 import { clockAt, phaseOf, weatherAt, PHASE_NAME, SEASON_NAME, WEATHER_NAME, WORLD_TZ } from '../../shared/time';
 
@@ -82,7 +83,7 @@ const tzMs = () => WORLD_TZ * 3600_000;
 /** Start of the town's day (the world clock's time zone) containing `t`. */
 const dayStart = (t: number) => Math.floor((t + tzMs()) / DAY) * DAY - tzMs();
 const dayKey = (t: number) => new Date(t + tzMs()).toISOString().slice(0, 10);
-const count = (sql: string, ...args: number[]) => (db.db.prepare(sql).get(...args) as { n: number }).n;
+const count = (sql: string, ...args: (string | number)[]) => (db.db.prepare(sql).get(...args) as { n: number }).n;
 
 interface DayStats { active: number; peak: number; llmCalls: number }
 let peakToday = 0;
@@ -173,25 +174,117 @@ route('GET', '/api/admin/world', (r) => {
 }, { auth: false });
 
 // ---------- players ----------
-/** Cats by name, owner nickname or id; the most recently active first. */
+// Only what looking after the town needs: no diary pages, notes or recovery codes.
+const SECURED = '(u.code_hash IS NOT NULL OR EXISTS (SELECT 1 FROM passkeys p WHERE p.user_id = u.id))';
+type Filter = 'all' | 'today' | 'week' | 'new' | 'secured' | 'paused';
+const FILTERS: Record<Filter, (today: number) => [string, number[]]> = {
+  all: () => ['1 = 1', []],
+  today: (t) => ['u.last_seen >= ?', [t]],
+  week: (t) => ['u.last_seen >= ?', [t - 6 * DAY]],
+  new: (t) => ['u.created >= ?', [t - 6 * DAY]],
+  secured: () => [SECURED, []],
+  paused: () => ['u.banned = 1', []],
+};
+const SORTS = { recent: 'u.last_seen DESC', new: 'u.created DESC', name: 'u.nickname ASC' } as const;
+const PAGE = 30;
+
+function stageOf(born: number) {
+  const a = ageOf(born);
+  return a < 0.6 ? '小奶猫' : a < 0.9 ? '少年猫' : '成年猫';
+}
+function catsOfUser(uid: string) {
+  return (db.db.prepare('SELECT id FROM cats WHERE owner_id = ? OR co_owner_id = ?').all(uid, uid) as { id: string }[])
+    .map((row) => game.getCat(row.id))
+    .filter((c): c is NonNullable<typeof c> => !!c);
+}
+
 route('GET', '/api/admin/players', (r) => {
   requireAdmin(r);
+  const today = dayStart(Date.now());
+  const filter = (Object.keys(FILTERS).includes(String(r.query.get('filter'))) ? r.query.get('filter') : 'all') as Filter;
+  const sort = SORTS[(r.query.get('sort') as keyof typeof SORTS) ?? 'recent'] ?? SORTS.recent;
+  const page = Math.max(0, Math.floor(Number(r.query.get('page')) || 0));
   const q = String(r.query.get('q') ?? '').trim().slice(0, 40);
   const like = `%${q.replace(/[%_]/g, '')}%`;
+  const search = `(? = '' OR u.nickname LIKE ? OR u.id = ? OR EXISTS (SELECT 1 FROM cats c WHERE (c.owner_id = u.id OR c.co_owner_id = u.id) AND (json_extract(c.data, '$.name') LIKE ? OR c.id = ?)))`;
+  const searchArgs = [q, like, q, like, q];
+  const [where, args] = FILTERS[filter](today);
+  const total = count(`SELECT COUNT(*) n FROM users u WHERE ${where} AND ${search}`, ...args, ...searchArgs);
   const rows = db.db
-    .prepare(
-      `SELECT c.id, json_extract(c.data, '$.name') name, json_extract(c.data, '$.born') born, json_extract(c.data, '$.location') location,
-              u.id uid, u.nickname, u.fish, u.last_seen lastSeen, u.created, u.banned
-         FROM cats c JOIN users u ON u.id = c.owner_id
-        WHERE c.owner_id != 'town' AND (? = '' OR json_extract(c.data, '$.name') LIKE ? OR u.nickname LIKE ? OR c.id = ? OR u.id = ?)
-        ORDER BY u.last_seen DESC LIMIT 30`,
-    )
-    .all(q, like, like, q, q) as { id: string; name: string }[];
-  // the live record knows things the saved row may not have yet
-  return rows.map((row) => {
-    const c = game.getCat(row.id);
-    return { ...row, name: c?.name ?? row.name, location: c?.location ?? (row as { location?: string }).location, discovered: c?.discovered.length ?? 0, places: POIS.length };
-  });
+    .prepare(`SELECT u.id, u.nickname, u.created, u.last_seen lastSeen, u.banned, u.ban_reason banReason, ${SECURED} secured FROM users u WHERE ${where} AND ${search} ORDER BY ${sort} LIMIT ? OFFSET ?`)
+    .all(...args, ...searchArgs, PAGE, page * PAGE) as { id: string; nickname: string; created: number; lastSeen: number; banned: number; banReason: string | null; secured: number }[];
+  const online = onlineUsers();
+  const counts = Object.fromEntries((Object.keys(FILTERS) as Filter[]).map((f) => {
+    const [w, a] = FILTERS[f](today);
+    return [f, count(`SELECT COUNT(*) n FROM users u WHERE ${w}`, ...a)];
+  }));
+  return {
+    total,
+    page,
+    pageSize: PAGE,
+    counts,
+    rows: rows.map((u) => ({
+      ...u,
+      secured: !!u.secured,
+      online: online.has(u.id),
+      cats: catsOfUser(u.id).map((c) => ({ id: c.id, name: c.name, stage: stageOf(c.born), out: c.location === 'world', shared: !!c.coOwnerId })),
+    })),
+  };
+}, { auth: false });
+
+route('GET', '/api/admin/players/:uid', (r) => {
+  requireAdmin(r);
+  const u = db.getUser(r.params.uid);
+  if (!u) throw new HttpError(404, '没有这位玩家');
+  const now = Date.now();
+  const where = new Map(worldSnapshot().ents.map((e) => [e.id, e.place]));
+  const inv = db.getInventory(u.id);
+  const collectibles = ITEMS.filter((it) => it.cat === 'collect').map((it) => it.id);
+  return {
+    id: u.id,
+    nickname: u.nickname,
+    created: u.created,
+    lastSeen: u.last_seen,
+    online: onlineUsers().has(u.id),
+    fish: u.fish,
+    banned: !!u.banned,
+    banReason: u.ban_reason ?? null,
+    recoveryCode: !!u.code_hash,
+    passkeys: count('SELECT COUNT(*) n FROM passkeys WHERE user_id = ?', u.id),
+    devices: count('SELECT COUNT(*) n FROM sessions WHERE user_id = ? AND expires > ?', u.id, now),
+    notifications: !!game.settingsOf(u).push,
+    items: Object.entries(inv).filter(([id]) => !collectibles.includes(id)).reduce((n, [, k]) => n + k, 0),
+    collection: { found: game.foundItems(u.id).length, total: collectibles.length },
+    cats: catsOfUser(u.id).map((c) => {
+      game.refresh(c);
+      const partner = c.coOwnerId ? db.getUser(c.ownerId === u.id ? c.coOwnerId : c.ownerId) : null;
+      return {
+        id: c.id,
+        name: c.name,
+        born: c.born,
+        stage: stageOf(c.born),
+        place: c.location === 'world' ? (where.get(c.id) ?? '小镇里') : '窝里',
+        mood: moodWord(c.stats),
+        stats: { hunger: Math.round(c.stats.hunger), energy: Math.round(c.stats.energy), mood: Math.round(c.stats.mood), clean: Math.round(c.stats.clean), social: Math.round(c.stats.social) },
+        bond: bondLevel(c.stats.bond),
+        discovered: c.discovered.length,
+        places: POIS.length,
+        partner: partner?.nickname ?? null,
+      };
+    }),
+  };
+}, { auth: false });
+
+/** A letter from the town, with a little gift if you like. Lands in the player's mailbox. */
+route('POST', '/api/admin/players/:uid/letter', (r) => {
+  requireAdmin(r);
+  const u = db.getUser(r.params.uid);
+  if (!u) throw new HttpError(404, '没有这位玩家');
+  const text = str(r.body.text, 200, '信');
+  const fish = Math.max(0, Math.min(1000, Math.round(Number(r.body.fish) || 0)));
+  if (fish) game.addFish(u.id, fish);
+  game.notify(u.id, 'town', fish ? `小镇寄来一封信，还附上了 ${fish} 小鱼干` : '小镇寄来一封信', text);
+  return { ok: true };
 }, { auth: false });
 
 /**

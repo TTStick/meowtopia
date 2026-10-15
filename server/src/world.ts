@@ -998,6 +998,13 @@ export function worldStats() {
   return { ents: ents.size, clients: clients.size };
 }
 
+/** Players with the game open right now. */
+export function onlineUsers(): Set<string> {
+  const s = new Set<string>();
+  for (const c of clients) if (c.uid) s.add(c.uid);
+  return s;
+}
+
 /** Everything in the town right now, for the admin sandbox. Read-only. */
 export function worldSnapshot() {
   const now = Date.now();

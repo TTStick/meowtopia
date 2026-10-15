@@ -520,15 +520,43 @@ test('model settings: an Anthropic-compatible model without structured output (e
   }
 });
 
-test('admin: find a player and unlock everything for testing', async () => {
+test('admin: the roster, a page per player, letters, pausing, and unlocking for testing', async () => {
   const p = new Player();
   await p.join('测试主人');
   const cat = (await p.call('POST', '/api/adopt', { name: '喵喵', seed: 5 })).data.cats[0].id;
   const admin = new Player();
   await admin.call('POST', '/api/admin/login', { token: ADMIN });
-  const found = (await admin.call('GET', `/api/admin/players?q=${encodeURIComponent('喵喵')}`)).data;
-  assert.ok(found.some((r: { id: string; nickname: string }) => r.id === cat && r.nickname === '测试主人'));
+
+  // the roster: one row per person, with their cats; search by a cat's name too
+  const page = (await admin.call('GET', `/api/admin/players?q=${encodeURIComponent('喵喵')}`)).data;
+  const row = page.rows.find((r: { nickname: string }) => r.nickname === '测试主人');
+  assert.ok(row, JSON.stringify(page));
+  assert.equal(row.cats[0].id, cat);
+  assert.ok(page.counts.all >= 1 && page.counts.today >= 1 && page.counts.new >= 1);
+  assert.equal(page.pageSize, 30);
+  const uid = row.id;
+
+  // a page per person: what caring for them needs, nothing private
+  const d = (await admin.call('GET', `/api/admin/players/${uid}`)).data;
+  assert.equal(d.nickname, '测试主人');
+  assert.equal(d.cats[0].name, '喵喵');
+  assert.ok(d.cats[0].stats.hunger >= 0 && d.cats[0].bond.level >= 1);
+  assert.equal(d.devices, 1);
+  assert.ok(!('code' in d) && !('token' in d), 'no secrets in the page');
+
+  // a letter from the town, with a little gift
+  const before = (await p.call('GET', '/api/me')).data.user.fish;
+  assert.equal((await admin.call('POST', `/api/admin/players/${uid}/letter`, { text: '谢谢你告诉我们那个小问题', fish: 50 })).status, 200);
+  assert.equal((await p.call('GET', '/api/me')).data.user.fish, before + 50);
+  const mail = (await p.call('GET', '/api/events')).data;
+  assert.ok(mail.some((e: { kind: string; text: string }) => e.kind === 'town' && e.text.includes('谢谢你')));
+  assert.equal((await admin.call('POST', `/api/admin/players/${uid}/letter`, { text: '' })).status, 400);
+
+  // players can't use any of it
+  assert.equal((await p.call('GET', '/api/admin/players')).status, 404);
   assert.equal((await p.call('POST', '/api/admin/unlock', { cat })).status, 404, 'players cannot unlock');
+
+  // test tools: unlock everything on a cat
   const u = (await admin.call('POST', '/api/admin/unlock', { cat })).data;
   assert.ok(u.items > 50 && u.places >= 26 && u.collectibles >= 30 && u.fish >= 9999, JSON.stringify(u));
   const me = (await p.call('GET', '/api/me')).data;
@@ -536,6 +564,12 @@ test('admin: find a player and unlock everything for testing', async () => {
   assert.ok(me.inventory.crown >= 1 && me.inventory.piano >= 3 && me.inventory.treat_can >= 20);
   const book = (await p.call('GET', '/api/collection')).data;
   assert.equal(book.found.length, u.collectibles, 'the collection book is full');
-  // doing it again adds nothing new
-  assert.equal((await admin.call('POST', '/api/admin/unlock', { cat })).data.items, 0);
+  assert.equal((await admin.call('POST', '/api/admin/unlock', { cat })).data.items, 0, 'doing it again adds nothing');
+
+  // pausing shows up in its own filter, and can be undone
+  await admin.call('POST', '/api/admin/ban', { user: uid, reason: '测试暂停' });
+  const paused = (await admin.call('GET', '/api/admin/players?filter=paused')).data;
+  assert.ok(paused.rows.some((r: { id: string; banReason: string }) => r.id === uid && r.banReason === '测试暂停'));
+  await admin.call('POST', '/api/admin/ban', { user: uid, unban: true });
+  assert.ok(!(await admin.call('GET', '/api/admin/players?filter=paused')).data.rows.some((r: { id: string }) => r.id === uid));
 });

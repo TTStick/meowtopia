@@ -671,7 +671,7 @@ class Game {
     this.world?.onServer(m);
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
     // only kinds the server also files as letters; live-only toasts (friend, home) would leave an empty mailbox with a badge
-    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond')) ui.set((s) => ({ unread: s.unread + 1 }));
+    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'town')) ui.set((s) => ({ unread: s.unread + 1 }));
     if (m.t === 'event' && m.kind === 'bond') this.refreshMe().catch(() => {});
     if (m.t === 'event' && m.kind === 'wish') {
       this.loadWish();
@@ -680,10 +680,10 @@ class Game {
       setTimeout(() => this.nest?.say('wish'), 600);
     }
     if (m.t === 'event') {
-      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : '🐾';
+      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : m.kind === 'town' ? '💌' : '🐾';
       toast(m.text, icon, 4200);
       if (m.kind === 'find' || m.kind === 'gift') audio.sparkle();
-      if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift') this.refreshMe().catch(() => {});
+      if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift' || m.kind === 'town') this.refreshMe().catch(() => {});
       if (m.kind === 'home' && m.catId) {
         patchCat(m.catId, { location: 'nest' });
         const c = activeCat();

@@ -94,19 +94,53 @@ export interface LlmUsage {
   budget: { minute: number; rpm: number; today: number; daily: number };
 }
 
+export type PlayerFilter = 'all' | 'today' | 'week' | 'new' | 'secured' | 'paused';
 export interface PlayerRow {
   id: string;
-  name: string;
-  born: number;
-  location: string;
-  uid: string;
   nickname: string;
-  fish: number;
-  lastSeen: number;
   created: number;
+  lastSeen: number;
   banned: number;
-  discovered: number;
-  places: number;
+  banReason: string | null;
+  secured: boolean;
+  online: boolean;
+  cats: { id: string; name: string; stage: string; out: boolean; shared: boolean }[];
+}
+export interface PlayerPage {
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: Record<PlayerFilter, number>;
+  rows: PlayerRow[];
+}
+export interface PlayerDetail {
+  id: string;
+  nickname: string;
+  created: number;
+  lastSeen: number;
+  online: boolean;
+  fish: number;
+  banned: boolean;
+  banReason: string | null;
+  recoveryCode: boolean;
+  passkeys: number;
+  devices: number;
+  notifications: boolean;
+  items: number;
+  collection: { found: number; total: number };
+  cats: {
+    id: string;
+    name: string;
+    born: number;
+    stage: string;
+    place: string;
+    mood: string;
+    stats: { hunger: number; energy: number; mood: number; clean: number; social: number };
+    bond: { level: number; name: string };
+    discovered: number;
+    places: number;
+    partner: string | null;
+  }[];
 }
 
 export interface Report {
