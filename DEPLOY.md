@@ -116,7 +116,7 @@ docker compose logs -f
 | `CAT_LLM_MODEL` | 默认 `claude-opus-5-5`；想省钱可换 `claude-haiku-5-5` |
 | `CAT_LLM_DAILY` / `CAT_LLM_USER_DAILY` | 全服每天、每位玩家每天的模型调用上限 |
 | `NPM_REGISTRY` | 构建时的 npm 源，国内服务器可设为 `https://registry.npmmirror.com` |
-| `CAT_APNS_*` | iOS App 推送（有 Apple 开发者账号后再配置，见 README） |
+| `CAT_APNS_*` | iOS App 推送（有 Apple 开发者账号后再配置，见 [docs/apps.md](docs/apps.md#上架-testflight--app-store-前)） |
 
 改完 `.env` 后让它生效：
 
@@ -217,7 +217,7 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 | iPhone App | 项目根目录的 `.env.ios` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:ios` |
 | Mac App | `macos/project.yml` 里 Release 的 `CATNEST_SERVER`；装好的 App 也可以执行 `defaults write com.catnest.mac serverURL https://你的域名` |
 | Apple Watch | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
-| Android App | 项目根目录的 `.env.android` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:android` 并重新打包（见 README「Android App」） |
+| Android App | 项目根目录的 `.env.android` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:android` 并重新打包（见 [docs/apps.md](docs/apps.md#打正式包)） |
 
 ## 12. 安全提醒
 

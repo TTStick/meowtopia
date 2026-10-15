@@ -1,6 +1,6 @@
 // Web vs. native app (Capacitor). The app ships the game inside its bundle and
 // talks to the server cross-origin with a bearer token kept in the Keychain.
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, SystemBars, SystemBarsStyle } from '@capacitor/core';
 
 export const isNative = Capacitor.isNativePlatform();
 
@@ -112,7 +112,9 @@ let barDark: boolean | null = null;
 export function statusBarOver(dark: boolean) {
   if (!isNative || barDark === dark) return;
   barDark = dark;
-  void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {}));
+  // Android: tell Capacitor's own SystemBars, which otherwise re-applies the device theme on every configuration change
+  if (platform === 'android') void SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light }).catch(() => {});
+  else void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {}));
 }
 
 let backdrop = '';

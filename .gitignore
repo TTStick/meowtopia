@@ -12,3 +12,4 @@ caddy-root.crt
 *.log
 release/
 .DS_Store
+.claude/

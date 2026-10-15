@@ -33,7 +33,8 @@
     },
     "SystemBars": {
       "insetsHandling": "css",
-      "initialViewportFitValueHint": "cover"
+      "initialViewportFitValueHint": "cover",
+      "style": "LIGHT"
     }
   },
   "loggingBehavior": "debug",
