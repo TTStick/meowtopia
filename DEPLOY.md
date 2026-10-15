@@ -27,13 +27,13 @@
 在你自己的电脑上，把压缩包传到服务器（以 `/opt` 为例）：
 
 ```bash
-scp catnest-2026-10-15j.tar.gz root@你的服务器IP:/opt/
+scp catnest-2026-10-15k.tar.gz root@你的服务器IP:/opt/
 ```
 
 登录服务器后解压：
 
 ```bash
-cd /opt && tar xzf catnest-2026-10-15j.tar.gz && cd catnest
+cd /opt && tar xzf catnest-2026-10-15k.tar.gz && cd catnest
 ```
 
 ## 2. 安装 Docker
