@@ -371,6 +371,10 @@ test('companions: sprites, snapshot, outing and pairing a watch', async () => {
   assert.equal(home.cat.out, false);
   assert.ok(home.line.length > 0);
   assert.ok(home.cat.look && home.wish && Array.isArray(home.foods));
+  // what the Android app needs to follow the player's notification rules by itself
+  assert.equal(home.notify.push, false);
+  assert.equal(typeof home.notify.quietStart, 'number');
+  assert.equal(typeof home.notify.tzOffset, 'number');
 
   // go out and come back without a websocket
   const out = await phone.call('POST', `/api/cat/${cat}/outing`, { go: true });
