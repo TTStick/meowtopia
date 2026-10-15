@@ -13,3 +13,4 @@ caddy-root.crt
 release/
 .DS_Store
 .claude/
+downloads/

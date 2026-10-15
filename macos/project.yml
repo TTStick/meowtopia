@@ -51,4 +51,4 @@ targets:
         Debug:
           CATNEST_SERVER: https://localhost
         Release:
-          CATNEST_SERVER: https://cat.example.com
+          CATNEST_SERVER: https://mycat.xioix.xin

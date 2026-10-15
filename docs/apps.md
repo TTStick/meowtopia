@@ -1,6 +1,6 @@
 # 各个客户端：构建、调试与发布
 
-网页版不需要单独构建：服务器跑起来就能用浏览器玩（也可以「添加到主屏幕」当 App 用）。下面是四个原生客户端的做法。它们都是同一个服务器的客户端，连哪台服务器由各自的配置决定（见 [DEPLOY.md 第 11 节](../DEPLOY.md#11-让各个-app-连到你的服务器)）。
+网页版不需要单独构建：服务器跑起来就能用浏览器玩（也可以「添加到主屏幕」当 App 用）。下面是四个原生客户端的做法。它们默认都连接公共服务器 **https://mycat.xioix.xin**；自己架了服务器的话，按各自的配置改成你的域名（见 [DEPLOY.md 第 11 节](../DEPLOY.md#11-让各个-app-连到你的服务器)）。
 
 - [iOS App](#ios-app)
 - [Android App](#android-app)
@@ -9,13 +9,43 @@
 
 ## iOS App
 
-`ios/` 是用 Capacitor 8 做的原生壳：游戏网页打包在 App 里，联网时连 `.env.ios` 里 `VITE_API_BASE` 指定的服务器。和网页版相比，App 里多了这些：
+`ios/` 是用 Capacitor 8 做的原生壳：游戏网页打包在 App 里，联网时连公共服务器 `https://mycat.xioix.xin`（或 `.env.ios` 里 `VITE_API_BASE` 指定的服务器）。和网页版相比，App 里多了这些：
 
 - 登录凭证存在 iOS 钥匙串（Keychain）里，删掉重装 App 也还在；
 - 通知走苹果的 APNs 推送，点通知会直接打开信箱；
 - 呼噜、发现宝贝时有震动反馈；
 - 导出数据、保存照片走系统的分享面板（可以存到「文件」）；
 - 留出了刘海和灵动岛的安全区域，启动画面和图标就是游戏里画的那只三花猫。
+
+### 装到自己的 iPhone 上（免费 Apple ID 也可以）
+
+苹果不允许直接下载安装包，但可以用 Mac 上的 Xcode 把源代码装到自己的 iPhone。装好后连接公共服务器，和网页版、安卓版在同一个小镇里。
+
+1. Mac 上安装 Xcode（App Store 里搜）和 Node.js 24，然后下载源代码：
+
+```bash
+git clone https://github.com/TTStick/meowtopia.git
+```
+
+2. 进入项目目录，安装依赖并构建 App 里的游戏：
+
+```bash
+npm install
+```
+
+```bash
+npm run build:ios
+```
+
+3. 用 Xcode 打开 `ios/App/App.xcodeproj`。在左边选中 App 项目，打开 Signing & Capabilities，把 Team 选成你的 Apple ID（没有的话先在 Xcode → 设置 → Accounts 里登录）。
+4. 用**免费 Apple ID** 时还要做两件事：
+   - 在项目的 Build Settings 里搜索 `CATNEST_BUNDLE_ID`，改成一个独一无二的名字，比如 `com.你的名字.catnest`。手表 App 的 ID 会自动跟着改。
+   - 在 App 这个 target 的 Signing & Capabilities 里，删掉 Push Notifications 这一项。免费账号不支持推送；猫猫的小纸条照样会出现在游戏的信箱里。
+5. 用数据线连上 iPhone，在 iPhone 的「设置 → 隐私与安全性」里打开「开发者模式」。回到 Xcode，在顶部选中你的 iPhone，点 ▶ 运行。第一次打开时，到 iPhone 的「设置 → 通用 → VPN 与设备管理」里信任你的开发者证书。
+
+免费 Apple ID 装的 App 7 天后会失效，再用 Xcode 运行一次就好：猫在服务器上，登录凭证在钥匙串里，什么都不会丢（保险起见，在游戏的「设置 → 账号与安全」里生成一个找回码）。付费开发者账号没有这些限制。
+
+想连自己的服务器：把 `.env.ios.example` 复制成 `.env.ios`，把 `VITE_API_BASE` 改成你的域名，再 `npm run build:ios`。
 
 ### 在本机用 Docker + 模拟器调试
 
@@ -49,9 +79,9 @@ npm run build:ios
 
 ### 上架 TestFlight / App Store 前
 
-1. **开发者账号**：在 Xcode 的 Signing & Capabilities 里选择你的 Team；把 Bundle ID `com.catnest.app` 换成你自己的（同时改 `capacitor.config.json` 里的 `appId`）。
+1. **开发者账号**：在 Xcode 的 Signing & Capabilities 里选择你的 Team；在 Build Settings 里把 `CATNEST_BUNDLE_ID`（默认 `com.catnest.app`）换成你自己的，同时改 `capacitor.config.json` 里的 `appId`。
 2. **推送**：在 Apple 开发者后台给这个 App ID 打开 Push Notifications，然后创建一个 APNs 密钥（`.p8` 文件）。把 `.p8` 放到服务器的 `secrets/` 目录，在 `.env` 里填 `CAT_APNS_KEY_ID`、`CAT_APNS_TEAM_ID`、`CAT_APNS_BUNDLE_ID`，再打开 `docker-compose.yml` 里挂载密钥的那几行注释。正式包的 `.env.ios` 要写 `VITE_APNS_ENV=production`。
-3. **服务器地址**：`.env.ios` 里的 `VITE_API_BASE` 改成你的正式域名，再 `npm run build:ios`。
+3. **服务器地址**：默认连接公共服务器；连自己的服务器时，`.env.ios` 里的 `VITE_API_BASE` 改成你的正式域名，再 `npm run build:ios`。
 4. **通行密钥**：App 里暂时只支持找回码登录（网页版可以添加通行密钥，App 里也能显示）。如果要在 App 里直接用面容 / 指纹登录，需要在域名上放 `apple-app-site-association` 文件并配置 Associated Domains，有了开发者账号以后可以接着做。
 
 模拟器里可以这样模拟一条推送，看看样式和点开后的效果：
@@ -108,7 +138,7 @@ npm run build:android
 
 ### 打正式包
 
-1. `.env.android` 里的 `VITE_API_BASE` 改成你的正式域名（`https://你的域名`），再 `npm run build:android`。
+1. 构建 App 里的游戏：`npm run build:android`。默认连接公共服务器 `https://mycat.xioix.xin`；连自己的服务器时，先在 `.env.android` 里把 `VITE_API_BASE` 写成 `https://你的域名`。
 2. 生成签名密钥（只需一次）。这个 `.jks` 文件和密码一定要保管好，以后每次更新都必须用同一把钥匙签名：
 
 ```bash
@@ -122,6 +152,7 @@ cd android && ./gradlew bundleRelease assembleRelease
 ```
 
 4. 想换包名时，同时改 `android/app/build.gradle` 里的 `applicationId` 和 `capacitor.config.json` 里的 `appId`。
+5. 放到官网上给大家下载：见 [DEPLOY.md「发布 Android 安装包」](../DEPLOY.md#发布-android-安装包)。
 
 小米、华为等系统的省电策略比较严，可能会推迟 App 在后台查信。在系统设置里允许猫窝「自启动 / 后台运行」，通知会更准时。
 
@@ -150,7 +181,7 @@ cd macos && xcodegen generate
 open macos/CatNest.xcodeproj
 ```
 
-调试版连接 `https://localhost`（本机 Docker）。正式版的服务器地址在 `macos/project.yml` 的 `CATNEST_SERVER`（Release）里改成你的域名；已经装好的 App 也可以这样改：
+调试版连接 `https://localhost`（本机 Docker）。正式版默认连接公共服务器 `https://mycat.xioix.xin`；连自己的服务器时，把 `macos/project.yml` 里 Release 的 `CATNEST_SERVER` 改成你的域名，已经装好的 App 也可以这样改：
 
 ```bash
 defaults write com.catnest.mac serverURL https://你的域名
@@ -165,4 +196,4 @@ defaults write com.catnest.mac serverURL https://你的域名
 - 底栏可以喂食（列出背包里的食物）、逗猫（夜里变成说晚安）。「更多」里有三个状态圆环、今天的心愿、语音或随手写对它说话、出门 / 叫它回家、信箱、生成找回码和退出登录。
 - **登录方式**：装了 iPhone App 时，手机会自动把登录交给手表，什么都不用输；或者在手表上点「用手机或电脑登录」，把显示的 6 位码填到任意已登录设备的「设置 → 登录手表」；也可以直接在手表上开一个新猫窝，从三只小猫里领养一只。
 
-在模拟器里运行：用 Xcode 选择 `CatNestWatch` scheme 和一台手表模拟器。调试版连接 `https://localhost`；正式版的默认地址在 `CatNestWatch/Config.swift` 的 `defaultServer`。和 iPhone 一起使用时，手机会把自己的服务器地址一并告诉手表。
+在模拟器里运行：用 Xcode 选择 `CatNestWatch` scheme 和一台手表模拟器。调试版连接 `https://localhost`；正式版默认连接公共服务器，地址在 `CatNestWatch/Config.swift` 的 `defaultServer`。和 iPhone 一起使用时，手机会把自己的服务器地址一并告诉手表。

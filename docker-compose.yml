@@ -49,6 +49,7 @@ services:
       CAT_ALIASES: ${CAT_ALIASES:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./downloads:/srv/download:ro
       - caddy-data:/data
       - caddy-config:/config
     cap_drop: [ALL]

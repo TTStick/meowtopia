@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
 
     func openGame(query: String = "") {
         popover.performClose(nil)
-        let url = Server.url("/" + query)
+        let url = Server.url("/play/" + query)
         if let w = gameWindow {
             if !query.isEmpty { gameView?.load(URLRequest(url: url)) }
             NSApp.setActivationPolicy(.regular)

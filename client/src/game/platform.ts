@@ -12,8 +12,11 @@ export function toMac(m: MacMsg) {
 }
 export const platform = Capacitor.getPlatform(); // 'ios' | 'android' | 'web'
 
-/** Where the API lives. Empty for the website (same origin); set via VITE_API_BASE for app builds. */
-export const API_BASE = ((import.meta.env.VITE_API_BASE as string | undefined) ?? '').replace(/\/$/, '');
+/** The public server the apps connect to unless a build says otherwise. */
+export const OFFICIAL_SERVER = 'https://mycat.xioix.xin';
+
+/** Where the API lives. Empty for the website (same origin); app builds use VITE_API_BASE, or the public server. */
+export const API_BASE = ((import.meta.env.VITE_API_BASE as string | undefined) || (Capacitor.isNativePlatform() ? OFFICIAL_SERVER : '')).replace(/\/$/, '');
 
 export function wsUrl(): string {
   const base = API_BASE || location.origin;

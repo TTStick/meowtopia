@@ -23,7 +23,7 @@ npm install
 npm run dev
 ```
 
-然后打开 http://localhost:5199 。
+然后打开 http://localhost:5199 是官网，http://localhost:5199/play/ 是游戏。
 
 本地跑生产版：
 
@@ -57,7 +57,7 @@ npm test
 
 ## 调试小工具
 
-- `http://localhost:5199/?hour=21&weather=rain&season=3`：预览夜晚 / 雨天 / 冬天的画面（只影响本地显示）。
+- `http://localhost:5199/play/?hour=21&weather=rain&season=3`：预览夜晚 / 雨天 / 冬天的画面（只影响本地显示）。
 - `http://localhost:5199/gallery.html?scale=4&only=sit,loaf,walk,sleep`：猫咪姿态画廊。
 
 ## 结构

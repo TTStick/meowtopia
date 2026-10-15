@@ -30,7 +30,7 @@ const PORT = Number(process.env.PORT || 8737);
 const DIST = resolve(process.env.CAT_DIST || 'dist');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
-  '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
+  '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
 };
 
 /** Resolve a URL path to a file inside dist, or null. No dotfiles, no escaping the folder. */
@@ -63,9 +63,14 @@ const server = createServer(async (req, res) => {
       res.writeHead(405, { allow: 'GET, HEAD' }).end();
       return;
     }
-    // static files (production build); unknown paths fall back to the app shell
-    let p = staticFile(url.pathname);
-    if (!p && !extname(url.pathname)) p = staticFile('/index.html');
+    // the website lives at /, the game at /play/. Older links straight into the game
+    // (/?panel=letters from a notification, /?scene=world from the Mac app) still work.
+    const into = (to: string, code = 302) => res.writeHead(code, { location: to + url.search, 'cache-control': 'no-store' }).end();
+    if (url.pathname === '/' && (url.searchParams.has('panel') || url.searchParams.has('scene'))) return into('/play/');
+    if (url.pathname === '/play' || url.pathname === '/index.html') return into('/play/', 301);
+    // static files (production build); unknown paths inside the game fall back to its shell
+    const game = url.pathname.startsWith('/play/');
+    let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
     if (!p) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end(existsSync(join(DIST, 'index.html')) ? 'not found' : 'client not built — run `npm run build` or use the vite dev server');
       return;

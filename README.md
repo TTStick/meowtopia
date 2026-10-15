@@ -10,6 +10,14 @@
   <img alt="watchOS" src="https://img.shields.io/badge/watchOS-Apple%20Watch-6E6E73?style=flat-square&logo=apple&logoColor=white">
   <img alt="Docker 一键部署" src="https://img.shields.io/badge/Docker-%E4%B8%80%E9%94%AE%E9%83%A8%E7%BD%B2-2496ED?style=flat-square&logo=docker&logoColor=white">
   <img alt="简体中文" src="https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-C9A96E?style=flat-square">
+  <a href="#开源协议"><img alt="协议：PolyForm Noncommercial 1.0.0（禁止商用）" src="https://img.shields.io/badge/%E5%8D%8F%E8%AE%AE-PolyForm%20Noncommercial%20%C2%B7%20%E7%A6%81%E6%AD%A2%E5%95%86%E7%94%A8-9A7CC4?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <a href="https://mycat.xioix.xin"><b>🏠 官网</b></a> ·
+  <a href="https://mycat.xioix.xin/play/"><b>▶ 网页版，马上玩</b></a> ·
+  <a href="https://mycat.xioix.xin/download/meowtopia.apk"><b>⬇ Android 安装包</b></a> ·
+  <a href="docs/apps.md#ios-app"><b>iPhone：用 Xcode 安装</b></a>
 </p>
 
 <p align="center">
@@ -18,7 +26,8 @@
   <a href="#五分钟跑起来">本地运行</a> ·
   <a href="#放到自己的服务器上">部署上线</a> ·
   <a href="docs/apps.md">客户端构建</a> ·
-  <a href="docs/development.md">开发者文档</a>
+  <a href="docs/development.md">开发者文档</a> ·
+  <a href="#开源协议">开源协议</a>
 </p>
 
 <br>
@@ -185,7 +194,7 @@ npm install
 npm run dev
 ```
 
-然后打开 <http://localhost:5199>。想让猫说话更有灵性，在项目根目录的 `.env` 里填上 `ANTHROPIC_API_KEY`（可选，其他配置见 [开发者文档 · 配置](docs/development.md#配置)）。
+然后打开 <http://localhost:5199/play/> 就能玩（<http://localhost:5199> 是官网）。想让猫说话更有灵性，在项目根目录的 `.env` 里填上 `ANTHROPIC_API_KEY`（可选，其他配置见 [开发者文档 · 配置](docs/development.md#配置)）。
 
 ## 放到自己的服务器上
 
@@ -201,13 +210,13 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-几十秒后打开 `https://你的域名` 就能玩了。一键部署脚本、国内服务器加速、备份恢复、更新和常见问题，都在 **[部署手册 DEPLOY.md](DEPLOY.md)** 里。
+几十秒后打开 `https://你的域名`：首页是游戏官网，游戏本身在 `https://你的域名/play/`。一键部署脚本、国内服务器加速、备份恢复、发布 Android 安装包、更新和常见问题，都在 **[部署手册 DEPLOY.md](DEPLOY.md)** 里。
 
 ## 各个客户端
 
 | 客户端 | 代码 | 构建与发布 |
 |---|---|---|
-| 网页 | `client/` | 随服务器一起，不需要单独构建 |
+| 网页 | `client/` | 随服务器一起，不需要单独构建；官网是 `client/home.html` |
 | iPhone | `ios/`（Capacitor 8） | [docs/apps.md · iOS](docs/apps.md#ios-app) |
 | Android | `android/`（Capacitor 8） | [docs/apps.md · Android](docs/apps.md#android-app) |
 | Mac 菜单栏 | `macos/`（Swift + AppKit） | [docs/apps.md · Mac](docs/apps.md#mac-菜单栏-app) |
@@ -226,6 +235,18 @@ npm test
 ```
 
 测试包括寻路与地图可达性、数值的“温柔”约束、兜底猫语覆盖，以及真实启动服务器的接口测试（注册、会话、CSRF、找回码、通行密钥、共养、举报与封禁等）。目录结构和调试小工具见 [开发者文档](docs/development.md)。
+
+## 开源协议
+
+猫窝的源代码以 **[PolyForm Noncommercial License 1.0.0](LICENSE)** 发布，**禁止任何商业用途**。
+
+- ✅ **可以**：阅读、学习、修改代码；自己架一台服务器，和家人朋友一起玩；在个人项目、学校、公益组织、科研中使用；在注明出处、附上本协议的前提下分享修改后的版本。
+- 🚫 **不可以**：任何商业用途，例如收费运营服务器、做成付费 App 上架、加入广告或内购、用于公司的产品或服务。
+- 想商用？请先在 [GitHub](https://github.com/TTStick/meowtopia) 上联系作者，另行取得授权。
+
+分发本项目（包括修改后的版本）时，需要附上 [LICENSE](LICENSE) 文件以及其中以 `Required Notice:` 开头的那一行版权声明。项目用到的第三方库（Capacitor、Preact 等）仍适用它们各自的开源协议。
+
+说明：限制商用的协议不属于 OSI 定义的“开源许可证”，更准确的说法是“源代码公开”。
 
 <br>
 

@@ -45,5 +45,11 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
-  }
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TTStick/meowtopia.git"
+  },
+  "homepage": "https://mycat.xioix.xin"
 }

@@ -85,7 +85,7 @@ async function sendPush(u: db.UserRow, payload: { title: string; body: string; t
   }
   if (u.push_sub) {
     try {
-      await webpush.sendNotification(JSON.parse(u.push_sub), JSON.stringify({ url: '/', ...payload }), { TTL: 6 * 3600 });
+      await webpush.sendNotification(JSON.parse(u.push_sub), JSON.stringify({ url: '/play/', ...payload }), { TTL: 6 * 3600 });
       sent = true;
     } catch (e: any) {
       if (e?.statusCode === 404 || e?.statusCode === 410) db.updateUser(u.id, { push_sub: null });

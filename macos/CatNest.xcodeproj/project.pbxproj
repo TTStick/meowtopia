@@ -145,7 +145,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CATNEST_SERVER = "https://cat.example.com";
+				CATNEST_SERVER = "https://mycat.xioix.xin";
 				CODE_SIGN_ENTITLEMENTS = CatNest/CatNest.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;

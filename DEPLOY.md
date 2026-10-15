@@ -78,7 +78,7 @@ docker compose version
 2. 构建镜像并启动两个容器（第一次需要几分钟）；
 3. 等游戏服务健康检查通过后告诉你结果。
 
-然后等几十秒让 Caddy 申请证书，用浏览器打开 `https://你的域名`，能看到「开始养猫」就成功了。
+然后等几十秒让 Caddy 申请证书，用浏览器打开 `https://你的域名`，能看到游戏官网就成功了；游戏本身在 `https://你的域名/play/`。
 
 <details>
 <summary>不想用脚本？手动部署的步骤</summary>
@@ -222,11 +222,24 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 
 | 客户端 | 在哪里改 |
 |---|---|
-| 网页版 | 不用改，直接访问 `https://你的域名` |
+| 网页版 | 不用改：官网是 `https://你的域名`，游戏在 `https://你的域名/play/` |
 | iPhone App | 项目根目录的 `.env.ios` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:ios` |
 | Mac App | `macos/project.yml` 里 Release 的 `CATNEST_SERVER`；装好的 App 也可以执行 `defaults write com.catnest.mac serverURL https://你的域名` |
 | Apple Watch | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
 | Android App | 项目根目录的 `.env.android` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:android` 并重新打包（见 [docs/apps.md](docs/apps.md#打正式包)） |
+
+### 发布 Android 安装包
+
+官网的「下载 APK」按钮指向 `/download/meowtopia.apk`。这个文件不在 git 和镜像里，由 Caddy 直接从服务器上的 `/opt/catnest/downloads/` 目录提供，所以换新版本不需要重新部署。
+
+1. 按 [docs/apps.md「打正式包」](docs/apps.md#打正式包) 打出签名好的 APK（要连你自己的服务器，先在 `.env.android` 里写好你的域名）。
+2. 在电脑上，把它和版本说明一起传到服务器（官网的下载卡片会显示版本、大小和 SHA-256 校验值）：
+
+```bash
+./deploy/publish-apk.sh android/app/build/outputs/apk/release/app-release.apk 1.0 root@你的服务器IP:/opt/catnest
+```
+
+以后发新版本，把版本号（`android/app/build.gradle` 里的 `versionCode` 加 1、`versionName` 改新）改好后重新打包、再运行一次这条命令即可。已经装了旧版的玩家直接覆盖安装，猫和登录都还在。
 
 ## 12. 安全提醒
 
