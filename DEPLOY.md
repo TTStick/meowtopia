@@ -38,7 +38,15 @@ cd /opt && tar xzf catnest-2026-10-15e.tar.gz && cd catnest
 
 ## 2. 安装 Docker
 
-已经装过可以跳过。境外服务器：
+已经装过可以跳过。
+
+Debian 13 / Ubuntu 24.04 以上直接用系统自带的软件包（实测 Debian 13 可用）：
+
+```bash
+apt-get update && apt-get install -y docker.io docker-cli docker-compose
+```
+
+其他系统的境外服务器：
 
 ```bash
 curl -fsSL https://get.docker.com | sh
