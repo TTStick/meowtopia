@@ -12,6 +12,7 @@ function sitePaths(): Plugin {
         const intoGame = /(^|&)(panel|scene)=/.test(query ?? '');
         if (path === '/' && !intoGame) req.url = '/home.html' + (query ? '?' + query : '');
         else if (path.startsWith('/play/') && !path.slice(6).includes('.')) req.url = '/index.html' + (query ? '?' + query : '');
+        else if (path === '/admin/' || path === '/admin') req.url = '/admin.html';
         next();
       });
     },
@@ -40,7 +41,7 @@ export default defineConfig(({ mode }) => {
       outDir: '../dist',
       emptyOutDir: true,
       rollupOptions: {
-        input: { main: page('index'), companion: page('companion'), ...(native ? {} : { home: page('home') }) },
+        input: { main: page('index'), companion: page('companion'), ...(native ? {} : { home: page('home'), admin: page('admin') }) },
       },
     },
   };

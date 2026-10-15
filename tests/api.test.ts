@@ -404,3 +404,63 @@ test('companions: sprites, snapshot, outing and pairing a watch', async () => {
   w2.token = minted;
   assert.equal((await w2.call('GET', '/api/me')).status, 200);
 });
+
+test('admin panel: sign in, numbers, the town, model settings', async () => {
+  const outsider = new Player();
+  // without a session every admin route stays hidden
+  assert.equal((await outsider.call('GET', '/api/admin/overview')).status, 404);
+  assert.equal((await outsider.call('POST', '/api/admin/login', { token: 'wrong' })).status, 401);
+
+  const admin = new Player();
+  const login = await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  assert.equal(login.status, 200);
+  const cookie = login.setCookie.find((c) => c.startsWith('cn_admin='))!;
+  assert.match(cookie, /HttpOnly/);
+  assert.match(cookie, /SameSite=Strict/);
+  assert.match(cookie, /Path=\/api\/admin/);
+  // a forged or expired cookie is no good
+  assert.equal((await outsider.call('GET', '/api/admin/me', undefined, { cookie: `cn_admin=${Math.floor(Date.now() / 1000) + 999}.forged` })).status, 404);
+  assert.equal((await outsider.call('GET', '/api/admin/me', undefined, { cookie: admin.cookie.replace(/=\d+/, '=1000') })).status, 404);
+
+  // a player with a cat out in the town shows up in the numbers and the sandbox
+  const p = new Player();
+  await p.join('沙盘测试员');
+  const cat = (await p.call('POST', '/api/adopt', { name: '沙盘猫', seed: 77 })).data.cats[0].id;
+  assert.equal((await p.call('POST', `/api/cat/${cat}/outing`, { go: true })).status, 200);
+  const o = (await admin.call('GET', '/api/admin/overview')).data;
+  assert.ok(o.users.total >= 1 && o.users.newToday >= 1 && o.cats.total >= 1);
+  assert.equal(o.days.length, 14);
+  assert.ok(o.online.catsInTown >= 1);
+  const w = (await admin.call('GET', '/api/admin/world')).data;
+  const mine = w.ents.find((e: { id: string }) => e.id === cat);
+  assert.ok(mine, 'the cat is in the snapshot');
+  assert.equal(mine.owner, '沙盘测试员');
+  assert.ok(w.ents.some((e: { kind: string }) => e.kind === 'npc'));
+  assert.match(w.clock.time, /^\d\d:\d\d$/);
+  // the old header still works for scripts, and old routes accept the panel's cookie
+  assert.equal((await outsider.call('GET', '/api/admin/stats', undefined, { 'x-admin-token': ADMIN })).status, 200);
+  assert.equal((await admin.call('GET', '/api/admin/reports')).status, 200);
+
+  // model settings: saved, masked, validated, and back to the defaults
+  const before = (await admin.call('GET', '/api/admin/llm')).data;
+  assert.equal(before.settings.active, false);
+  assert.equal(before.settings.keySource, 'none');
+  const saved = await admin.call('PUT', '/api/admin/llm', { model: 'claude-haiku-5-5', rpm: 10, apiKey: 'sk-ant-test-0123456789abcdef', effort: 'medium' });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.settings.model, 'claude-haiku-5-5');
+  assert.equal(saved.data.settings.rpm, 10);
+  assert.equal(saved.data.settings.keySource, 'panel');
+  assert.ok(!saved.data.settings.apiKey.includes('0123456789'), 'the key is masked');
+  assert.equal((await admin.call('PUT', '/api/admin/llm', { baseURL: 'http://insecure.example' })).status, 400);
+  assert.equal((await outsider.call('PUT', '/api/admin/llm', { model: 'x' })).status, 404);
+  assert.equal((await p.call('GET', '/api/status')).data.llm, true, 'a key from the panel turns the model on');
+  const reset = (await admin.call('POST', '/api/admin/llm/reset')).data;
+  assert.equal(reset.settings.keySource, 'none');
+  assert.equal(reset.settings.model, 'claude-opus-5-5');
+  assert.equal((await p.call('GET', '/api/status')).data.llm, false);
+  const t = (await admin.call('POST', '/api/admin/llm/test', {})).data;
+  assert.equal(t.ok, false);
+
+  assert.equal((await admin.call('POST', '/api/admin/logout')).status, 200);
+  assert.equal((await admin.call('GET', '/api/admin/me')).status, 404);
+});

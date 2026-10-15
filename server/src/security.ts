@@ -61,6 +61,7 @@ export const LIMITS = {
   llm: [30, 30 / 600] as const, // model-backed calls per user
   write: [60, 1] as const, // state-changing calls per user
   report: [20, 20 / 86400] as const,
+  admin: [30, 30 / 600] as const, // admin panel sign-ins and model test calls, per IP
   wsConnect: [20, 20 / 60] as const, // websocket connections per IP
 };
 

@@ -14,6 +14,7 @@ const { migrateLegacyAccounts, sessionFromRequest, sessionFromToken } = await im
 const { allow, clientIp, fromApp, LIMITS, originAllowed, securityHeaders } = await import('./security');
 await import('./api');
 await import('./companion');
+await import('./admin');
 const { onBan, onAccountDeleted } = await import('./auth');
 const { startPush } = await import('./push');
 const { startWorld, onConnection, kickUser } = await import('./world');
@@ -68,9 +69,10 @@ const server = createServer(async (req, res) => {
     const into = (to: string, code = 302) => res.writeHead(code, { location: to + url.search, 'cache-control': 'no-store' }).end();
     if (url.pathname === '/' && (url.searchParams.has('panel') || url.searchParams.has('scene'))) return into('/play/');
     if (url.pathname === '/play' || url.pathname === '/index.html') return into('/play/', 301);
+    if (url.pathname === '/admin') return into('/admin/', 301);
     // static files (production build); unknown paths inside the game fall back to its shell
     const game = url.pathname.startsWith('/play/');
-    let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
+    let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : url.pathname === '/admin/' ? staticFile('/admin.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
     if (!p) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end(existsSync(join(DIST, 'index.html')) ? 'not found' : 'client not built — run `npm run build` or use the vite dev server');
       return;

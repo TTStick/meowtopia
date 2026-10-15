@@ -12,7 +12,8 @@ import { route, HttpError, str, type Req } from './http';
 import * as db from './db';
 import * as game from './game';
 import { cleanText, textProblem } from './moderation';
-import { ADMIN_TOKEN, EXTRA_ORIGINS, RP_ID } from './config';
+import { EXTRA_ORIGINS, RP_ID } from './config';
+import { requireAdmin } from './admin';
 import { isHttps, originAllowed } from './security';
 import {
   createSession,
@@ -399,11 +400,8 @@ route('POST', '/api/report', (r) => {
 }, { limit: 'report' });
 
 // ---------- admin (token from CAT_ADMIN_TOKEN, header x-admin-token) ----------
-function admin(r: Req) {
-  const got = Buffer.from(String(r.raw.headers['x-admin-token'] ?? ''));
-  const want = Buffer.from(ADMIN_TOKEN);
-  if (!ADMIN_TOKEN || got.length !== want.length || !timingSafeEqual(got, want)) throw new HttpError(404, 'not found');
-}
+// (the panel's signed cookie works here too, see admin.ts)
+const admin = requireAdmin;
 
 export type BanHook = (uid: string) => void;
 const banHooks: BanHook[] = [];

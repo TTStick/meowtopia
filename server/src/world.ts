@@ -997,3 +997,37 @@ function talkNpc(e: Ent, o: Ent, c: Client, now: number) {
 export function worldStats() {
   return { ents: ents.size, clients: clients.size };
 }
+
+/** Everything in the town right now, for the admin sandbox. Read-only. */
+export function worldSnapshot() {
+  const now = Date.now();
+  const list = [...ents.values()].map((e) => {
+    const [x, y] = posOf(e, now);
+    const dest = e.path.length ? e.path[e.path.length - 1] : null;
+    return {
+      id: e.st.id,
+      kind: e.npc ? ('npc' as const) : e.cat?.ownerId === 'town' ? ('town' as const) : ('cat' as const),
+      name: e.st.name,
+      role: e.npc?.role ?? null,
+      owner: e.st.owner ?? null,
+      ownerId: e.st.ownerId ?? null,
+      x: Math.round(x),
+      y: Math.round(y),
+      dest: dest ? [Math.round(dest[0]), Math.round(dest[1])] : null,
+      speed: e.speed,
+      anim: e.st.anim,
+      mode: e.mode,
+      place: placeName(x, y),
+      controlled: !!e.controlledBy,
+      trip: e.trip ? { since: e.trip.started, finds: e.trip.finds, friends: e.trip.friends, places: e.trip.places.length, goingHome: e.trip.goingHome, userSent: e.trip.userSent } : null,
+    };
+  });
+  const players = new Set<string>();
+  let guests = 0, watching = 0;
+  for (const c of clients) {
+    if (c.uid) players.add(c.uid);
+    else guests++;
+    if (c.view) watching++;
+  }
+  return { now, ents: list, players: players.size, guests, watching, connections: clients.size };
+}

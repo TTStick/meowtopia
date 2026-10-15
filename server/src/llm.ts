@@ -10,18 +10,95 @@ import { clockAt, phaseOf, PHASE_NAME, weatherAt, WEATHER_NAME, SEASON_NAME } fr
 import { ageOf } from '../../shared/stats';
 import { POI_ALIASES } from '../../shared/world';
 import { textProblem } from './moderation';
+import { kvGet, kvSet } from './db';
 
-const MODEL = process.env.CAT_LLM_MODEL || 'claude-opus-5-5';
-const RPM = Number(process.env.CAT_LLM_RPM || 40);
-const DAILY = Number(process.env.CAT_LLM_DAILY || 4000);
-const USER_DAILY = Number(process.env.CAT_LLM_USER_DAILY || 120);
+// ---- settings: environment defaults, overridden from the admin panel (kept in the kv table) ----
+export type Effort = 'low' | 'medium' | 'high';
+export interface LlmSettings {
+  enabled: boolean;
+  apiKey: string;
+  model: string;
+  baseURL: string; // empty = Anthropic's own API
+  effort: Effort;
+  rpm: number; // whole server, per minute
+  daily: number; // whole server, per day
+  userDaily: number; // per player, per day
+}
+const ENV: LlmSettings = {
+  enabled: true,
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+  model: process.env.CAT_LLM_MODEL || 'claude-opus-5-5',
+  baseURL: process.env.CAT_LLM_BASE_URL || '',
+  effort: 'low',
+  rpm: Number(process.env.CAT_LLM_RPM || 40),
+  daily: Number(process.env.CAT_LLM_DAILY || 4000),
+  userDaily: Number(process.env.CAT_LLM_USER_DAILY || 120),
+};
+let saved: Partial<LlmSettings> = kvGet<Partial<LlmSettings>>('llm') ?? {};
+let cfg: LlmSettings = ENV;
+let client: Anthropic | null = null;
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
-const client = apiKey
-  ? new Anthropic({ apiKey, baseURL: process.env.CAT_LLM_BASE_URL || 'https://api.anthropic.com', maxRetries: 1, timeout: 25_000 })
-  : null;
+function makeClient(c: LlmSettings) {
+  return new Anthropic({ apiKey: c.apiKey, baseURL: c.baseURL || 'https://api.anthropic.com', maxRetries: 1, timeout: 25_000 });
+}
+function apply() {
+  cfg = { ...ENV, ...saved, apiKey: saved.apiKey || ENV.apiKey };
+  client = cfg.enabled && cfg.apiKey ? makeClient(cfg) : null;
+}
+apply();
 
 export const llmEnabled = () => !!client;
+
+/** What the admin panel shows: never the whole key. */
+export function llmSettings() {
+  const k = cfg.apiKey;
+  return {
+    ...cfg,
+    apiKey: k ? `${k.slice(0, 7)}…${k.slice(-4)}` : '',
+    keySource: saved.apiKey ? 'panel' : ENV.apiKey ? 'env' : 'none',
+    defaults: { ...ENV, apiKey: undefined },
+    active: !!client,
+  };
+}
+
+const EFFORTS: Effort[] = ['low', 'medium', 'high'];
+function cleanSettings(patch: Record<string, unknown>): Partial<LlmSettings> {
+  const out: Partial<LlmSettings> = {};
+  const int = (v: unknown, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v))));
+  if ('enabled' in patch) out.enabled = !!patch.enabled;
+  if (typeof patch.apiKey === 'string') out.apiKey = patch.apiKey.trim().slice(0, 300);
+  if (typeof patch.model === 'string' && /^[\w.:@/-]{2,80}$/.test(patch.model.trim())) out.model = patch.model.trim();
+  if (typeof patch.baseURL === 'string') {
+    const u = patch.baseURL.trim();
+    if (u && !/^https:\/\/[^\s]+$/.test(u)) throw new Error('API 地址需要以 https:// 开头');
+    out.baseURL = u.replace(/\/+$/, '');
+  }
+  if (EFFORTS.includes(patch.effort as Effort)) out.effort = patch.effort as Effort;
+  if (patch.rpm != null) out.rpm = int(patch.rpm, 1, 2000);
+  if (patch.daily != null) out.daily = int(patch.daily, 0, 1_000_000);
+  if (patch.userDaily != null) out.userDaily = int(patch.userDaily, 0, 10_000);
+  return out;
+}
+
+/** Save settings from the panel. An empty apiKey means "use the one in .env again". */
+export function updateLlmSettings(patch: Record<string, unknown>) {
+  const next = { ...saved, ...cleanSettings(patch) };
+  if (next.apiKey === '') delete next.apiKey;
+  saved = next;
+  kvSet('llm', saved);
+  apply();
+  pools.clear(); // lines written by the old model/settings
+  return llmSettings();
+}
+
+/** Back to the .env values. */
+export function resetLlmSettings() {
+  saved = {};
+  kvSet('llm', saved);
+  apply();
+  pools.clear();
+  return llmSettings();
+}
 
 // ---- budget ----
 let windowStart = Date.now();
@@ -39,7 +116,7 @@ function takeBudget(): boolean {
     dayKey = dk;
     dayCount = 0;
   }
-  if (windowCount >= RPM || dayCount >= DAILY) return false;
+  if (windowCount >= cfg.rpm || dayCount >= cfg.daily) return false;
   windowCount++;
   dayCount++;
   return true;
@@ -57,7 +134,7 @@ function takeUserBudget(uid: string | undefined): boolean {
     userCalls.clear();
   }
   const n = userCalls.get(uid) ?? 0;
-  if (n >= USER_DAILY) return false;
+  if (n >= cfg.userDaily) return false;
   userCalls.set(uid, n + 1);
   return true;
 }
@@ -93,28 +170,110 @@ function envInfo(): string {
   return `现在是${SEASON_NAME[ck.season]}的${PHASE_NAME[phaseOf(ck.hour)]}，天气${WEATHER_NAME[w.kind]}。`;
 }
 
+// ---- usage, for the admin panel ----
+interface Usage { day: string; calls: number; ok: number; failed: number; input: number; output: number; cacheRead: number; cacheWrite: number; ms: number; lastError: string | null; lastErrorAt: number | null }
+const freshUsage = (day: string): Usage => ({ day, calls: 0, ok: 0, failed: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, ms: 0, lastError: null, lastErrorAt: null });
+let usage = freshUsage(new Date().toDateString());
+function usageToday() {
+  const d = new Date().toDateString();
+  if (usage.day !== d) usage = freshUsage(d);
+  return usage;
+}
+// USD per million tokens [input, output, cache read]; an estimate for the panel only
+const PRICES: Record<string, [number, number, number]> = {
+  'claude-opus-5-5': [4, 20, 0.2],
+  'claude-sonnet-5-5': [2, 10, 0.2],
+  'claude-haiku-5-5': [0.1, 0.5, 0.01],
+  'claude-fable-5-1': [10, 50, 0.25],
+};
+export function llmUsage() {
+  const u = usageToday();
+  const p = PRICES[cfg.model];
+  const cost = p ? (u.input * p[0] + u.cacheWrite * p[0] * 1.25 + u.cacheRead * p[2] + u.output * p[1]) / 1e6 : null;
+  return { ...u, avgMs: u.ok ? Math.round(u.ms / u.ok) : null, costUsd: cost, budget: { minute: windowCount, rpm: cfg.rpm, today: dayCount, daily: cfg.daily } };
+}
+
+/**
+ * Request options that depend on the model: server-side refusal fallback where the
+ * model has one (not Claude Haiku 5.5), and effort only on the Claude 5 family.
+ */
+function modelOptions(model: string, effort: Effort) {
+  const five = /^claude-(opus|sonnet|haiku|fable|mythos)-5/.test(model);
+  const fallback = five && !model.startsWith('claude-haiku');
+  return { fallback, effort: five ? effort : undefined };
+}
+
+async function request(c: Anthropic, s: LlmSettings, user: string, schema: object, maxTokens: number) {
+  const o = modelOptions(s.model, s.effort);
+  const t0 = Date.now();
+  const res = await c.beta.messages.create({
+    model: s.model,
+    max_tokens: maxTokens,
+    ...(o.fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+    system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+    output_config: { ...(o.effort ? { effort: o.effort } : {}), format: { type: 'json_schema', schema: schema as any } },
+    messages: [{ role: 'user', content: user }],
+  });
+  const u = usageToday();
+  u.calls++;
+  u.input += res.usage.input_tokens ?? 0;
+  u.output += res.usage.output_tokens ?? 0;
+  u.cacheRead += res.usage.cache_read_input_tokens ?? 0;
+  u.cacheWrite += res.usage.cache_creation_input_tokens ?? 0;
+  if (res.stop_reason === 'refusal' || res.stop_reason === 'max_tokens') {
+    u.failed++;
+    u.lastError = res.stop_reason === 'refusal' ? '模型拒绝了这次请求' : '回答太长被截断';
+    u.lastErrorAt = Date.now();
+    return null;
+  }
+  for (const b of res.content) {
+    if (b.type === 'text') {
+      u.ok++;
+      u.ms += Date.now() - t0;
+      return JSON.parse(b.text);
+    }
+  }
+  return null;
+}
+
+function describe(e: unknown): string {
+  if (e instanceof Anthropic.AuthenticationError) return 'API Key 不对（401）';
+  if (e instanceof Anthropic.PermissionDeniedError) return '这个 Key 没有权限（403）';
+  if (e instanceof Anthropic.NotFoundError) return '找不到这个模型（404）';
+  if (e instanceof Anthropic.RateLimitError) return '被限流了（429）';
+  if (e instanceof Anthropic.APIConnectionTimeoutError) return '连接超时';
+  if (e instanceof Anthropic.APIConnectionError) return '连不上 API 地址';
+  if (e instanceof Anthropic.APIError) return `${e.status ?? ''} ${e.message}`.trim().slice(0, 200);
+  return (e as Error).message?.slice(0, 200) ?? '未知错误';
+}
+
 async function callJSON<T>(user: string, schema: object, maxTokens = 1200): Promise<T | null> {
   if (!client || !takeBudget()) return null;
   try {
-    const res = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-      output_config: { effort: 'low', format: { type: 'json_schema', schema: schema as any } },
-      messages: [{ role: 'user', content: user }],
-    });
-    if (res.stop_reason === 'refusal' || res.stop_reason === 'max_tokens') return null;
-    for (const b of res.content) {
-      if (b.type === 'text') return JSON.parse(b.text) as T;
-    }
-    return null;
+    return (await request(client, cfg, user, schema, maxTokens)) as T | null;
   } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) console.warn('[llm] rate limited');
-    else if (e instanceof Anthropic.APIError) console.warn('[llm] api error', e.status, e.message);
-    else console.warn('[llm] error', (e as Error).message);
+    const u = usageToday();
+    u.calls++;
+    u.failed++;
+    u.lastError = describe(e);
+    u.lastErrorAt = Date.now();
+    console.warn('[llm]', u.lastError);
     return null;
+  }
+}
+
+/** The panel's "test" button: one real call with the settings being edited (not saved yet). */
+export async function testLlm(patch: Record<string, unknown>) {
+  const s: LlmSettings = { ...cfg, ...cleanSettings(patch), enabled: true };
+  if (typeof patch.apiKey !== 'string' || !patch.apiKey.trim()) s.apiKey = cfg.apiKey;
+  if (!s.apiKey) return { ok: false, error: '还没有 API Key', model: s.model, ms: 0 };
+  const t0 = Date.now();
+  try {
+    const out = (await request(makeClient(s), s, '一只叫团团的橘猫刚睡醒，正趴在窗台上晒太阳。写 1 句它对主人说的话。', LINES_SCHEMA, 300)) as { lines?: string[] } | null;
+    const text = out?.lines?.[0];
+    return text ? { ok: true, text, model: s.model, ms: Date.now() - t0 } : { ok: false, error: '模型没有给出回答', model: s.model, ms: Date.now() - t0 };
+  } catch (e) {
+    return { ok: false, error: describe(e), model: s.model, ms: Date.now() - t0 };
   }
 }
 

@@ -45,6 +45,8 @@ npm run build && npm run build:server && npm start
 | `CAT_LLM_RPM` / `CAT_LLM_DAILY` / `CAT_LLM_USER_DAILY` | 全服限速与每人每日额度 |
 | `CAT_VAPID_SUBJECT` | Web Push 联系方式 |
 
+模型相关的配置也可以在管理面板（`/admin/` →「模型」）里在线修改，保存在数据库的 `kv` 表里，优先于环境变量。
+
 模型调用做了“台词池”缓存：每次按场景批量生成几句，玩家拿到的永远是现成的一句，后台再补货，所以不会卡顿，也不会每句话都花钱。模型生成的句子在展示给其他玩家前同样会经过屏蔽词过滤。
 
 ## 测试
@@ -72,6 +74,7 @@ server/   Node HTTP + WebSocket；SQLite 存储、REST API、小镇模拟、居�
 - `client/src/game/actor.ts`：猫的动画控制器（姿态插值、眨眼、耳朵抖动、呼吸、视角切换的挤压过渡）。
 - `client/src/game/nestBrain.ts`：猫在窝里的效用 AI。
 - `server/src/world.ts`：小镇模拟（路径、探险行程、发现与拾取、相遇与对话、居民作息）。
+- `client/home.html`：官网（像素图由 `scripts/make-site-art.ts` 生成）；`client/admin.html` + `client/src/admin/`：管理面板，接口在 `server/src/admin.ts`。
 
 ## 账号与安全
 
