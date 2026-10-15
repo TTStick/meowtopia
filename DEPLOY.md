@@ -27,13 +27,13 @@
 在你自己的电脑上，把压缩包传到服务器（以 `/opt` 为例）：
 
 ```bash
-scp catnest-2026-10-15d.tar.gz root@你的服务器IP:/opt/
+scp catnest-2026-10-15e.tar.gz root@你的服务器IP:/opt/
 ```
 
 登录服务器后解压：
 
 ```bash
-cd /opt && tar xzf catnest-2026-10-15d.tar.gz && cd catnest
+cd /opt && tar xzf catnest-2026-10-15e.tar.gz && cd catnest
 ```
 
 ## 2. 安装 Docker
@@ -111,6 +111,7 @@ docker compose logs -f
 
 | 变量 | 作用 |
 |---|---|
+| `CAT_ALIASES` | 其他也指向这台服务器的域名（如 `www.你的域名`），会自动跳转到主域名；多个用空格隔开 |
 | `CAT_WORLD_TZ` | 小镇的统一时钟，默认 `8`（北京时间） |
 | `ANTHROPIC_API_KEY` | 填写后猫猫的话由 Claude 生成；不填则用内置的句子，游戏完全可玩 |
 | `CAT_LLM_MODEL` | 默认 `claude-opus-5-5`；想省钱可换 `claude-haiku-5-5` |

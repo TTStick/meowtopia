@@ -46,6 +46,7 @@ services:
       - "443:443/udp"
     environment:
       CAT_DOMAIN: ${CAT_DOMAIN:?请在 .env 里设置 CAT_DOMAIN，例如 cat.example.com}
+      CAT_ALIASES: ${CAT_ALIASES:-}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
