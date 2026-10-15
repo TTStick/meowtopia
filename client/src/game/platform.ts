@@ -25,9 +25,15 @@ interface CatNativePlugin {
   get(o: { key: string }): Promise<{ value: string | null }>;
   set(o: { key: string; value: string }): Promise<void>;
   remove(o: { key: string }): Promise<void>;
-  shareFile(o: { name: string; base64: string }): Promise<{ completed: boolean }>;
+  shareFile(o: { name: string; base64: string }): Promise<{ completed: boolean; saved?: boolean }>;
   watchState(): Promise<{ supported: boolean; paired: boolean; installed: boolean }>;
   sendToWatch(o: { token: string; server: string }): Promise<void>;
+  // Android: letters from the cat, checked in the background (no Google services needed)
+  enableLetters(o: { server: string; prompt: boolean }): Promise<{ granted: boolean }>;
+  setBackdrop(o: { color: string }): Promise<void>;
+  disableLetters(): Promise<void>;
+  sampleLetter(o: { title: string; body: string }): Promise<void>;
+  addListener(event: 'open', fn: (e: { panel: string }) => void): Promise<{ remove(): void }>;
 }
 const Native = registerPlugin<CatNativePlugin>('CatNative');
 const TOKEN_KEY = 'session';
@@ -77,6 +83,7 @@ export async function handOffToWatch(account: string, mint: () => Promise<string
 // ---------- haptics ----------
 type Buzz = 'tap' | 'soft' | 'happy' | 'purr';
 let lastBuzz = 0;
+let selecting = false;
 export function haptic(kind: Buzz) {
   if (!isNative) return;
   const now = Date.now();
@@ -84,7 +91,14 @@ export function haptic(kind: Buzz) {
   lastBuzz = now;
   void import('@capacitor/haptics').then(({ Haptics, ImpactStyle, NotificationType }) => {
     if (kind === 'tap') return Haptics.impact({ style: ImpactStyle.Light });
-    if (kind === 'soft') return Haptics.selectionChanged();
+    if (kind === 'soft') {
+      // the selection buzz only fires between selectionStart/End, on both iOS and Android
+      if (!selecting) {
+        selecting = true;
+        void Haptics.selectionStart();
+      }
+      return Haptics.selectionChanged();
+    }
     if (kind === 'happy') return Haptics.notification({ type: NotificationType.Success });
     // a purr: a few gentle, uneven pulses
     const beats = [0, 160, 330, 470, 640];
@@ -101,6 +115,23 @@ export function statusBarOver(dark: boolean) {
   void import('@capacitor/status-bar').then(({ StatusBar, Style }) => StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => {}));
 }
 
+let backdrop = '';
+/**
+ * Match the system bars to what's actually at the top of the screen: light or dark
+ * icons by brightness, and on Android the colour behind the bars too (older WebViews
+ * are padded away from them).
+ */
+export function matchSystemBars(rgb: [number, number, number]) {
+  if (!isNative) return;
+  const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  statusBarOver(lum < 0.55);
+  if (platform !== 'android') return;
+  const hex = '#' + rgb.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  if (hex === backdrop) return;
+  backdrop = hex;
+  void Native.setBackdrop({ color: hex }).catch(() => {});
+}
+
 let splashHidden = false;
 export function hideSplash() {
   if (!isNative || splashHidden) return;
@@ -109,23 +140,25 @@ export function hideSplash() {
 }
 
 // ---------- files ----------
-/** Save or share a file: the share sheet where available (phones, the app), a download otherwise. */
-export async function saveFile(name: string, blob: Blob, title = '猫窝') {
+/**
+ * Save or share a file: the share sheet where available (phones, the app), a download otherwise.
+ * Resolves true when it also went straight into the gallery (photos on Android).
+ */
+export async function saveFile(name: string, blob: Blob, title = '猫窝'): Promise<boolean> {
   if (isNative) {
     // the web share/download paths need a fresh user gesture, which is gone after an await
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let bin = '';
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    await Native.shareFile({ name, base64: btoa(bin) });
-    return;
+    return !!(await Native.shareFile({ name, base64: btoa(bin) })).saved;
   }
   const file = new File([blob], name, { type: blob.type });
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title });
-      return;
+      return false;
     } catch (e) {
-      if ((e as Error).name === 'AbortError') return;
+      if ((e as Error).name === 'AbortError') return false;
     }
   }
   const a = document.createElement('a');
@@ -135,6 +168,31 @@ export async function saveFile(name: string, blob: Blob, title = '猫窝') {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return false;
+}
+
+// ---------- Android back button ----------
+const backClosers: (() => void)[] = [];
+
+/** Something small and local (the "say something" bar…) that back should close first. Returns the unregister. */
+export function closeOnBack(close: () => void): () => void {
+  backClosers.push(close);
+  return () => {
+    const i = backClosers.indexOf(close);
+    if (i >= 0) backClosers.splice(i, 1);
+  };
+}
+
+/** `handler` returns true when it handled the press; otherwise the app goes to the background. */
+export function onBackButton(handler: () => boolean) {
+  if (platform !== 'android') return;
+  void import('@capacitor/app').then(({ App }) =>
+    App.addListener('backButton', () => {
+      const close = backClosers.pop();
+      if (close) close();
+      else if (!handler()) void App.minimizeApp();
+    }),
+  );
 }
 
 // ---------- app lifecycle ----------
@@ -151,6 +209,10 @@ const APNS_ENV = (import.meta.env.VITE_APNS_ENV as string | undefined) === 'prod
 
 /** Ask for permission and hand the device token to `send`. Resolves false if the player said no. */
 export async function enableNativePush(send: (token: string, env: string) => Promise<unknown>): Promise<boolean> {
+  if (platform === 'android') {
+    // Android: the app itself looks for new letters now and then (FCM isn't available everywhere)
+    return (await Native.enableLetters({ server: API_BASE, prompt: true })).granted;
+  }
   const { PushNotifications } = await import('@capacitor/push-notifications');
   let perm = await PushNotifications.checkPermissions();
   if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') perm = await PushNotifications.requestPermissions();
@@ -165,9 +227,26 @@ export async function enableNativePush(send: (token: string, env: string) => Pro
   return true;
 }
 
+/** Notifications turned off. On iOS the server simply stops pushing; Android stops looking. */
+export async function disableNativePush() {
+  if (platform === 'android') await Native.disableLetters();
+}
+
+/** Right after turning notifications on: one little note so the player sees what they look like. */
+export async function sampleNotification(title: string, body: string, viaServer: () => Promise<unknown>) {
+  if (platform === 'android') await Native.sampleLetter({ title, body });
+  else await viaServer();
+}
+
 /** Re-register silently on launch (tokens can change) and route taps on a notification. */
-export async function initNativePush(send: (token: string, env: string) => Promise<unknown>, onOpen: () => void) {
+export async function initNativePush(send: (token: string, env: string) => Promise<unknown>, onOpen: () => void, wanted = true) {
   if (!isNative) return;
+  if (platform === 'android') {
+    void Native.addListener('open', () => onOpen());
+    if (wanted) await Native.enableLetters({ server: API_BASE, prompt: false });
+    else await Native.disableLetters();
+    return;
+  }
   const { PushNotifications } = await import('@capacitor/push-notifications');
   void PushNotifications.addListener('pushNotificationActionPerformed', () => onOpen());
   const perm = await PushNotifications.checkPermissions();

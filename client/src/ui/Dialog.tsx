@@ -22,6 +22,15 @@ function open(a: Omit<Ask, 'resolve'>): Promise<string | null> {
   });
 }
 
+/** Close an open dialog as if cancelled (Android back button). Returns whether one was open. */
+export function dismissDialog(): boolean {
+  const a = dialogs.state.ask;
+  if (!a) return false;
+  dialogs.set({ ask: null });
+  a.resolve(null);
+  return true;
+}
+
 /** Yes/no question. */
 export async function confirmBox(text: string, opts: { ok?: string; cancel?: string; danger?: boolean } = {}): Promise<boolean> {
   return (await open({ text, ...opts })) !== null;

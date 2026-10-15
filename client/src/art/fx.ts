@@ -130,12 +130,15 @@ export function drawEmote(pen: Pen, kind: EmoteKind, x: number, y: number, k: nu
 
 const FONT = '"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif';
 
+/** Closing punctuation never starts a line; it hangs off the end of the previous one. */
+const NO_LINE_START = new Set(Array.from('，。！？、；：）」』】》〉…～—,.!?;:)]}~'));
+
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const lines: string[] = [];
   let cur = '';
   for (const ch of Array.from(text)) {
     const test = cur + ch;
-    if (ctx.measureText(test).width > maxW && cur) {
+    if (ctx.measureText(test).width > maxW && cur && !NO_LINE_START.has(ch)) {
       lines.push(cur);
       cur = ch;
     } else cur = test;

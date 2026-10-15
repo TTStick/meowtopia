@@ -8,5 +8,7 @@ caddy-root.crt
 .env.*
 !.env.example
 !.env.ios.example
+!.env.android.example
 *.log
 release/
+.DS_Store

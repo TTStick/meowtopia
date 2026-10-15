@@ -3,7 +3,8 @@ import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
 import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError } from './net';
-import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, statusBarOver, onResume, initNativePush, handOffToWatch } from './platform';
+import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, matchSystemBars, onResume, initNativePush, handOffToWatch, onBackButton } from './platform';
+import { confirmBox, dismissDialog } from '../ui/Dialog';
 import { takeGuestPow } from './pow';
 import { codeLogin, passkeyLogin, scheduleProtectNudge, guestLogin, registerApns } from './account';
 import { ui, toast, activeCat, patchCat } from './state';
@@ -56,14 +57,48 @@ class Game {
       }
     });
     this.ws.on((m) => this.onServer(m));
-    // app chrome: splash until we know where to go, status bar text readable over the scene
+    // app chrome: splash until we know where to go, system bars matching the top of the scene
     const chrome = () => {
       const s = ui.state;
       if (s.phase !== 'loading') hideSplash();
-      statusBarOver(s.phase === 'game' && this.isNight());
+      if (!isNative) return;
+      if (s.phase !== 'game') return matchSystemBars([246, 238, 223]); // the cream onboarding pages
+      try {
+        const px = canvas.getContext('2d')!.getImageData(Math.floor(canvas.width / 2), 1, 1, 1).data;
+        if (px[3] > 0) matchSystemBars([px[0], px[1], px[2]]);
+      } catch {
+        /* canvas not ready */
+      }
     };
     ui.subscribe(chrome);
-    setInterval(chrome, 30_000);
+    if (isNative) setInterval(chrome, 1500);
+    // Android back button: step back out of whatever is open, then leave the app in the background
+    onBackButton(() => {
+      const s = ui.state;
+      if (dismissDialog()) return true;
+      if (s.panel) {
+        ui.set({ panel: null });
+        return true;
+      }
+      if (s.phase !== 'game') return false;
+      if (s.build) {
+        void confirmBox('要保存这次的布置吗？', { ok: '保存', cancel: '不保存' }).then((save) => this.finishBuild(save));
+        return true;
+      }
+      if (s.play) {
+        this.togglePlay();
+        return true;
+      }
+      if (s.worldTarget) {
+        ui.set({ worldTarget: null });
+        return true;
+      }
+      if (s.visiting || s.scene === 'world') {
+        void this.openNest();
+        return true;
+      }
+      return false;
+    });
     onResume(() => {
       if (ui.state.phase !== 'game') return;
       // a phone that slept may hold a dead socket that hasn't noticed yet
@@ -185,7 +220,7 @@ class Game {
     const panel = q.get('panel');
     if (panel === 'letters' || panel === 'settings' || panel === 'shop') setTimeout(() => ui.set({ panel }), 600);
     if (isMacShell) toMac({ type: 'game', loggedIn: true });
-    void initNativePush(registerApns, () => ui.set({ panel: 'letters' })).catch(() => {});
+    void initNativePush(registerApns, () => ui.set({ panel: 'letters' }), me.user.settings.push).catch(() => {});
     void handOffToWatch(me.user.id, async () => (await api<{ token: string }>('POST', '/api/auth/device/mint')).token).catch(() => {});
     if (me.away && me.away.entries.length) setTimeout(() => ui.set({ panel: 'away' }), 900);
     else this.tip();

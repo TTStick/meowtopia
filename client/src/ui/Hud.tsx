@@ -3,6 +3,7 @@ import { ui, activeCat, toast, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
 import { audio } from '../game/audio';
+import { closeOnBack } from '../game/platform';
 import { catPortrait, itemIcon } from '../art/icons';
 import { moodWord, ageOf } from '../../../shared/stats';
 import { ITEMS, ITEM_MAP } from '../../../shared/items';
@@ -158,6 +159,7 @@ function Speak({ onClose }: { onClose: () => void }) {
     const t = setTimeout(() => ref.current?.focus(), 30);
     return () => clearTimeout(t);
   }, []);
+  useEffect(() => closeOnBack(onClose), []);
   const busy = useStore(ui, (s) => s.busy);
   const cat = activeCat();
   const send = async () => {

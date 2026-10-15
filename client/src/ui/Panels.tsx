@@ -4,7 +4,8 @@ import { ui, activeCat, toast, patchCat, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
 import { api } from '../game/net';
-import { isNative, isMacShell, toMac, enableNativePush, saveFile } from '../game/platform';
+import { isNative, isMacShell, toMac, enableNativePush, disableNativePush, sampleNotification, saveFile } from '../game/platform';
+import { fallbackLine } from '../../../shared/speech';
 import { registerApns } from '../game/account';
 import { audio } from '../game/audio';
 import { itemIcon, catPortrait } from '../art/icons';
@@ -208,7 +209,10 @@ function JournalPanel() {
 // ---------------- letters ----------------
 function LettersPanel() {
   const [list, setList] = useState<any[] | null>(null);
+  // new letters while it's open (back from the background, a letter tapped in the notification shade…)
+  const fresh = useStore(ui, (s) => s.unread > 0);
   useEffect(() => {
+    if (list && !fresh) return;
     api<any[]>('GET', '/api/events')
       .then((l) => {
         setList(l);
@@ -216,7 +220,7 @@ function LettersPanel() {
         ui.set({ unread: 0 });
       })
       .catch((e) => toast(e.message));
-  }, []);
+  }, [fresh]);
   return (
     <Sheet title="信箱">
       {!list ? (
@@ -811,7 +815,12 @@ function SettingsPanel() {
           return;
         }
         await save({ push: true });
-        await api('POST', '/api/push/test').catch(() => {});
+        const cat = activeCat();
+        await sampleNotification(
+          cat ? `${cat.name}的小纸条` : '猫窝',
+          cat ? fallbackLine('greet', { name: cat.name, p: cat.personality }) : '通知已开启～',
+          () => api('POST', '/api/push/test'),
+        ).catch(() => {});
         toast('开好啦，猫猫偶尔会给你写小纸条', '💌');
         return;
       }
@@ -862,7 +871,7 @@ function SettingsPanel() {
             探险回来、交到朋友时轻轻告诉你，一天最多几次
           </div>
         </span>
-        {st.push ? <button class="sw on" aria-label="通知" onClick={() => save({ push: false })} /> : <button class="btn small" onClick={enablePush}>开启</button>}
+        {st.push ? <button class="sw on" aria-label="通知" onClick={() => (void disableNativePush().catch(() => {}), save({ push: false }))} /> : <button class="btn small" onClick={enablePush}>开启</button>}
       </div>
       <div class="toggle">
         <span>安静时段（不打扰）</span>
@@ -967,7 +976,7 @@ function PhotoPanel() {
   const name = `猫窝-${cat?.name ?? 'cat'}-${new Date().toISOString().slice(0, 10)}.png`;
   const share = async () => {
     try {
-      await saveFile(name, await (await fetch(photo)).blob());
+      if (await saveFile(name, await (await fetch(photo)).blob())) toast('已经存进相册「猫窝」啦', '📷');
     } catch (e) {
       toast((e as Error).message);
     }

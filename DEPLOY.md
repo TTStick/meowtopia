@@ -217,6 +217,7 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 | iPhone App | 项目根目录的 `.env.ios` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:ios` |
 | Mac App | `macos/project.yml` 里 Release 的 `CATNEST_SERVER`；装好的 App 也可以执行 `defaults write com.catnest.mac serverURL https://你的域名` |
 | Apple Watch | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
+| Android App | 项目根目录的 `.env.android` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:android` 并重新打包（见 README「Android App」） |
 
 ## 12. 安全提醒
 

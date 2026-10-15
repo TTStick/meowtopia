@@ -68,7 +68,7 @@ export function SecuritySection() {
     <>
       <div class="sec">账号与安全</div>
       <p class="muted" style={{ marginTop: 0, fontSize: 13 }}>
-        {me.user.secured ? '猫窝已经上锁：换手机、清了浏览器数据，也能用通行密钥或找回码回来。' : '猫窝还没上锁：现在只有这台设备认得你。清除浏览器数据或换手机后，可能就找不到它了。'}
+        {me.user.secured ? `猫窝已经上锁：换手机、${isNative ? '删了 App' : '清了浏览器数据'}，也能用通行密钥或找回码回来。` : `猫窝还没上锁：现在只有这台设备认得你。${isNative ? '删除 App' : '清除浏览器数据'}或换手机后，可能就找不到它了。`}
       </p>
 
       <div class="toggle">

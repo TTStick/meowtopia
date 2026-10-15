@@ -65,7 +65,10 @@ export function isNightNow(now = Date.now()): boolean {
 route('GET', '/api/companion', (r) => {
   const c = activeCat(r);
   const user = { nickname: r.user.nickname, fish: r.user.fish };
-  if (!c) return { user, cat: null };
+  // for apps that check for letters themselves (Android): the same gentle rules as server push
+  const st = game.settingsOf(r.user);
+  const notify = { push: st.push, quietStart: st.quietStart, quietEnd: st.quietEnd, tzOffset: st.tzOffset };
+  if (!c) return { user, cat: null, notify };
   game.refresh(c);
   const inv = db.getInventory(r.user.id);
   const foods = ITEMS.filter((it) => it.food && (inv[it.id] ?? 0) > 0).map((it) => ({ id: it.id, name: it.name, count: inv[it.id] }));
@@ -94,6 +97,7 @@ route('GET', '/api/companion', (r) => {
     letters: letters.map((e) => ({ id: e.id, ts: e.ts, kind: e.kind, title: e.title, text: e.text, seen: !!e.seen })),
     unread: letters.filter((e) => !e.seen).length,
     night,
+    notify,
   };
 });
 

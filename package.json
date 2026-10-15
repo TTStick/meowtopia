@@ -13,10 +13,13 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "build:server": "esbuild server/src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=build/server.mjs --external:@napi-rs/canvas --external:bufferutil --external:utf-8-validate --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\" --log-level=warning",
     "build:ios": "vite build --mode ios && cap sync ios",
-    "ios": "npm run build:ios && cap open ios"
+    "ios": "npm run build:ios && cap open ios",
+    "build:android": "vite build --mode android && cap sync android",
+    "android": "npm run build:android && cap open android"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
+    "@capacitor/android": "^8.5.3",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
     "@capacitor/haptics": "^8.0.2",

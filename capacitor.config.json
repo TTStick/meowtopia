@@ -30,7 +30,25 @@
     "StatusBar": {
       "overlaysWebView": true,
       "style": "LIGHT"
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
     }
   },
-  "loggingBehavior": "debug"
+  "loggingBehavior": "debug",
+  "android": {
+    "backgroundColor": "#f6eedf",
+    "appendUserAgent": "CatNestApp/1.0",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "includePlugins": [
+      "@capacitor/app",
+      "@capacitor/haptics",
+      "@capacitor/keyboard",
+      "@capacitor/splash-screen",
+      "@capacitor/status-bar"
+    ]
+  }
 }

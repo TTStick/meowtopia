@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release: HTTPS only. (A debug-only copy in src/debug allows the local dev server.) -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
