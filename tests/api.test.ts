@@ -514,6 +514,21 @@ test('model settings: an Anthropic-compatible model without structured output (e
     const priced = (await admin.call('PUT', '/api/admin/llm', { ...settings, priceIn: 1, priceOut: 8, currency: '¥' })).data;
     assert.equal(priced.usage.currency, '¥');
     assert.ok(priced.usage.cost > 0, JSON.stringify(priced.usage));
+
+    // talking to a cat: a model that leaves out "place" when it isn't going anywhere is fine
+    const owner = new Player();
+    await owner.join('说话测试');
+    const talker = (await owner.call('POST', '/api/adopt', { name: '团团', seed: 9 })).data.cats[0].id;
+    reply = () => [{ type: 'text', text: '{"action":"unknown","reply":"喵呜……你好呀，我慢慢醒呢。"}' }];
+    let said = (await owner.call('POST', `/api/cat/${talker}/command`, { text: '早上好呀' })).data;
+    assert.equal(said.reply, '喵呜……你好呀，我慢慢醒呢。', JSON.stringify(said));
+    assert.equal(said.action, 'unknown');
+    assert.equal(said.place, null);
+    // numbers as strings and an action in capitals are mended too
+    reply = () => [{ type: 'text', text: '{"action":"SLEEP","place":"","reply":"那我睡啦"}' }];
+    said = (await owner.call('POST', `/api/cat/${talker}/command`, { text: '去睡觉' })).data;
+    assert.equal(said.action, 'sleep');
+    assert.equal(said.reply, '那我睡啦');
   } finally {
     fake.close();
     await admin.call('POST', '/api/admin/llm/reset');

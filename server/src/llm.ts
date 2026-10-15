@@ -231,7 +231,33 @@ function sample(s: any): unknown {
   return '……';
 }
 function formatHint(schema: object) {
-  return `\n\n只输出一个 JSON 对象，不要输出任何别的文字、解释或代码块标记。格式：${JSON.stringify(sample(schema))}`;
+  return `\n\n只输出一个 JSON 对象，不要输出任何别的文字、解释或代码块标记。每个字段都要写，用不上的写 null。格式：${JSON.stringify(sample(schema))}`;
+}
+
+/**
+ * Small, safe fixes for answers that are nearly right, as models without structured
+ * output often give: a field that may be null but was left out (or left empty)
+ * becomes null, "1" becomes 1, and an enum value in the wrong case is matched.
+ * Anything else is left for fits() to judge.
+ */
+function repair(v: any, s: any): any {
+  const types: string[] = Array.isArray(s.type) ? s.type : s.type ? [s.type] : [];
+  if (types.includes('object') && v && typeof v === 'object' && !Array.isArray(v)) {
+    const out = { ...v };
+    for (const [k, ps] of Object.entries<any>(s.properties ?? {})) {
+      const nullable = (Array.isArray(ps.type) && ps.type.includes('null')) || (ps.enum ?? []).includes(null);
+      if (nullable && (!(k in out) || out[k] === undefined || out[k] === '' || out[k] === 'null')) out[k] = null;
+      else if (k in out) out[k] = repair(out[k], ps);
+    }
+    return out;
+  }
+  if (types.includes('array') && Array.isArray(v)) return s.items ? v.map((x) => repair(x, s.items)) : v;
+  if ((types.includes('integer') || types.includes('number')) && typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim())) return Number(v);
+  if (s.enum && typeof v === 'string' && !s.enum.includes(v)) {
+    const hit = s.enum.find((e: unknown) => typeof e === 'string' && e.toLowerCase() === v.trim().toLowerCase());
+    if (hit) return hit;
+  }
+  return v;
 }
 
 /** Does a parsed answer have the shape the schema asks for? (Enough of JSON Schema for ours.) */
@@ -301,7 +327,7 @@ async function request(c: Anthropic, s: LlmSettings, user: string, schema: objec
     if (res.stop_reason === 'refusal') throw new FormatError('模型拒绝了这次请求');
     if (res.stop_reason === 'max_tokens') throw new FormatError('回答太长被截断');
     const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
-    const out = parseAnswer(text, schema);
+    const out = repair(parseAnswer(text, schema), schema);
     if (!fits(out, schema)) throw new FormatError(`模型返回的 JSON 格式不对：${JSON.stringify(out).slice(0, 60)}`);
     u.ok++;
     u.ms += Date.now() - t0;
