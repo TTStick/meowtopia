@@ -45,7 +45,7 @@ npm run build && npm run build:server && npm start
 | `CAT_LLM_RPM` / `CAT_LLM_DAILY` / `CAT_LLM_USER_DAILY` | 全服限速与每人每日额度 |
 | `CAT_VAPID_SUBJECT` | Web Push 联系方式 |
 
-模型相关的配置也可以在管理面板（`/admin/` →「模型」）里在线修改，保存在数据库的 `kv` 表里，优先于环境变量。
+模型相关的配置也可以在管理面板（`/admin/` →「模型」）里在线修改，保存在数据库的 `kv` 表里，优先于环境变量。`claude-` 开头的模型使用结构化输出（`output_config.format`），Claude 5 系列还会带上 `effort`，支持的型号带上服务端拒答兜底（`fallbacks`）；其他兼容 Anthropic API 的模型（比如 MiniMax）不发送这些参数，改在提示词里说明 JSON 格式，回答会被宽容地解析并按 schema 校验，不合格时退回内置猫语（见 `server/src/llm.ts`）。
 
 模型调用做了“台词池”缓存：每次按场景批量生成几句，玩家拿到的永远是现成的一句，后台再补货，所以不会卡顿，也不会每句话都花钱。模型生成的句子在展示给其他玩家前同样会经过屏蔽词过滤。
 
