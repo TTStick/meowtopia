@@ -1,0 +1,54 @@
+name: CatNest
+options:
+  bundleIdPrefix: com.catnest
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+# (this XcodeGen install has no setting presets, so the usual defaults are spelled out)
+settings:
+  base:
+    SDKROOT: macosx
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    ALWAYS_SEARCH_USER_PATHS: NO
+    LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      ONLY_ACTIVE_ARCH: YES
+      DEBUG_INFORMATION_FORMAT: dwarf
+      ENABLE_TESTABILITY: YES
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      SWIFT_COMPILATION_MODE: wholemodule
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+      VALIDATE_PRODUCT: YES
+configs:
+  Debug: debug
+  Release: release
+targets:
+  CatNest:
+    type: application
+    platform: macOS
+    sources:
+      - CatNest
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.catnest.mac
+        PRODUCT_NAME: CatNest
+        INFOPLIST_FILE: CatNest/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CatNest/CatNest.entitlements
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        # where the game lives; override at runtime with: defaults write com.catnest.mac serverURL https://…
+        Debug:
+          CATNEST_SERVER: https://localhost
+        Release:
+          CATNEST_SERVER: https://cat.example.com

@@ -13,6 +13,7 @@ const { handleApi } = await import('./http');
 const { migrateLegacyAccounts, sessionFromRequest, sessionFromToken } = await import('./sessions');
 const { allow, clientIp, fromApp, LIMITS, originAllowed, securityHeaders } = await import('./security');
 await import('./api');
+await import('./companion');
 const { onBan, onAccountDeleted } = await import('./auth');
 const { startPush } = await import('./push');
 const { startWorld, onConnection, kickUser } = await import('./world');

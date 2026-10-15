@@ -22,6 +22,8 @@ WORKDIR /app
 RUN mkdir -p /app/data && chown node:node /app/data
 COPY --from=build --chown=root:root /src/dist ./dist
 COPY --from=build --chown=root:root /src/build/server.mjs ./server.mjs
+# native canvas (Skia) for drawing cat sprites for the watch and the Mac menu bar
+COPY --from=build --chown=root:root /src/node_modules/@napi-rs ./node_modules/@napi-rs
 COPY --from=build --chown=root:root /src/scripts/admin.mjs ./scripts/admin.mjs
 USER node
 VOLUME ["/app/data"]

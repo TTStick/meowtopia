@@ -57,6 +57,7 @@ export const LIMITS = {
   ipGlobal: [240, 4] as const, // any API call per IP
   register: [Number(process.env.CAT_REGISTER_PER_HOUR || 6), Number(process.env.CAT_REGISTER_PER_HOUR || 6) / 3600] as const, // new guests per IP
   login: [10, 10 / 900] as const, // recovery-code / passkey logins per IP
+  pair: [12, 12 / 600] as const, // watches asking for a pairing code, per IP
   llm: [30, 30 / 600] as const, // model-backed calls per user
   write: [60, 1] as const, // state-changing calls per user
   report: [20, 20 / 86400] as const,

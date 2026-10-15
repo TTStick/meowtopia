@@ -347,3 +347,56 @@ test('native app origin: CORS without credentials, bearer only, APNs tokens', as
   assert.equal(reg.data.delivering, false, 'no APNs key configured in tests');
   assert.equal((await phone.call('GET', '/api/me')).data.user.settings.push, true);
 });
+
+test('companions: sprites, snapshot, outing and pairing a watch', async () => {
+  const phone = new Player('app');
+  await phone.join('主人');
+  const cat = (await phone.call('POST', '/api/adopt', { name: '团团', seed: 951 })).data.cats[0].id;
+
+  // sprites are real PNGs, cached with ETags
+  const res = await fetch(`${BASE}/api/sprite/cat/${cat}/happy?size=100&outline=1`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  const png = Buffer.from(await res.arrayBuffer());
+  assert.deepEqual([...png.subarray(1, 4)], [0x50, 0x4e, 0x47]);
+  assert.equal(png.readUInt32BE(16), 128, 'sizes snap to the next standard size');
+  const etag = res.headers.get('etag')!;
+  assert.equal((await fetch(`${BASE}/api/sprite/cat/${cat}/happy?size=100&outline=1`, { headers: { 'if-none-match': etag } })).status, 304);
+  assert.equal((await fetch(`${BASE}/api/sprite/cat/${cat}/dance`)).status, 404);
+  assert.equal((await fetch(`${BASE}/api/sprite/seed/12345/sit?size=64`)).status, 200);
+
+  // one snapshot with everything a small screen shows
+  const home = (await phone.call('GET', '/api/companion')).data;
+  assert.equal(home.cat.name, '团团');
+  assert.equal(home.cat.out, false);
+  assert.ok(home.line.length > 0);
+  assert.ok(home.cat.look && home.wish && Array.isArray(home.foods));
+
+  // go out and come back without a websocket
+  const out = await phone.call('POST', `/api/cat/${cat}/outing`, { go: true });
+  assert.equal(out.data.out, true);
+  assert.equal((await phone.call('GET', '/api/companion')).data.cat.out, true);
+  await phone.call('POST', `/api/cat/${cat}/outing`, { go: false });
+
+  // the watch shows a code; the phone approves it; the watch gets its own session
+  const watch = new Player('app');
+  const start = (await watch.call('POST', '/api/auth/device/start', {}, { 'user-agent': 'CatNestWatch/1.0 watchOS' })).data;
+  assert.match(start.code, /^[A-Z0-9]{6}$/);
+  assert.equal((await watch.call('POST', '/api/auth/device/poll', { secret: start.secret })).data.status, 'pending');
+  assert.equal((await phone.call('POST', '/api/auth/device/approve', { code: 'ZZZZZZ' })).status, 404);
+  const ok = await phone.call('POST', '/api/auth/device/approve', { code: start.code.toLowerCase() });
+  assert.equal(ok.data.name, 'Apple Watch');
+  const got = (await watch.call('POST', '/api/auth/device/poll', { secret: start.secret }, { 'user-agent': 'CatNestWatch/1.0 watchOS' })).data;
+  assert.equal(got.status, 'ok');
+  watch.token = got.token;
+  assert.equal((await watch.call('GET', '/api/companion')).data.cat.name, '团团');
+  assert.equal((await new Player().call('POST', '/api/auth/device/poll', { secret: start.secret })).data.status, 'expired', 'codes are single use');
+  const devices = (await phone.call('GET', '/api/auth/state')).data.sessions;
+  assert.ok(devices.some((s: any) => s.agent.includes('猫窝 手表')));
+
+  // the phone app can also hand a fresh session straight to its paired watch
+  const minted = (await phone.call('POST', '/api/auth/device/mint')).data.token;
+  const w2 = new Player('app');
+  w2.token = minted;
+  assert.equal((await w2.call('GET', '/api/me')).status, 200);
+});

@@ -4,7 +4,7 @@ import { ui, activeCat, toast, patchCat, type Panel } from '../game/state';
 import { useStore } from '../game/store';
 import { game } from '../game/game';
 import { api } from '../game/net';
-import { isNative, enableNativePush, saveFile } from '../game/platform';
+import { isNative, isMacShell, toMac, enableNativePush, saveFile } from '../game/platform';
 import { registerApns } from '../game/account';
 import { audio } from '../game/audio';
 import { itemIcon, catPortrait } from '../art/icons';
@@ -798,6 +798,13 @@ function SettingsPanel() {
   };
   const enablePush = async () => {
     try {
+      if (isMacShell) {
+        // the Mac app is always in the menu bar and shows the letters itself
+        toMac({ type: 'enableNotifications' });
+        await save({ push: true });
+        toast('开好啦，猫猫有新信时会在屏幕右上角告诉你', '💌');
+        return;
+      }
       if (isNative) {
         if (!(await enableNativePush(registerApns))) {
           toast('没有拿到通知权限，可以在系统「设置 → 通知」里打开', 'ℹ️', 5000);

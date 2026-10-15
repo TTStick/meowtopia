@@ -225,6 +225,77 @@ route('POST', '/api/auth/logout-others', (r) => {
   return { ok: true };
 });
 
+// ---------- signing in small devices (Apple Watch) ----------
+// Like signing in on a TV: the watch shows a short code, the player types it on a
+// device that is already signed in, and the watch picks up its own session.
+const DEVICE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const pairing = new Map<string, { secret: string; exp: number; uid?: string; name: string }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, p] of pairing) if (p.exp < now) pairing.delete(k);
+}, 60_000).unref();
+
+function deviceName(req: IncomingMessage): string {
+  const ua = String(req.headers['user-agent'] ?? '');
+  return /CatNestWatch/.test(ua) ? 'Apple Watch' : /CatNestMac/.test(ua) ? 'Mac' : '新设备';
+}
+
+route(
+  'POST',
+  '/api/auth/device/start',
+  (r) => {
+    let code = '';
+    do {
+      const b = randomBytes(6);
+      code = [...b].map((x) => DEVICE_CHARS[x % DEVICE_CHARS.length]).join('');
+    } while (pairing.has(code));
+    const secret = randomBytes(24).toString('base64url');
+    pairing.set(code, { secret, exp: Date.now() + 10 * 60_000, name: deviceName(r.raw) });
+    return { code, secret, expiresIn: 600, interval: 3 };
+  },
+  { auth: false, limit: 'pair', by: 'ip' },
+);
+
+route('POST', '/api/auth/device/approve', (r) => {
+  const code = String(r.body.code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const p = pairing.get(code);
+  if (!p || p.exp < Date.now()) throw new HttpError(404, '没有找到这个配对码，看看手表上的码是不是变了');
+  if (p.uid && p.uid !== r.user.id) throw new HttpError(409, '这个配对码已经被使用了');
+  p.uid = r.user.id;
+  return { ok: true, name: p.name };
+}, { limit: 'login', by: 'user' });
+
+route(
+  'POST',
+  '/api/auth/device/poll',
+  (r) => {
+    const secret = String(r.body.secret ?? '');
+    for (const [code, p] of pairing) {
+      const a = Buffer.from(p.secret), b = Buffer.from(secret);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) continue;
+      if (p.exp < Date.now()) {
+        pairing.delete(code);
+        break;
+      }
+      if (!p.uid) return { status: 'pending' };
+      pairing.delete(code);
+      const u = db.getUser(p.uid);
+      if (!u || u.banned) throw new HttpError(403, '这个账号暂时不能登录');
+      const s = createSession(u.id, r.raw, 'app');
+      return { status: 'ok', token: s.token, me: game.me(u) };
+    }
+    return { status: 'expired' };
+  },
+  { auth: false },
+);
+
+/** A fresh session for a paired watch, handed over by the phone app (WatchConnectivity). */
+route('POST', '/api/auth/device/mint', (r) => {
+  const s = createSession(r.user.id, r.raw, 'app');
+  db.db.prepare('UPDATE sessions SET agent = ? WHERE id = ?').run('Apple Watch · 猫窝 手表', s.id);
+  return { token: s.token };
+}, { limit: 'login', by: 'user' });
+
 /** Move an old localStorage bearer token into a fresh HttpOnly cookie session. */
 route('POST', '/api/auth/upgrade', (r) => {
   if (r.session) deleteSession(r.session.id);

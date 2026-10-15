@@ -37,8 +37,8 @@ export function hashToken(t: string): string {
 
 function agentLabel(req: IncomingMessage): string {
   const ua = String(req.headers['user-agent'] ?? '');
-  const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
-  const br = /CatNestApp/.test(ua) ? '猫窝 App' : /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '浏览器';
+  const os = /CatNestWatch|watchOS/.test(ua) ? 'Apple Watch' : /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+  const br = /CatNestWatch/.test(ua) ? '猫窝 手表' : /CatNestMac/.test(ua) ? '猫窝 Mac' : /CatNestApp/.test(ua) ? '猫窝 App' : /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '浏览器';
   return [os, br].filter(Boolean).join(' · ').slice(0, 40);
 }
 

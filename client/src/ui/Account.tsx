@@ -157,6 +157,10 @@ export function SecuritySection() {
         </>
       )}
 
+      <div class="sec">登录手表 / 新设备</div>
+      <p class="muted" style={{ marginTop: 0, fontSize: 13 }}>在 Apple Watch 上打开猫窝，选「用其他设备登录」，把手表上的 6 位码填在这里。</p>
+      <DeviceCode onDone={load} />
+
       <div class="sec">我的数据</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button class="btn small" onClick={() => attempt(acc.exportData)}>
@@ -188,6 +192,31 @@ export function SecuritySection() {
         </button>
       </div>
     </>
+  );
+}
+
+function DeviceCode(p: { onDone: () => void }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <input class="field" maxLength={8} placeholder="手表上的码，例如 K7P4QM" autocomplete="off" autocapitalize="characters" value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
+      <button
+        class="btn small"
+        disabled={busy || clean.length !== 6}
+        onClick={() =>
+          attempt(async () => {
+            const r = await acc.approveDevice(clean);
+            setCode('');
+            toast(`${r.name} 登上啦`, '⌚');
+            setTimeout(p.onDone, 4000);
+          }, setBusy)
+        }
+      >
+        登录
+      </button>
+    </div>
   );
 }
 

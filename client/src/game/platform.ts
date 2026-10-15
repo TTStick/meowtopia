@@ -3,6 +3,13 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export const isNative = Capacitor.isNativePlatform();
+
+/** Running inside the 猫窝 Mac app (a native window around the website). */
+export const isMacShell = typeof navigator !== 'undefined' && /CatNestMac/.test(navigator.userAgent);
+type MacMsg = { type: string; [k: string]: unknown };
+export function toMac(m: MacMsg) {
+  (window as { webkit?: { messageHandlers?: { catnest?: { postMessage(m: MacMsg): void } } } }).webkit?.messageHandlers?.catnest?.postMessage(m);
+}
 export const platform = Capacitor.getPlatform(); // 'ios' | 'android' | 'web'
 
 /** Where the API lives. Empty for the website (same origin); set via VITE_API_BASE for app builds. */

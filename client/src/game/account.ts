@@ -1,7 +1,7 @@
 // Account protection and sign-in: passkeys, recovery codes, devices, export, delete.
 import { startAuthentication, startRegistration, browserSupportsWebAuthn } from '@simplewebauthn/browser';
 import { api, setBearer } from './net';
-import { isNative, saveToken, saveFile } from './platform';
+import { isNative, isMacShell, saveToken, saveFile } from './platform';
 import { ui } from './state';
 import type { MeResponse } from '../../../shared/types';
 
@@ -13,7 +13,7 @@ export interface AuthState {
 }
 
 // In the app the page isn't served from our domain, so WebAuthn can't bind to it (yet).
-export const passkeysSupported = () => !isNative && typeof window !== 'undefined' && window.isSecureContext && browserSupportsWebAuthn();
+export const passkeysSupported = () => !isNative && !isMacShell && typeof window !== 'undefined' && window.isSecureContext && browserSupportsWebAuthn();
 
 /** Sign-in responses carry a token for the app (the website gets a cookie instead). */
 async function adopt(r: { me: MeResponse; token?: string }): Promise<MeResponse> {
@@ -27,6 +27,11 @@ const client = isNative ? 'app' : 'web';
 
 export async function guestLogin(body: Record<string, unknown>): Promise<MeResponse> {
   return adopt(await api('POST', '/api/auth/guest', { ...body, client }));
+}
+
+/** Sign a watch (or another small device) in: it shows a code, we approve it here. */
+export function approveDevice(code: string) {
+  return api<{ ok: boolean; name: string }>('POST', '/api/auth/device/approve', { code });
 }
 
 export function registerApns(token: string, env: string) {
