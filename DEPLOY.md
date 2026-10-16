@@ -292,4 +292,42 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 - `.env` 里有管理口令，保持 `chmod 600`，不要提交或发给别人。
 - 不要把 8737 端口直接暴露到公网，所有流量都应经过 Caddy。
 - 游戏容器以非 root、只读文件系统运行，只有数据卷可写。
-- 服务器本身记得开启自动安全更新，并只开放 22、80、443 端口。
+- 服务器本身记得开启自动安全更新，只开放 SSH、80、443 端口。下面的加固脚本会把这些一次做好。
+
+### 服务器加固（推荐）
+
+`deploy/harden.sh` 适用于 Debian 12 / 13，用 root 在服务器上运行，分两步，中间不会把你锁在门外：
+
+```bash
+cd /opt/catnest && ./deploy/harden.sh
+```
+
+第一步会做这些事：
+
+- 补上 Debian 的安全更新源（有些服务商的系统镜像没有带），装好所有更新，并开启**每天自动安装安全更新**（不会自动重启）。
+- 把系统日志保存下来（一个月、最多 300 MB），出问题时可以用 `journalctl` 查。
+- 内存小于 2 GB 时常用的 1 GB 交换文件；关闭服务器不需要的几项网络行为（ICMP 重定向、源路由等），Docker 需要的转发保持开着。
+- Docker：容器默认不能提权、日志有大小上限、以后升级 Docker 时容器不中断（这一步会让游戏重启几秒）。
+- **防火墙**：只放行 SSH、80、443（以及 IPv6 和 DHCP 必需的流量），同一个 IP 每分钟最多尝试 10 次 SSH 新连接。只加自己的规则表，不会动 Docker 的规则。
+- **SSH 换到高端口**：可以指定，例如 `./deploy/harden.sh 52345`；不指定就随机挑一个 40000–60000 的端口。这时 22 和新端口同时开着；同时关掉 X11 和代理转发，每次连接最多尝试 3 次密码。
+
+**10 分钟内**完成第二步：如果服务商控制台有「安全组 / 防火墙」，先放行新端口；然后**不要关掉原来的窗口**，另开一个终端用新端口登录（`ssh -p 新端口 root@服务器IP`），成功后运行：
+
+```bash
+cd /opt/catnest && ./deploy/harden.sh confirm
+```
+
+它会关掉 22 端口。如果新端口登录不上，什么都不用做：10 分钟后 SSH 和防火墙的改动会**自动撤销**，22 端口照常能用。随时可以用 `./deploy/harden.sh status` 查看状态。
+
+可选的第三步：把自己电脑的 SSH 公钥加到服务器的 `/root/.ssh/authorized_keys`，确认能用密钥登录后运行 `./deploy/harden.sh keys-only`，关掉密码登录。脚本会先检查你确实有自己的密钥。
+
+换了端口以后，在自己电脑的 `~/.ssh/config` 里加一段，之后 `ssh`、`scp` 和发布安装包的脚本都直接用 `maowo` 这个名字，不用每次写端口：
+
+```
+Host maowo
+  HostName 服务器IP
+  User root
+  Port 新端口
+```
+
+例如 `./deploy/publish-apk.sh app-release.apk 1.1 maowo:/opt/catnest`。
