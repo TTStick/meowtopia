@@ -2,7 +2,7 @@ import { Store } from './store';
 import type { MeResponse, NestLayout, CatRecord, CatGenes, DoorSetting } from '../../../shared/types';
 
 export type Panel =
-  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo' | 'protect' | 'privacy' | 'playdate';
+  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo' | 'protect' | 'privacy' | 'playdate' | 'moveout';
 
 /** 猫窝小区: who lives in which house, as this player sees it. */
 export interface HoodCat {

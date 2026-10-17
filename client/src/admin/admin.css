@@ -250,3 +250,6 @@ section { margin-bottom: 28px; }
 .devtools .grow { flex: 1; }
 .tool-cat { padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .tool-cat img { image-rendering: pixelated; }
+.notice { margin-bottom: 20px; background: #fff4dc; }
+.report .kv { margin: 8px 0; }
+.report .row + .row { margin-top: 8px; }

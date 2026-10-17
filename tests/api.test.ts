@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign, verify, createPublicKey } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -683,4 +683,128 @@ test('the neighbourhood: closest move in and stay; knocking, guests, the door, a
   const letters = (await b.p.call('GET', '/api/events')).data.map((e: any) => e.title).join('\n');
   assert.match(letters, /甲猫约乙猫一起玩/);
   assert.match(letters, /约定改天啦/);
+});
+
+test('moving: pack a cat here; move in from another town only once the admin says yes', async () => {
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+
+  // packing up: a signed package this server's key checks out
+  const a = new Player();
+  await a.join('搬家的人');
+  const aCat = (await a.call('POST', '/api/adopt', { name: '豆包', seed: 777 })).data.cats[0];
+  await a.call('POST', '/api/shop/buy', { item: 'cat_grass' });
+  const pkg = (await a.call('POST', '/api/move/export')).data;
+  assert.equal(pkg.format, 'catnest-move');
+  const key = (await a.call('GET', '/api/move/key')).data;
+  assert.equal(key.key, pkg.key);
+  assert.ok(verify(null, Buffer.from(pkg.body), createPublicKey({ key: Buffer.from(pkg.key, 'base64'), format: 'der', type: 'spki' }), Buffer.from(pkg.sig, 'base64')));
+  const body = JSON.parse(pkg.body);
+  assert.equal(body.cat.name, '豆包');
+  assert.equal(body.source.fingerprint, key.fingerprint);
+  assert.ok(body.cat.journal.length >= 1 && body.inventory.cat_grass === 1);
+  assert.ok(!pkg.body.includes(aCat.id) && !pkg.body.includes('code_hash'), 'no ids or secrets in the package');
+  assert.equal((await new Player().call('POST', '/api/move/export')).status, 401);
+
+  // the same town can't be moved into from itself
+  const b = new Player();
+  await b.join('新来的');
+  assert.match((await b.call('POST', '/api/move/request', { pkg })).data.error, /同一个小镇/);
+
+  // a package from "another town": the same content, signed by a different key
+  const far = generateKeyPairSync('ed25519');
+  const farKey = far.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  const farFp = createHash('sha256').update(Buffer.from(farKey, 'base64')).digest('hex').toUpperCase().slice(0, 16).match(/.{4}/g)!.join(' ');
+  const pack = (edit: (b: any) => void) => {
+    const x = JSON.parse(pkg.body);
+    x.id = 'mv_' + Math.random().toString(36).slice(2, 14);
+    x.source = { origin: 'https://far.example', fingerprint: farFp, world: 2 };
+    edit(x);
+    const text = JSON.stringify(x);
+    return { format: 'catnest-move', v: 1, key: farKey, body: text, sig: sign(null, Buffer.from(text), far.privateKey).toString('base64') };
+  };
+  const foreign = pack((x) => {
+    x.fish = 120_000;
+    x.inventory.not_a_thing = 5;
+    x.inventory.crown = 2;
+    x.cat.outfit = ['crown', 'jetpack'];
+    x.cat.stats.bond = 99_999;
+    x.cat.genes.base = 'url(javascript:1)';
+    x.cat.discovered.push('pier', 'nowhere');
+    x.cat.journal.unshift({ ts: Date.UTC(2026, 1, 3), kind: 'explore', text: '第一次在远方的小镇看海。' });
+  });
+
+  // edited on the way: refused
+  const tampered = { ...foreign, body: foreign.body.replace('"fish":120000', '"fish":990000') };
+  assert.match((await b.call('POST', '/api/move/request', { pkg: tampered })).data.error, /改动过/);
+  assert.equal((await b.call('POST', '/api/move/request', { pkg: { ...foreign, key: key.key } })).status, 400, 'a key that did not sign it');
+
+  // a player who already has a cat here can't move another in
+  assert.match((await a.call('POST', '/api/move/request', { pkg: foreign })).data.error, /新账号/);
+
+  // asking: pending until the admin decides; one at a time; a package works once
+  const req = await b.call('POST', '/api/move/request', { pkg: foreign });
+  assert.equal(req.status, 200, JSON.stringify(req.data));
+  assert.equal(req.data.status, 'pending');
+  assert.equal(req.data.summary.cat.name, '豆包');
+  assert.ok(req.data.summary.flags.some((f: string) => f.includes('小鱼干')), JSON.stringify(req.data.summary.flags));
+  assert.match((await b.call('POST', '/api/move/request', { pkg: foreign })).data.error, /在等回复/);
+  const c = new Player();
+  await c.join();
+  assert.match((await c.call('POST', '/api/move/request', { pkg: foreign })).data.error, /用过了/);
+  assert.equal((await b.call('GET', '/api/me')).data.cats.length, 0, 'nothing moves in before the admin says yes');
+
+  // the admin sees it (players can't)
+  assert.equal((await b.call('GET', '/api/admin/moves')).status, 404);
+  const list = (await admin.call('GET', '/api/admin/moves')).data;
+  const mine = list.requests.find((r: { id: number }) => r.id === req.data.id);
+  assert.equal(mine.fingerprint, farFp);
+  assert.equal(mine.trusted, false);
+  assert.equal(mine.user, '新来的');
+  assert.equal((await admin.call('GET', '/api/admin/overview')).data.moves, 1);
+
+  // yes: the cat moves in, cleaned up, with its diary and things; fish capped
+  const fishBefore = (await b.call('GET', '/api/me')).data.user.fish;
+  const ok = await admin.call('POST', `/api/admin/moves/${req.data.id}`, { approve: true, trust: true, fishCap: 500 });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
+  const me = (await b.call('GET', '/api/me')).data;
+  assert.equal(me.cats.length, 1);
+  const moved = me.cats[0];
+  assert.equal(moved.name, '豆包');
+  assert.equal(me.activeCatId, moved.id);
+  assert.deepEqual(moved.genes.seed, aCat.genes.seed);
+  assert.equal(moved.genes.base, '#f6b26b', 'odd colours are replaced');
+  assert.equal(moved.born, aCat.born);
+  assert.ok(moved.stats.bond <= 1000);
+  assert.deepEqual(moved.outfit, ['crown']);
+  assert.ok(moved.discovered.includes('pier') && !moved.discovered.includes('nowhere'));
+  assert.equal(me.user.fish, fishBefore + 500);
+  assert.equal(me.inventory.crown, 2);
+  assert.ok(!('not_a_thing' in me.inventory));
+  assert.equal(me.inventory.cat_grass, 1);
+  const diary = (await b.call('GET', `/api/cat/${moved.id}/journal`)).data;
+  assert.ok(diary.some((e: { text: string; ts: number }) => e.text.includes('远方的小镇看海') && e.ts === Date.UTC(2026, 1, 3)));
+  assert.ok(diary.some((e: { text: string }) => e.text.includes('从far.example搬到了这个小镇')));
+  assert.ok((await b.call('GET', `/api/nest/${moved.id}`)).data.layout.items.length > 0);
+  assert.ok((await b.call('GET', '/api/events')).data.some((e: { title: string }) => e.title === '搬家完成啦'));
+  assert.equal((await b.call('GET', '/api/move/request')).data.request.status, 'approved');
+  assert.match((await admin.call('POST', `/api/admin/moves/${req.data.id}`, { approve: true })).data.error, /处理过了/);
+
+  // the trusted town is remembered; the same cat again (another account) is flagged
+  const after = (await admin.call('GET', '/api/admin/moves')).data;
+  assert.ok(after.trusted.some((t: { fingerprint: string }) => t.fingerprint === farFp));
+  const again = (await c.call('POST', '/api/move/request', { pkg: pack(() => {}) })).data;
+  assert.ok(again.summary.flags.some((f: string) => f.includes('搬进来过')), JSON.stringify(again.summary.flags));
+
+  // no: a letter with the reason, and they can try again; or withdraw
+  const no = await admin.call('POST', `/api/admin/moves/${again.id}`, { approve: false, reason: '一只猫只能搬来一次哦' });
+  assert.equal(no.data.status, 'rejected');
+  assert.ok((await c.call('GET', '/api/events')).data.some((e: { text: string }) => e.text.includes('一只猫只能搬来一次')));
+  assert.equal((await c.call('GET', '/api/move/request')).data.request.reason, '一只猫只能搬来一次哦');
+  assert.equal((await c.call('GET', '/api/me')).data.cats.length, 0);
+  await c.call('POST', '/api/move/request', { pkg: pack(() => {}) });
+  await c.call('DELETE', '/api/move/request');
+  assert.equal((await c.call('GET', '/api/move/request')).data.request.status, 'withdrawn');
+  await admin.call('POST', '/api/admin/moves-trusted/remove', { fingerprint: farFp });
+  assert.equal((await admin.call('GET', '/api/admin/moves')).data.trusted.length, 0);
 });

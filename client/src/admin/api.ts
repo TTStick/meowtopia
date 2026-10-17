@@ -30,6 +30,7 @@ export interface Overview {
   users: { total: number; newToday: number; new7d: number; activeToday: number; active7d: number; active30d: number; secured: number; banned: number };
   cats: { total: number };
   reports: number;
+  moves: number;
   days: { day: string; newUsers: number; active: number | null; peak: number | null }[];
   server: { startedAt: number; uptime: number; rss: number; dbBytes: number; node: string; worldTz: number };
   llm: { active: boolean; model: string; calls: number; failed: number; cost: number | null; currency: string };
@@ -152,4 +153,34 @@ export interface Report {
   reason: string | null;
   target_user: string | null;
   reporter: string;
+}
+
+export interface MoveReq {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+  reason: string | null;
+  created: number;
+  decided: number | null;
+  origin: string;
+  user: string;
+  uid: string;
+  fingerprint: string;
+  trusted: boolean;
+  summary: {
+    nickname: string;
+    since: number;
+    createdAt: number;
+    fish: number;
+    items: number;
+    found: number;
+    rare: number;
+    cat: { name: string; coat: string; days: number; places: number; diary: number; bond: number };
+    left: string[];
+    flags: string[];
+  };
+}
+export interface Moves {
+  fingerprint: string;
+  trusted: { fingerprint: string; origin: string; at: number }[];
+  requests: MoveReq[];
 }

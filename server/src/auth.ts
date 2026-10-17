@@ -320,6 +320,7 @@ route('GET', '/api/account/export', (r) => {
     visits: db.db.prepare('SELECT guest_cat, host_cat, status, created, started, ends, guest_user = ? AS mine FROM visits WHERE guest_user = ? OR host_user = ? ORDER BY created').all(uid, uid, uid),
     playdates: db.db.prepare('SELECT from_cat, to_cat, poi, at, note, status, from_user = ? AS mine FROM playdates WHERE from_user = ? OR to_user = ? ORDER BY at').all(uid, uid, uid),
     townsfolk: cats.flatMap((c) => db.db.prepare('SELECT cat_id, npc_id, points, walks FROM npc_bonds WHERE cat_id = ?').all(c.id)),
+    moves: db.db.prepare('SELECT origin, status, reason, created, decided FROM move_requests WHERE user_id = ? ORDER BY created').all(uid),
   };
 });
 

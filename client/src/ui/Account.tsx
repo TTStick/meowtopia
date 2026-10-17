@@ -166,6 +166,9 @@ export function SecuritySection() {
         <button class="btn small" onClick={() => attempt(acc.exportData)}>
           导出我的数据
         </button>
+        <button class="btn small" onClick={() => ui.set({ panel: 'moveout' })}>
+          搬家去别的小镇
+        </button>
         <button class="btn small ghost" onClick={() => ui.set({ panel: 'privacy' })}>
           隐私说明
         </button>
@@ -337,7 +340,7 @@ export function PrivacyPanel() {
           <b>别人能看到什么</b>：在小镇里，别人能看到你的猫、你的称呼，以及你留下的纸条。共养伙伴能看到你们的交换日记。
         </div>
         <div>
-          <b>你的权利</b>：随时可以在「设置 → 账号与安全」导出全部数据或删除账号。删除后数据会立即从游戏中移除，备份会在 7 天内自然轮换掉。
+          <b>你的权利</b>：随时可以在「设置 → 账号与安全」导出全部数据、把猫猫打包搬去别的小镇，或者删除账号。删除后数据会立即从游戏中移除，备份会在 7 天内自然轮换掉。
         </div>
         <div>
           <b>社区</b>：不当的名字、纸条或日记可以举报。为了保护大家，我们会自动拦截联系方式、链接和不友善的词。

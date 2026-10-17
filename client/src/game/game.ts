@@ -194,6 +194,12 @@ class Game {
     await this.enterGame();
   }
 
+  /** A cat moved in from another town (the admin said yes while we waited). */
+  async arrive() {
+    await this.refreshMe();
+    await this.enterGame();
+  }
+
   async adopt(name: string, seed: number) {
     const me = await api<MeResponse>('POST', '/api/adopt', { name, seed });
     this.setMe(me);

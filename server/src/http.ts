@@ -26,6 +26,7 @@ export interface RouteOpts {
   limit?: keyof typeof LIMITS; // extra bucket for this route
   by?: 'ip' | 'user'; // what the extra bucket is keyed by (default: user, or ip when unauthenticated)
   allowBanned?: boolean;
+  maxBody?: number; // bytes (default 64KB)
 }
 
 interface Route {
@@ -45,13 +46,13 @@ export function route(method: string, pattern: string, h: Handler, opts: RouteOp
   routes.push({ method, re, keys, h, o });
 }
 
-async function readBody(req: IncomingMessage): Promise<any> {
+async function readBody(req: IncomingMessage, max = 64 * 1024): Promise<any> {
   if (req.method === 'GET' || req.method === 'HEAD') return {};
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const c of req) {
     size += (c as Buffer).length;
-    if (size > 64 * 1024) throw new HttpError(413, '内容太大了');
+    if (size > max) throw new HttpError(413, '内容太大了');
     chunks.push(c as Buffer);
   }
   if (!chunks.length) return {};
@@ -112,7 +113,7 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
       const [cap, rate] = LIMITS[r.o.limit];
       if (!allow(key, cap, rate)) throw new HttpError(429, '太频繁啦，休息一下再试试');
     }
-    const body = await readBody(req);
+    const body = await readBody(req, r.o.maxBody);
     const out = await r.h({ method, path: url.pathname, params, query: url.searchParams, body, user: found?.user as UserRow, session: found?.session ?? null, ip, raw: req, res });
     if (!res.headersSent) send(res, 200, out ?? { ok: true });
   } catch (e) {

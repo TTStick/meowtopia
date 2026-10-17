@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { game } from '../game/game';
 import { toast } from '../game/state';
 import { LiveCat } from './LiveCat';
@@ -7,6 +7,8 @@ import { audio } from '../game/audio';
 import { hash3 } from '../../../shared/rng';
 import { prepareGuest } from '../game/pow';
 import { RecoverForm } from './Account';
+import { MoveIn } from './Moving';
+import { moveStatus } from '../game/account';
 
 export function Welcome() {
   const [mode, setMode] = useState<'start' | 'name' | 'code'>('start');
@@ -66,6 +68,10 @@ export function Adopt() {
   const [sel, setSel] = useState(0);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [moving, setMoving] = useState(false);
+  useEffect(() => {
+    moveStatus().then((s) => s.request?.status === 'pending' && setMoving(true), () => {});
+  }, []);
   const suggest = useMemo(() => {
     const arr = [...CAT_NAMES].sort(() => Math.random() - 0.5);
     return arr.slice(0, 6);
@@ -82,6 +88,7 @@ export function Adopt() {
       setBusy(false);
     }
   };
+  if (moving) return <MoveIn onBack={() => setMoving(false)} />;
   return (
     <div class="onboard">
       <h1 style={{ fontSize: '26px', letterSpacing: '1px' }}>谁会是你的猫猫？</h1>
@@ -113,6 +120,9 @@ export function Adopt() {
         </div>
         <button class="btn primary" disabled={busy} onClick={go}>
           带它回家
+        </button>
+        <button class="btn ghost small" onClick={() => setMoving(true)}>
+          在别的猫窝小镇养过猫？搬家过来
         </button>
       </div>
     </div>

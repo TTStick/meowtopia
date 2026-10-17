@@ -2,12 +2,12 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import './admin.css';
-import { adminApi, signedOut, type LlmSettings, type LlmUsage, type Overview, type Report, type Effort } from './api';
+import { adminApi, signedOut, type LlmSettings, type LlmUsage, type Overview, type Report, type Effort, type Moves } from './api';
 import { Sandbox } from './Sandbox';
 import { Players } from './Players';
 
-type Tab = 'overview' | 'sandbox' | 'players' | 'model' | 'reports';
-const TABS: [Tab, string][] = [['overview', '概览'], ['sandbox', '沙盘'], ['players', '玩家'], ['model', '模型'], ['reports', '举报']];
+type Tab = 'overview' | 'sandbox' | 'players' | 'model' | 'reports' | 'moves';
+const TABS: [Tab, string][] = [['overview', '概览'], ['sandbox', '沙盘'], ['players', '玩家'], ['model', '模型'], ['reports', '举报'], ['moves', '搬家']];
 
 function App() {
   const [state, setState] = useState<'checking' | 'out' | 'in'>('checking');
@@ -49,6 +49,7 @@ function App() {
         {tab === 'players' && <Players />}
         {tab === 'model' && <ModelTab />}
         {tab === 'reports' && <ReportsTab />}
+        {tab === 'moves' && <MovesTab />}
       </main>
     </div>
   );
@@ -111,6 +112,12 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
   );
   return (
     <>
+      {o.moves > 0 && (
+        <div class="card notice row between">
+          <span>📦 有 {o.moves} 份从别的小镇搬来的申请，等你看一看。</span>
+          <button class="btn small" onClick={() => go('moves')}>去看看</button>
+        </div>
+      )}
       <section>
         <h2>现在</h2>
         <div class="stats">
@@ -414,6 +421,117 @@ function ReportsTab() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---------------- moving in from other towns ----------------
+const MOVE_STATUS: Record<string, string> = { approved: '已同意', rejected: '已拒绝', withdrawn: '玩家撤回了' };
+const hostOf = (o: string) => {
+  try {
+    return new URL(o).host;
+  } catch {
+    return '（没写来源）';
+  }
+};
+const day = (ts: number) => new Date(ts).toLocaleDateString('zh-CN');
+
+function MovesTab() {
+  const [d, setD] = useState<Moves | null>(null);
+  const [err, setErr] = useState('');
+  const [caps, setCaps] = useState<Record<number, string>>({});
+  const load = () => adminApi<Moves>('GET', '/moves').then(setD, (e) => setErr(e.message));
+  useEffect(() => {
+    void load();
+  }, []);
+  const act = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      await load();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+  if (!d) return <p class="muted">{err || '正在读取…'}</p>;
+  const pending = d.requests.filter((r) => r.status === 'pending');
+  const done = d.requests.filter((r) => r.status !== 'pending');
+  const decide = (id: number, body: Record<string, unknown>) => act(() => adminApi('POST', `/moves/${id}`, body));
+  return (
+    <div class="reports">
+      <div class="card">
+        <h3>从别的小镇搬来</h3>
+        <p class="muted">
+          别的猫窝小镇的玩家，可以在领养页交上「搬家包」申请搬来。搬家包带着原来小镇的签名，路上没被改过；但那个小镇本身靠不靠谱，要你来判断：
+          第一次见到的小镇，可以打开它的 <code>/api/move/key</code> 核对指纹，或者直接问问那边的管理员。
+        </p>
+        <p class="small">这个小镇的指纹：<code>{d.fingerprint}</code>（玩家从这里搬走时，对方管理员核对的就是它）</p>
+        {d.trusted.length > 0 && (
+          <>
+            <p class="small"><b>信任的小镇</b></p>
+            {d.trusted.map((t) => (
+              <div key={t.fingerprint} class="row small">
+                <span>{hostOf(t.origin)}</span>
+                <code>{t.fingerprint}</code>
+                <button class="link" onClick={() => confirm(`不再信任 ${hostOf(t.origin)}？`) && act(() => adminApi('POST', '/moves-trusted/remove', { fingerprint: t.fingerprint }))}>移除</button>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+      {!pending.length && <div class="card empty">现在没有等着搬来的猫猫。</div>}
+      {pending.map((r) => {
+        const s = r.summary;
+        const src = hostOf(r.origin);
+        return (
+          <div key={r.id} class="card report">
+            <div class="row between">
+              <b>#{r.id} · {s.cat.name}（{s.cat.coat}）想从 {src} 搬来</b>
+              <span class="muted small">{new Date(r.created).toLocaleString('zh-CN', { hour12: false })}</span>
+            </div>
+            <p class="small">
+              来源指纹 <code>{r.fingerprint}</code>{' '}
+              {r.trusted ? <span class="ok">● 信任的小镇</span> : <span class="muted">● 第一次见到{r.origin && <>（<a href={`${r.origin}/api/move/key`} target="_blank" rel="noopener noreferrer">核对</a>）</>}</span>}
+            </p>
+            <dl class="kv small">
+              <dt>玩家</dt><dd>这里的「{r.user}」，原来叫「{s.nickname || '—'}」，{day(s.since)} 起在 {src} 养猫</dd>
+              <dt>猫猫</dt><dd>养了 {s.cat.days} 天 · 去过 {s.cat.places} 个地方 · 日记 {s.cat.diary} 篇 · 羁绊 {s.cat.bond}</dd>
+              <dt>带来</dt><dd>小鱼干 {s.fish} · 东西 {s.items} 件 · 收藏 {s.found} 种（稀有 {s.rare}）</dd>
+              <dt>打包于</dt><dd>{day(s.createdAt)}{s.left.length ? ` · 留在原小镇：${s.left.join('、')}` : ''}</dd>
+            </dl>
+            {s.flags.length > 0 && <p class="error small">值得留意：{s.flags.join('；')}</p>}
+            <div class="row">
+              <label class="small">
+                小鱼干最多带{' '}
+                <input class="field" style={{ width: 100, display: 'inline-block' }} inputMode="numeric" value={caps[r.id] ?? '50000'} onInput={(e) => setCaps({ ...caps, [r.id]: (e.target as HTMLInputElement).value })} />
+              </label>
+            </div>
+            <div class="row">
+              <button class="btn small" onClick={() => decide(r.id, { approve: true, fishCap: Number(caps[r.id] ?? 50000) || 0 })}>同意搬来</button>
+              {!r.trusted && <button class="btn small" onClick={() => decide(r.id, { approve: true, trust: true, fishCap: Number(caps[r.id] ?? 50000) || 0 })}>同意，并信任 {src}</button>}
+              <button
+                class="btn small danger"
+                onClick={() => {
+                  const reason = prompt('不同意的原因（会写在给玩家的信里，可不填）：', '');
+                  if (reason !== null) void decide(r.id, { approve: false, reason });
+                }}
+              >
+                不同意
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {done.length > 0 && (
+        <div class="card">
+          <h3>最近 30 天处理过的</h3>
+          {done.map((r) => (
+            <p key={r.id} class="small">
+              #{r.id} · {r.summary.cat?.name ?? '—'} 从 {hostOf(r.origin)} · {MOVE_STATUS[r.status] ?? r.status}
+              {r.reason ? `（${r.reason}）` : ''} · <span class="muted">{r.decided ? new Date(r.decided).toLocaleString('zh-CN', { hour12: false }) : ''}</span>
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

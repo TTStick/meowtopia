@@ -155,6 +155,7 @@ route('GET', '/api/admin/overview', (r) => {
     },
     cats: { total: count("SELECT COUNT(*) n FROM cats WHERE owner_id != 'town'") },
     reports: count("SELECT COUNT(*) n FROM reports WHERE status = 'open'"),
+    moves: count("SELECT COUNT(*) n FROM move_requests WHERE status = 'pending'"),
     days,
     server: { startedAt: STARTED, uptime: Math.round((now - STARTED) / 1000), rss: process.memoryUsage().rss, dbBytes, node: process.version, worldTz: WORLD_TZ },
     llm: { active: llmEnabled(), model: llmSettings().model, calls: u.calls, failed: u.failed, cost: u.cost, currency: u.currency },

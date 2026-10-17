@@ -16,6 +16,7 @@ await import('./api');
 await import('./neighbors');
 await import('./companion');
 await import('./admin');
+await import('./moving');
 const { onBan, onAccountDeleted } = await import('./auth');
 const { startPush } = await import('./push');
 const { startWorld, onConnection, kickUser } = await import('./world');

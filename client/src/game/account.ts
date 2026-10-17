@@ -92,11 +92,75 @@ export async function newRecoveryCode(): Promise<string> {
   return r.code;
 }
 
+/** Today as 2026-10-18, in the player's own time zone (for file names). */
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export async function exportData() {
   const data = await api('GET', '/api/account/export');
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  await saveFile(`猫窝-${new Date().toISOString().slice(0, 10)}.json`, blob);
+  await saveFile(`猫窝-${today()}.json`, blob);
 }
+
+// ---------------- 搬家: moving a cat between 猫窝 towns ----------------
+export interface MovePackage {
+  format: 'catnest-move';
+  v: 1;
+  key: string;
+  body: string;
+  sig: string;
+}
+export interface MoveSummary {
+  nickname: string;
+  createdAt: number;
+  fish: number;
+  items: number;
+  found: number;
+  cat: { name: string; coat: string; days: number; places: number; diary: number; bond: number };
+  left: string[];
+  flags: string[];
+}
+export interface MoveRequest {
+  id: number;
+  status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+  reason: string | null;
+  created: number;
+  decided: number | null;
+  origin: string;
+  summary: MoveSummary;
+}
+export interface MoveStatus {
+  request: MoveRequest | null;
+  out: { at: number; cat: string } | null;
+  fingerprint: string;
+}
+
+export const moveStatus = () => api<MoveStatus>('GET', '/api/move/request');
+
+/** Pack the cat up into a signed file to take to another town. */
+export async function packForMove(catName: string) {
+  const pkg = await api<MovePackage>('POST', '/api/move/export');
+  const blob = new Blob([JSON.stringify(pkg)], { type: 'application/json' });
+  await saveFile(`猫窝搬家包-${catName}-${today()}.json`, blob, '猫窝搬家包');
+}
+
+/** Read a moving package from a file the player picked (only its shape; the server checks the signature). */
+export async function readMoveFile(f: File): Promise<MovePackage> {
+  if (f.size > 700 * 1024) throw new Error('这个文件太大了，不像是搬家包');
+  let pkg: MovePackage;
+  try {
+    pkg = JSON.parse(await f.text());
+  } catch {
+    throw new Error('这个文件读不出来，换一个试试');
+  }
+  if (pkg?.format !== 'catnest-move' || typeof pkg.body !== 'string') throw new Error('这不是猫窝的搬家包（要选「猫窝搬家包-…」那个文件）');
+  return pkg;
+}
+
+export const requestMove = (pkg: MovePackage) => api<MoveRequest>('POST', '/api/move/request', { pkg });
+export const withdrawMove = () => api('DELETE', '/api/move/request');
 
 async function forgetSession() {
   setBearer(null);

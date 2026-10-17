@@ -20,6 +20,7 @@ import type { CatRecord, JournalEntry } from '../../../shared/types';
 import * as I from './icons';
 import { Sheet, Tabs, when } from './Sheet';
 import { SecuritySection, ProtectPanel, PrivacyPanel, ReportLink } from './Account';
+import { MoveOutPanel } from './Moving';
 import { confirmBox } from './Dialog';
 
 const go = (panel: Panel) => ui.set({ panel });
@@ -1339,6 +1340,8 @@ export function Panels() {
       return <ProtectPanel />;
     case 'privacy':
       return <PrivacyPanel />;
+    case 'moveout':
+      return <MoveOutPanel />;
     default:
       return null;
   }
