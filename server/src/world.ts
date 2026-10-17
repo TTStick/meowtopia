@@ -2,7 +2,7 @@
 // their schedules, meetings, finds, and broadcasting to connected clients.
 import type { WebSocket } from 'ws';
 import type { CatRecord } from '../../shared/types';
-import type { EntState, ServerMsg, ClientMsg } from '../../shared/protocol';
+import { WORLD_VERSION, type EntState, type ServerMsg, type ClientMsg } from '../../shared/protocol';
 import { getWorld, getRooms, roomAt, roomById, planRoute, POIS, POI_MAP, TILE, HOME_SPAWN, walkableAt, zoneAt, poiPoint, ZONE_NAME, type Poi, type Leg, type Room } from '../../shared/world';
 import { roomOpen } from '../../shared/rooms';
 import { NPCS, NPC_MAP, scheduleAt, walkBusy, type NpcDef } from '../../shared/npcs';
@@ -78,6 +78,7 @@ interface Client {
   cats: Set<string>;
   lastPos: number;
   view: { x: number; y: number } | null; // camera centre; null = not watching the world
+  v: number; // world version the client knows (0 = an app from before the town grew)
 }
 
 /** Cosmetic, high-frequency messages only travel to players looking nearby. */
@@ -580,8 +581,8 @@ function tickCompanion(o: Ent, now: number): boolean {
   }
   if (clients.size && now - c.lastSay > 40_000 + (hashf(now) * 30_000)) {
     c.lastSay = now;
-    const name = leader!.st.name;
-    if (o.npc) say(o, npcLine(personaOf(o.npc), `陪着${name}一起散步，走到了${place}`, o.npc.lines));
+    // lines about the place are shared by every cat the resident walks with
+    if (o.npc) say(o, npcLine(personaOf(o.npc), `陪着一只小猫一起散步，走到了${place}`, o.npc.lines));
     else if (o.cat) say(o, catLine(o.cat, 'place', { place }));
   }
   return true;
@@ -675,8 +676,13 @@ async function doSpecial(e: Ent, o: Ent, c: Client, now: number) {
     diary = `${n.name}讲了一个故事：「${lines.join('')}」`;
   } else say(o, npcLine(personaOf(n), `${sp.done}，你对${cat.name}说的话`, n.lines));
   if (sp.errand) {
+    // usually someone nearby, now and then a little journey
     const to = NPCS.filter((x) => x.id !== n.id && x.id !== 'npc_night' && ents.has(x.id));
-    const target = to[Math.floor(Math.random() * to.length)];
+    const [ax, ay] = anchorOf(o.st.x, o.st.y);
+    const target = to.length ? new Rng(now).weighted(to.map((x) => {
+      const [bx, by] = anchorOf(ents.get(x.id)!.st.x, ents.get(x.id)!.st.y);
+      return [x, 1 / (1 + Math.hypot(bx - ax, by - ay) / (25 * TILE)) ** 2] as const;
+    })) : null;
     if (target) {
       setErrand(cat.id, { from: n.id, to: target.id, day: clockAt(now).day });
       diary = `${n.name}托我把一封信送给${target.name}。`;
@@ -1102,7 +1108,11 @@ setInterval(() => {
 }, 30_000).unref();
 
 export function onConnection(ws: WebSocket, uid: string | null, nickname: string) {
-  const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0, view: null };
+  const c: Client = { ws, uid, nickname, cats: new Set(), lastPos: 0, view: null, v: 0 };
+  // apps from before the town grew carry the old map: ask them, once, to update
+  setTimeout(() => {
+    if (c.v < WORLD_VERSION && ws.readyState === 1) send(c, { t: 'event', kind: 'update', text: '猫窝更新啦：小镇变大了，店也能进去了。请到官网下载新版 App，网页刷新一下就好' });
+  }, 5000).unref();
   alive.add(ws);
   ws.on('pong', () => alive.add(ws));
   if (uid) for (const cat of game.catsOf(uid)) c.cats.add(cat.id);
@@ -1156,6 +1166,9 @@ function handle(c: Client, m: ClientMsg) {
   const now = Date.now();
   switch (m.t) {
     case 'ping':
+      return;
+    case 'hello':
+      c.v = Number(m.v) || 0;
       return;
     case 'view':
       if (Number.isFinite(m.x) && Number.isFinite(m.y)) c.view = { x: m.x, y: m.y };

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
 import WebSocket from 'ws';
+import { WORLD_VERSION } from '../shared/protocol';
 
 const PORT = 18000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -246,6 +247,24 @@ test('websocket: cookie only counts from our own pages; the app authenticates by
   const app = new Player('app');
   const appMe = await app.join();
   assert.equal((await open({}, { t: 'auth', token: app.token })).you, appMe.user.id);
+});
+
+test('apps from before the town grew are asked to update; current ones are not', async () => {
+  const listen = (hello: boolean) =>
+    new Promise<string[]>((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+      const kinds: string[] = [];
+      ws.on('open', () => ws.send(JSON.stringify(hello ? { t: 'hello', v: WORLD_VERSION } : { t: 'watch' })));
+      ws.on('message', (d) => {
+        const m = JSON.parse(String(d));
+        if (m.t === 'event') kinds.push(m.kind);
+      });
+      ws.on('error', reject);
+      setTimeout(() => (ws.close(), resolve(kinds)), 6000);
+    });
+  const [old, current] = await Promise.all([listen(false), listen(true)]);
+  assert.deepEqual(old, ['update']);
+  assert.deepEqual(current, []);
 });
 
 test('static files cannot escape dist; html gets security headers', async () => {

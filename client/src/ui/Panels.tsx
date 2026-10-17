@@ -695,6 +695,41 @@ function MapPanel() {
 }
 
 // ---------------- cat profile ----------------
+/** The residents this cat has got to know. */
+function TownFriends({ catId }: { catId: string }) {
+  const [list, setList] = useState<{ id: string; name: string; role: string; level: number; levelName: string; walks: number }[] | null>(null);
+  useEffect(() => {
+    api<typeof list>('GET', `/api/cat/${catId}/townsfolk`)
+      .then(setList)
+      .catch(() => setList([]));
+  }, [catId]);
+  if (!list?.length) return null;
+  return (
+    <>
+      <div class="sec">小镇朋友</div>
+      <div class="list">
+        {list.map((f) => (
+          <div class="row" key={f.id}>
+            <div class="grow">
+              <div class="t1">
+                {f.name}
+                <span class="muted" style={{ fontWeight: 400, marginLeft: 6 }}>
+                  {'♥'.repeat(f.level)}
+                  {'♡'.repeat(3 - f.level)} {f.levelName}
+                </span>
+              </div>
+              <div class="t2">
+                {f.role}
+                {f.walks > 0 ? ` · 一起散过 ${f.walks} 次步` : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 function CatPanel() {
   const me = useStore(ui, (s) => s.me)!;
   const cat = me.cats.find((c) => c.id === me.activeCatId) ?? me.cats[0];
@@ -751,6 +786,7 @@ function CatPanel() {
           </div>
         </div>
       </div>
+      <TownFriends catId={cat.id} />
       <div class="sec">羁绊：{bl.name}（Lv.{bl.level}）</div>
       {stat('亲密', Math.min(100, (cat.stats.bond / Math.max(1, bl.next)) * 100), 'var(--pink)')}
       <div class="sec">现在的状态</div>
@@ -932,6 +968,8 @@ function HelpPanel() {
         <div>· 「逗猫」之后，移动鼠标或手指，羽毛会在房间里飞，往墙上举高它会跳起来抓。</div>
         <div>· 「出门」后可以在小镇里看它自己探险；点「接管」就能自己带着它走（键盘 WASD 或拖动屏幕）。</div>
         <div>· 右边的对话按钮可以跟它说话，比如“去河边看看”“回家睡觉”。</div>
+        <div>· 小镇的店都能进去坐坐。点一下店门口，就能带它进去；打烊以后要等第二天。</div>
+        <div>· 点小镇居民，可以和它们做点小事，或者请它们陪你的猫一起逛逛。常来常往，它们会记得你的猫。</div>
         <div>· 它会自己出门、捡回宝贝、交到朋友，晚上一定会回家。你不在的时候它也过得很好，不用担心。</div>
       </div>
     </Sheet>

@@ -1,5 +1,6 @@
 import type { ClientMsg, ServerMsg } from '../../../shared/protocol';
 import { API_BASE, wsUrl } from './platform';
+import { WORLD_VERSION } from '../../../shared/protocol';
 
 // Browsers are signed in with an HttpOnly cookie the page can't read. The native
 // app (no shared cookie jar with the server) holds a bearer token instead.
@@ -74,6 +75,7 @@ export class WorldSocket {
     this.ws = ws;
     ws.onopen = () => {
       if (bearer) ws.send(JSON.stringify({ t: 'auth', token: bearer }));
+      ws.send(JSON.stringify({ t: 'hello', v: WORLD_VERSION }));
       this.connected = true;
       this.retry = 0;
       this.onState?.(true);

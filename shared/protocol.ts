@@ -57,4 +57,8 @@ export type ClientMsg =
   | { t: 'explore'; catId: string }
   | { t: 'view'; x: number; y: number } // camera centre, for area-of-interest filtering
   | { t: 'ping' }
-  | { t: 'auth'; token: string }; // first message from clients without a session cookie (native app)
+  | { t: 'auth'; token: string } // first message from clients without a session cookie (native app)
+  | { t: 'hello'; v: number }; // which version of the world this client knows
+
+/** Bumped when the shared world changes shape (map, rooms) so older apps can be told to update. */
+export const WORLD_VERSION = 2;

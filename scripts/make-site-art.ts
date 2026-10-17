@@ -354,7 +354,7 @@ function icons() {
 async function shots() {
   const list: [string, number][] = [
     ['hero', 1600], ['client-web', 1400], ['client-iphone', 900], ['client-android', 900], ['client-mac', 1100], ['client-watch', 900],
-    ...['welcome', 'profile', 'photo', 'night', 'build', 'wardrobe', 'world', 'map', 'social', 'letters', 'journal', 'collection'].map((n) => [`phone-${n}`, 480] as [string, number]),
+    ...['welcome', 'profile', 'photo', 'night', 'build', 'wardrobe', 'world', 'map', 'social', 'shop', 'walk', 'spring', 'letters', 'journal', 'collection'].map((n) => [`phone-${n}`, 480] as [string, number]),
   ];
   for (const [name, maxW] of list) {
     const im = await loadImage(`docs/images/${name}.png`);
