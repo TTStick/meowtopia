@@ -5,7 +5,7 @@ import type { CatRecord } from '../../shared/types';
 import { WORLD_VERSION, type EntState, type ServerMsg, type ClientMsg } from '../../shared/protocol';
 import { getWorld, getRooms, roomAt, roomById, planRoute, POIS, POI_MAP, TILE, HOME_SPAWN, walkableAt, zoneAt, poiPoint, ZONE_NAME, type Poi, type Leg, type Room } from '../../shared/world';
 import { roomOpen } from '../../shared/rooms';
-import { showAt, showRole, STAGE, type ShowNow } from '../../shared/shows';
+import { showAt, showRole, STAGE, INSTRUMENTS, type ShowNow } from '../../shared/shows';
 import { NPCS, NPC_MAP, scheduleAt, walkBusy, type NpcDef } from '../../shared/npcs';
 import { clockAt, weatherAt } from '../../shared/time';
 import { ITEMS, type ItemDef } from '../../shared/items';
@@ -59,6 +59,7 @@ interface Ent {
   companion?: Companion;
   busyUntil?: number; // doing a resident's little thing together
   nextGreet?: number;
+  nextNote?: number;
 }
 
 interface Companion {
@@ -804,6 +805,7 @@ function tickCat(e: Ent, now: number) {
   for (const o of ents.values()) {
     if (o === e || o.mode === 'meet' || o.mode === 'walk' || o.controlledBy) continue;
     if (o.companion?.leader === e.st.id || e.companion?.leader === o.st.id) continue;
+    if (o.npc && showRole(o.npc.id, tonight)) continue; // busy with tonight's show
     if (Math.hypot(o.st.x - e.st.x, o.st.y - e.st.y) > 110) continue;
     const key = pairKey(e.st.id, o.st.id);
     if ((meetCooldown.get(key) ?? 0) > now) continue;
@@ -936,16 +938,35 @@ function tickShowNpc(n: NpcDef, e: Ent | undefined, role: NonNullable<ReturnType
     e.st.dir = dir;
     setAct(e, role.act, 60_000, now);
   }
-  if (!tonight!.live || !clients.size || now < e.nextSay) return;
+  if (!tonight!.live || !clients.size) return;
+  // whoever holds an instrument sends notes up now and then
+  if (role.stage && INSTRUMENTS.has(role.act) && now > (e.nextNote ?? 0)) {
+    e.nextNote = now + 5000 + Math.random() * 6000;
+    broadcastNear({ t: 'emote', id: e.st.id, kind: 'note' }, e.st.x, e.st.y);
+  }
+  if (now < e.nextSay) return;
   if (role.stage) {
     const host = n.id === show.host;
     e.nextSay = now + (host ? 26_000 : 70_000) + Math.random() * 18_000;
     const i = showLine.get(n.id) ?? 0;
     showLine.set(n.id, i + 1);
     // the host keeps to the programme, with something of its own every other time
-    const line = host && i % 2 === 0 ? show.lines[(i / 2) % show.lines.length] : npcLine(personaOf(n), `在露天舞台的《${show.name}》上（${show.blurb}），对台下的观众说一句`, show.lines);
+    const li = (i / 2) % show.lines.length;
+    // the programme is the host's; everyone else on stage speaks for themselves
+    const line = host && i % 2 === 0 ? show.lines[li] : npcLine(personaOf(n), `在露天舞台的《${show.name}》上（${show.blurb}）${host ? '主持' : '表演'}，对台下的观众说一句`, host ? show.lines : n.lines);
     say(e, line);
     if (show.notes) broadcastNear({ t: 'emote', id: e.st.id, kind: 'note' }, e.st.x, e.st.y);
+    // a solo the host just called for
+    const solo = host && i % 2 === 0 ? show.solos?.[li] : undefined;
+    const player = solo && ents.get(solo[0]);
+    if (player) {
+      player.nextSay = Math.max(player.nextSay, Date.now() + 9000);
+      setTimeout(() => {
+        if (!ents.has(player.st.id)) return;
+        say(player, solo![1]);
+        for (let k = 0; k < 3; k++) setTimeout(() => broadcastNear({ t: 'emote', id: player.st.id, kind: k === 1 ? 'star' : 'note' }, player.st.x, player.st.y), k * 900);
+      }, 2600);
+    }
   } else {
     e.nextSay = now + 45_000 + Math.random() * 60_000;
     if (Math.random() < 0.55) say(e, show.cheers[Math.floor(Math.random() * show.cheers.length)], true);
@@ -969,9 +990,16 @@ function tickShow(now: number) {
   if (!live || now - lastShowCheck < 5000) return;
   lastShowCheck = now;
   const [cx, cy] = [STAGE.x * TILE, (STAGE.front + 3.6) * TILE];
+  const finale = show.finale !== undefined && tonight.progress >= show.finale;
   for (const e of ents.values()) {
     const c = e.cat;
-    if (!c || c.ownerId === 'town' || Math.hypot(e.st.x - cx, (e.st.y - cy) * 1.3) > 6 * TILE) continue;
+    if (!c || Math.hypot(e.st.x - cx, (e.st.y - cy) * 1.3) > 6 * TILE) continue;
+    // when the dancers call everyone up, the cats in the audience join in
+    if (finale && e.mode === 'idle' && !e.controlledBy && !e.companion && Math.random() < 0.5) {
+      e.st.dir = Math.random() < 0.5 ? 1 : -1;
+      setAct(e, ['pounce', 'belly', 'stretch', 'sit_happy', 'pounce'][Math.floor(Math.random() * 5)], 4500, now);
+    }
+    if (c.ownerId === 'town') continue;
     const k = `show:${day}:${c.id}`;
     if (db.kvGet(k)) continue;
     db.kvSet(k, 1);

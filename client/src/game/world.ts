@@ -1125,7 +1125,7 @@ export class WorldScene implements Scene {
         ctx.save();
         ctx.translate(e.x, e.y);
         if (T > e.blinkAt + 0.14) e.blinkAt = T + 2 + Math.random() * 4;
-        drawNpc(pen, npc.genes, npc.outfit, { anim: e.anim, t: T + e.st.genes.seed, phase: e.phase, moving: e.moving, dir: e.dir, blink: T > e.blinkAt, talking: !!e.bubble && T - e.bubble.start < Math.min(3, e.bubble.until - e.bubble.start) });
+        drawNpc(pen, npc.genes, npc.outfit, { anim: e.anim, t: T + e.st.genes.seed, beat: T, phase: e.phase, moving: e.moving, dir: e.dir, blink: T > e.blinkAt, talking: !!e.bubble && T - e.bubble.start < Math.min(3, e.bubble.until - e.bubble.start) });
         ctx.restore();
       }
     }

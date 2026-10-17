@@ -43,7 +43,12 @@ export interface NpcPose {
   dir: 1 | -1;
   blink: boolean;
   talking: boolean;
+  beat?: number; // shared clock, so everyone dancing keeps the same step
 }
+
+const PLAYING = new Set(['music', 'drum', 'violin', 'trumpet', 'accordion', 'tambourine', 'flute']);
+const GOLD = '#e8b65e';
+const SILVER = '#d6dbe0';
 
 export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, kidScale = 1) {
   const ctx = pen.ctx;
@@ -53,12 +58,19 @@ export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, ki
   const t = p.t;
   const kid = outfit === 'kid';
   const s = kid ? 0.82 * kidScale : 1;
+  // dancing: four moves of four beats each, all on one shared beat
+  const dancing = p.anim === 'dance' && !p.moving;
+  const bt = (p.beat ?? t) * 1.8;
+  const move = dancing ? Math.floor(bt / 4) % 4 : -1;
+  const kb = bt % 1;
+  const spin = move === 2 ? (Math.floor(bt * 2) % 2 ? -1 : 1) : 1;
   ctx.save();
-  ctx.scale(p.dir * s, s);
+  if (dancing) ctx.translate(move === 0 ? Math.sin(bt * Math.PI) * 5 : move === 3 ? Math.sin(bt * Math.PI * 2) * 2 : 0, 0);
+  ctx.scale(p.dir * s * spin, s);
   const sitting = p.anim === 'sit' || p.anim === 'sleep' || p.anim === 'fish' || p.anim === 'knit' || p.anim === 'read' && !p.moving;
   const walk = p.moving;
   const bob = walk ? Math.abs(Math.sin(p.phase)) * 2.2 : Math.sin(t * 2) * 0.6;
-  const hop = p.anim === 'play' && !walk ? Math.max(0, Math.sin(t * 6)) * 8 : 0;
+  const hop = p.anim === 'play' && !walk ? Math.max(0, Math.sin(t * 6)) * 8 : dancing && move === 1 ? Math.abs(Math.sin(bt * Math.PI)) * 9 : p.anim === 'tambourine' ? Math.abs(Math.sin(t * 5)) * 3 : 0;
   const by = -bob - hop + (sitting ? 8 : 0);
 
   // shadow
@@ -172,6 +184,80 @@ export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, ki
     pen.line([6, by - 21, 22, by - 34], 3, '#a5754e');
     arm(-1, 18, by - 31);
     arm(1, 4 + Math.sin(t * 9) * 2, by - 18);
+  } else if (a === 'drum') {
+    // a snare drum on a stand, sticks taking turns
+    const hit = Math.sin((p.beat ?? t) * Math.PI * 2 * 1.8);
+    const dx = 13;
+    pen.line([dx - 7, 0, dx, by - 10, dx + 7, 0], 1.4, '#6f7480');
+    pen.shape([dx - 11, by - 20, dx + 11, by - 20, dx + 11, by - 10, dx - 11, by - 10], '#e0605e', 1.3);
+    pen.line([dx - 11, by - 15, dx + 11, by - 15], 1, rgba('#ffffff', 0.7));
+    pen.ellipse(dx, by - 20, 11, 3.4, '#fffaf0', 1.2);
+    const l = Math.max(0, hit) * 9, r = Math.max(0, -hit) * 9;
+    pen.line([dx - 8, by - 28 - l, dx - 2, by - 21 - l * 0.2], 1.8, '#a5754e');
+    pen.line([dx + 2, by - 28 - r, dx + 6, by - 21 - r * 0.2], 1.8, '#a5754e');
+    arm(-1, dx - 8, by - 28 - l);
+    arm(1, dx + 2, by - 28 - r);
+  } else if (a === 'violin') {
+    const bow = Math.sin(t * 4) * 7;
+    ctx.save();
+    ctx.translate(9, by - 33);
+    ctx.rotate(-0.35);
+    pen.shape([-7, -3, -3, -5, 0, -3, 3, -5, 7, -3, 7, 3, 3, 5, 0, 3, -3, 5, -7, 3], '#c27a4a', 1.2);
+    pen.line([7, 0, 22, 0], 2, '#5a4740');
+    ctx.restore();
+    pen.line([2 + bow, by - 22, 16 + bow, by - 40], 1.2, '#8a6440');
+    arm(-1, 25, by - 41);
+    arm(1, 4 + bow, by - 25);
+  } else if (a === 'trumpet') {
+    const fing = Math.sin(t * 8) > 0 ? 1 : 0;
+    pen.line([10, by - 41, 30, by - 39], 3.2, GOLD);
+    pen.shape([28, by - 44, 36, by - 47, 36, by - 31, 28, by - 34], GOLD, 1.2);
+    pen.line([16, by - 41, 16, by - 45 - fing], 1.2);
+    pen.line([20, by - 41, 20, by - 45 - (1 - fing)], 1.2);
+    arm(-1, 14, by - 38);
+    arm(1, 20, by - 40);
+  } else if (a === 'accordion') {
+    const open = 6 + Math.sin(t * 2.2) * 4;
+    const x0 = 4, x1 = x0 + 8 + open;
+    pen.poly([x0 - 6, by - 32, x0, by - 32, x0, by - 14, x0 - 6, by - 14], '#e0605e', 1.2);
+    pen.poly([x1, by - 32, x1 + 6, by - 32, x1 + 6, by - 14, x1, by - 14], '#e0605e', 1.2);
+    pen.poly([x0, by - 30, x1, by - 30, x1, by - 16, x0, by - 16], '#fffaf0', 1);
+    for (let i = 1; i < 4; i++) pen.line([x0 + ((x1 - x0) * i) / 4, by - 30, x0 + ((x1 - x0) * i) / 4, by - 16], 0.8, rgba(INK, 0.5));
+    for (let i = 0; i < 3; i++) pen.ellipse(x1 + 3, by - 28 + i * 5, 1, 1, '#fffaf0', 0, null);
+    arm(-1, x0 - 4, by - 24);
+    arm(1, x1 + 4, by - 24);
+  } else if (a === 'tambourine') {
+    const shake = Math.sin(t * 14) * 2;
+    arm(-1, -12, by - 20);
+    pen.ellipse(18 + shake, by - 48, 8, 8, '#f6e7c8', 1.4);
+    pen.ellipse(18 + shake, by - 48, 5.5, 5.5, null, 0.8, rgba(INK, 0.4));
+    for (let i = 0; i < 6; i++) {
+      const an = (i / 6) * Math.PI * 2 + t * 2;
+      pen.ellipse(18 + shake + Math.cos(an) * 8, by - 48 + Math.sin(an) * 8, 1.8, 1.8, GOLD, 0.6);
+    }
+    arm(1, 14 + shake, by - 44);
+  } else if (a === 'flute') {
+    pen.line([4, by - 43, 34, by - 38], 2.4, SILVER);
+    const f = Math.floor(t * 6) % 3;
+    for (let i = 0; i < 3; i++) pen.ellipse(18 + i * 4, by - 40.5 + i * 0.7, 0.9, 0.9, i === f ? INK : rgba(INK, 0.4), 0, null);
+    arm(-1, 14, by - 38);
+    arm(1, 26, by - 37);
+  } else if (dancing) {
+    // move 0: sway with paws up; 1: hop with arms wide; 2: spin; 3: paws on hips, a little shimmy
+    const w = Math.sin(kb * Math.PI * 2);
+    if (move === 0) {
+      arm(-1, -12 + w * 2, by - 46 - Math.max(0, w) * 4);
+      arm(1, 12 + w * 2, by - 46 - Math.max(0, -w) * 4);
+    } else if (move === 1) {
+      arm(-1, -18, by - 36);
+      arm(1, 18, by - 36);
+    } else if (move === 2) {
+      arm(-1, -6, by - 50);
+      arm(1, 6, by - 50);
+    } else {
+      arm(-1, -14, by - 22);
+      arm(1, 14, by - 22);
+    }
   } else if (a === 'read') {
     pen.shape([-8, by - 26, 0, by - 22, 8, by - 26, 8, by - 14, 0, by - 10, -8, by - 14], '#9ec3e6', 1.2);
     pen.line([0, by - 22, 0, by - 10], 1);
@@ -205,11 +291,11 @@ export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, ki
   pose.view = 'front';
   pose.turn = 0.25;
   pose.t = t;
-  pose.eyes = a === 'sleep' ? 'closed' : p.blink ? 'blink' : a === 'music' || a === 'play' ? 'happy' : a === 'read' ? 'half' : 'open';
-  pose.mouth = p.talking ? (Math.sin(t * 12) > 0 ? 'open' : 'w') : a === 'music' ? 'smile' : 'w';
+  pose.eyes = a === 'sleep' ? 'closed' : p.blink ? 'blink' : PLAYING.has(a) || a === 'play' || a === 'dance' ? 'happy' : a === 'read' ? 'half' : 'open';
+  pose.mouth = p.talking ? (Math.sin(t * 12) > 0 ? 'open' : 'w') : a === 'trumpet' || a === 'flute' ? 'o' : PLAYING.has(a) || a === 'dance' ? 'smile' : 'w';
   pose.lookY = a === 'read' || a === 'knit' ? 0.8 : a === 'gaze' ? -1 : 0;
   pose.blush = 0.4;
-  const headTilt = a === 'sleep' ? 0.25 + Math.sin(t) * 0.05 : a === 'music' ? Math.sin(t * 3) * 0.1 : a === 'gaze' ? -0.2 : 0;
+  const headTilt = a === 'sleep' ? 0.25 + Math.sin(t) * 0.05 : a === 'violin' ? 0.22 : PLAYING.has(a) ? Math.sin(t * 3) * 0.1 : dancing ? Math.sin(bt * Math.PI) * 0.15 : a === 'gaze' ? -0.2 : 0;
   ctx.save();
   ctx.translate(0, by - 46);
   ctx.rotate(headTilt);
