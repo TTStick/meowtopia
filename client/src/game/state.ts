@@ -36,6 +36,10 @@ export interface UIState {
   unread: number;
   hint: string | null;
   worldTarget: { id: string; name: string; kind: 'cat' | 'npc'; owner?: string; shop?: string } | null;
+  worldShop: string | null; // a shop building tapped in town (room id)
+  room: string | null; // the room the town camera is looking into
+  myRoom: string | null; // the room my cat is in
+  companion: { id: string; name: string } | null; // a resident walking along with my cat
   llm: boolean;
   busy: boolean;
   photo: string | null;
@@ -62,6 +66,10 @@ export const ui = new Store<UIState>({
   unread: 0,
   hint: null,
   worldTarget: null,
+  worldShop: null,
+  room: null,
+  myRoom: null,
+  companion: null,
   llm: false,
   busy: false,
   photo: null,

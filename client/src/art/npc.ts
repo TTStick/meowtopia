@@ -30,6 +30,9 @@ const LOOKS: Record<NpcOutfit, Look> = {
   granny: { shirt: '#c7a8d8', pants: null, glasses: true, extra: 'shawl', extraColor: '#f4e1c1' },
   scholar: { shirt: '#9db48c', pants: '#6f6a62', glasses: true },
   tailor: { shirt: '#3f4a5c', pants: '#2f3442', hat: 'beret', extra: 'tape', extraColor: '#ffd45e' },
+  farmer: { shirt: '#f6e7c8', pants: '#7f9f6a', apron: '#c9a36b', hat: 'straw_hat' },
+  onsen: { shirt: '#a8c8e8', pants: null, apron: '#f3f0e6', extra: 'scarf', extraColor: '#f0a6a6' },
+  traveler: { shirt: '#e8a87c', pants: '#6d7f95', hat: 'cap', extra: 'bag', extraColor: '#7f9f6a' },
 };
 
 export interface NpcPose {

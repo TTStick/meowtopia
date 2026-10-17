@@ -5,10 +5,12 @@ import { CatActor, type AnimName } from './actor';
 import { drawProp, BOUNDS, type PropCtx } from '../art/props';
 import { drawNpc } from '../art/npc';
 import { drawBubble, drawNameTag, drawEmote, measureBubble, type EmoteKind } from '../art/fx';
-import { getWorld, TILE, WW, WH, Ter, POIS, POI_MAP, BUILDINGS, walkable, zoneAt, ZONE_NAME, type Prop, type PropKind } from '../../../shared/world';
-import { findPath, smoothPath } from '../../../shared/path';
+import { getWorld, getRooms, roomAt, roomById, planRoute, TILE, WW, WH, Ter, POIS, POI_MAP, BUILDINGS, walkableAt, zoneAt, ZONE_NAME, type Prop, type PropKind, type Room } from '../../../shared/world';
+import { roomOpen } from '../../../shared/rooms';
+import { CELL, WALL_H, drawWallpaper, drawFloor, drawFurniture, drawWallItem, wallpaperBase, HAS_FRONT, type DrawCtx, type SkyInfo } from '../art/furniture';
+import { drawShopPiece, drawShopWall, drawPlaque, isShopPiece } from '../art/interior';
 import { hashf, noise2 } from '../../../shared/rng';
-import { daylight, sunset } from '../../../shared/time';
+import { daylight, sunset, skyColor } from '../../../shared/time';
 import * as clock from './clock';
 import type { EntState, ServerMsg } from '../../../shared/protocol';
 import { NPC_MAP } from '../../../shared/npcs';
@@ -23,6 +25,7 @@ interface GameLike {
 }
 
 const CHUNK = 16; // tiles per chunk
+const INK_TEXT = '#4a3a34';
 const CPX = CHUNK * TILE;
 const CAT_SPEED = 46;
 
@@ -46,6 +49,10 @@ interface WEnt {
   blinkAt: number;
   mine: boolean;
 }
+
+// tall things fade when my cat walks behind them; leafy things sway in the wind
+const FADE = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'house', 'shop', 'windmill', 'lighthouse', 'fruittree', 'bamboo', 'palm', 'gazebo', 'tent']);
+const SWAY = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'reed', 'crop', 'flower', 'bush', 'fruittree', 'bamboo', 'palm']);
 
 const ANIM_MAP: Record<string, AnimName> = {
   sit: 'sit', sit_happy: 'sit_happy', watch: 'watch', window: 'window', groom: 'groom', sniff: 'sniff' as AnimName, think: 'think', beg: 'beg',
@@ -93,6 +100,9 @@ export class WorldScene implements Scene {
   private welcomed = false;
   private sentView: [number, number] = [-1e9, -1e9];
   private sentViewAt = -100;
+  private townZoom = 1.15; // remembered while looking into a room
+  private fade = 0; // a soft blink when the camera goes through a door
+  private lastDoor = 0;
 
   constructor(g: GameLike) {
     this.g = g;
@@ -105,8 +115,7 @@ export class WorldScene implements Scene {
     this.follow = focus ?? (c && this.ents.has(c.id) ? c.id : null);
     if (this.follow && this.ents.has(this.follow)) {
       const e = this.ents.get(this.follow)!;
-      this.camX = e.x;
-      this.camY = e.y;
+      this.moveCamera(e.x, e.y);
     } else if (!this.follow) {
       this.camX = 60 * TILE;
       this.camY = 47 * TILE;
@@ -229,6 +238,23 @@ export class WorldScene implements Scene {
         if (e.mine) audio.meow(1.1);
         break;
       }
+      case 'door': {
+        const e = this.ents.get(m.id);
+        if (!e) break;
+        e.x = e.tx = m.x;
+        e.y = e.ty = m.y;
+        e.path = [];
+        e.moving = false;
+        e.smooth = false;
+        if (e.actor) {
+          e.actor.x = m.x;
+          e.actor.y = m.y;
+          e.actor.stop();
+        }
+        if (this.follow === m.id) this.moveCamera(m.x, m.y);
+        if (e.mine) audio.blip(m.room ? 520 : 440, 0.05);
+        break;
+      }
       case 'emote': {
         const e = this.ents.get(m.id);
         if (!e) break;
@@ -308,14 +334,25 @@ export class WorldScene implements Scene {
     this.g.ws.send({ t: 'interact', catId: id, target });
   }
 
+  /** Do something with a resident: their little thing, a walk together, or goodbye. */
+  npcAct(target: string, act: 'special' | 'walk' | 'bye') {
+    const id = this.myCatId;
+    if (!id || !this.ents.has(id)) {
+      toast('先带猫猫出门吧', '🐾');
+      return;
+    }
+    if (act !== 'bye' && this.controlling) this.setControl(false);
+    this.g.ws.send({ t: 'npcAct', catId: id, npc: target, act });
+    if (act !== 'bye') this.follow = id;
+  }
+
   goToPoi(poiId: string) {
     const id = this.myCatId;
     const poi = POI_MAP[poiId];
     if (!poi) return;
     if (!id || !this.ents.has(id)) {
       this.follow = null;
-      this.camX = poi.x * TILE;
-      this.camY = poi.y * TILE;
+      this.moveCamera(poi.x * TILE, poi.y * TILE);
       return;
     }
     if (this.controlling) this.setControl(false);
@@ -442,18 +479,25 @@ export class WorldScene implements Scene {
         if (e.bubble && T > e.bubble.until) e.bubble = null;
       }
     }
-    // camera
+    // camera: follow along the street; through a door it jumps to the other side
     const v = this.v;
     if (this.follow) {
       const f = this.ents.get(this.follow);
       if (f) {
-        const k = 1 - Math.exp(-dt * 4);
-        this.camX += (f.x - this.camX) * k;
-        this.camY += (f.y - 20 - this.camY) * k;
+        if (roomAt(f.x, f.y) !== roomAt(this.camX, this.camY)) this.moveCamera(f.x, f.y);
+        else {
+          const k = 1 - Math.exp(-dt * 4);
+          this.camX += (f.x - this.camX) * k;
+          this.camY += (f.y - 20 - this.camY) * k;
+        }
       }
     }
-    this.zoom += (this.targetZoom - this.zoom) * (1 - Math.exp(-dt * 8));
-    if (v) this.clampCam(v);
+    const room = roomAt(this.camX, this.camY);
+    if (room && v) this.fitRoom(v, room);
+    else this.zoom += (this.targetZoom - this.zoom) * (1 - Math.exp(-dt * 8));
+    if (v && !room) this.clampCam(v);
+    if (this.fade > 0) this.fade = Math.max(0, this.fade - dt * 2.6);
+    if ((room?.id ?? null) !== ui.state.room) ui.set({ room: room?.id ?? null, worldShop: null });
     // tell the server where we're looking (for area-of-interest filtering)
     if (Math.hypot(this.camX - this.sentView[0], this.camY - this.sentView[1]) > 240 || T - this.sentViewAt > 5) {
       this.sentView = [this.camX, this.camY];
@@ -463,9 +507,11 @@ export class WorldScene implements Scene {
     this.updateCritters(dt);
     // where is my cat
     const me = myId ? this.ents.get(myId) : undefined;
+    const myRoom = me ? roomAt(me.x, me.y)?.id ?? null : null;
+    if (myRoom !== ui.state.myRoom) ui.set({ myRoom });
     if (me) {
       const poi = POIS.find((p) => Math.hypot(p.x * TILE - me.x, p.y * TILE - me.y) < p.r * TILE);
-      const label = poi?.name ?? ZONE_NAME[zoneAt(this.w, me.x, me.y)];
+      const label = roomAt(me.x, me.y)?.name ?? poi?.name ?? ZONE_NAME[zoneAt(this.w, me.x, me.y)];
       if (label !== this.lastPoi) {
         this.lastPoi = label;
         ui.set({ hint: label });
@@ -496,8 +542,15 @@ export class WorldScene implements Scene {
       vy /= len;
       const sp = CAT_SPEED * (run ? 2.3 : 1);
       const nx = a.x + vx * sp * dt, ny = a.y + vy * sp * dt * 0.85;
-      if (walkable(this.w, nx, a.y)) a.x = nx;
-      if (walkable(this.w, a.x, ny)) a.y = ny;
+      if (walkableAt(this.w, nx, a.y)) a.x = nx;
+      if (walkableAt(this.w, a.x, ny)) a.y = ny;
+      // walking into a doorway takes the cat through it
+      const inside = roomAt(a.x, a.y);
+      const atDoor = inside ? vy > 0.4 && Math.hypot(a.x - inside.door[0], a.y - inside.door[1]) < 34 : vy < -0.4 && getRooms().some((r) => Math.hypot(a.x - r.outside[0], a.y - r.outside[1]) < 30);
+      if (atDoor && performance.now() - this.lastDoor > 1200) {
+        this.lastDoor = performance.now();
+        this.g.ws.send({ t: 'door', catId: e.st.id });
+      }
       if (Math.abs(vx) > 0.2) a.dir = vx > 0 ? 1 : -1;
       a.phase += (sp * dt) / (run ? 30 : 15) * Math.PI / a.scale;
       a.play(run ? 'run' : 'walk');
@@ -619,12 +672,14 @@ export class WorldScene implements Scene {
     const forest = ['#b9d99a', '#b2d394', '#cdd59a', '#d6e0d2'][season];
     const hill = ['#d5ebb4', '#d2e8ae', '#e2e2ac', '#eef1ea'][season];
     const field = ['#dde8b0', '#e6e3a8', '#eadbb0', '#ecebe4'][season];
+    const bamboo = ['#b4d79c', '#a9d293', '#c6d59c', '#d8e2d2'][season];
+    const orchard = ['#d6ebb0', '#cbe6a6', '#dfe2a6', '#e8ede2'][season];
     // base
     for (let ty = ty0; ty < ty1; ty++)
       for (let tx = tx0; tx < tx1; tx++) {
         const t = this.terAt(tx, ty);
         const n = noise2(tx * 0.18, ty * 0.18, 5) - 0.5;
-        const base = t === Ter.Forest ? forest : t === Ter.Hill ? hill : t === Ter.Field ? field : grass;
+        const base = t === Ter.Forest ? forest : t === Ter.Hill ? hill : t === Ter.Field ? field : t === Ter.Bamboo ? bamboo : t === Ter.Orchard ? orchard : grass;
         ctx.fillStyle = mix(base, n > 0 ? '#ffffff' : '#7a9a5a', Math.abs(n) * 0.18);
         ctx.fillRect(tx * TILE - 0.5, ty * TILE - 0.5, TILE + 1, TILE + 1);
       }
@@ -657,7 +712,7 @@ export class WorldScene implements Scene {
     for (let ty = ty0; ty < ty1; ty++)
       for (let tx = tx0; tx < tx1; tx++) {
         const t = this.terAt(tx, ty);
-        if (t !== Ter.Grass && t !== Ter.Forest && t !== Ter.Hill) continue;
+        if (t !== Ter.Grass && t !== Ter.Forest && t !== Ter.Hill && t !== Ter.Bamboo && t !== Ter.Orchard) continue;
         for (let k = 0; k < 2; k++) {
           if (hashf(tx, ty, 50 + k) > 0.45) continue;
           const x = (tx + hashf(tx, ty, 60 + k)) * TILE, y = (ty + hashf(tx, ty, 70 + k)) * TILE;
@@ -695,8 +750,17 @@ export class WorldScene implements Scene {
           ctx.fillRect((tx + hashf(tx, ty, 95)) * TILE, (ty + hashf(tx, ty, 96)) * TILE, 1.6, 1.6);
         }
       }
-    layer([Ter.Water, Ter.Deep, Ter.Wood], '#a9d6ec', true, 0.74);
+    layer([Ter.Water, Ter.Deep, Ter.Wood, Ter.Stone], '#a9d6ec', true, 0.74);
     layer([Ter.Deep], '#93c6e3', false, 0.7);
+    // stepping stones
+    for (let ty = ty0; ty < ty1; ty++)
+      for (let tx = tx0; tx < tx1; tx++) {
+        if (this.terAt(tx, ty) !== Ter.Stone) continue;
+        const sx = (tx + 0.5 + (hashf(tx, ty, 110) - 0.5) * 0.25) * TILE, sy = (ty + 0.5) * TILE;
+        pen.ellipse(sx, sy + 2, 12, 7, 'rgba(74,58,52,0.18)', 0, null);
+        pen.ellipse(sx, sy, 12, 8, ['#d6d0c6', '#c9c6c0'][(tx + ty) % 2], 1.4);
+        pen.line([sx - 6, sy - 2, sx - 1, sy - 4], 1, 'rgba(255,255,255,0.7)');
+      }
     // shore highlights
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 1.4;
@@ -786,6 +850,18 @@ export class WorldScene implements Scene {
     v.zoom = this.zoom;
     v.camX = this.camX;
     v.camY = this.camY;
+    const room = roomAt(this.camX, this.camY);
+    if (room) this.drawRoom(v, room, T);
+    else this.drawTown(v, T);
+    this.drawOverlays(v, T);
+    if (this.fade > 0) {
+      v.screen();
+      v.ctx.fillStyle = rgba('#f6eedf', Math.min(1, this.fade));
+      v.ctx.fillRect(0, 0, v.w, v.h);
+    }
+  }
+
+  private drawTown(v: Viewport, T: number) {
     const ctx = v.ctx;
     const ck = clock.worldClock();
     const day = daylight(ck.hour);
@@ -880,20 +956,20 @@ export class WorldScene implements Scene {
       const b = BOUNDS[p.k] ?? [-40, -80, 40, 10];
       const pw = p.k === 'house' || p.k === 'shop' ? p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136) : p.s;
       if (p.x + b[2] * pw < bx0 || p.x + b[0] * pw > bx1 || p.y + b[1] * pw > by1 || p.y + b[3] * pw < by0) continue;
-      const flat = p.k === 'lily' || p.k === 'picnic' || p.k === 'sandbox';
+      const flat = p.k === 'lily' || p.k === 'picnic' || p.k === 'sandbox' || p.k === 'hotspring';
       items.push({
         y: flat ? p.y - 200 : p.y,
         f: () => {
           const sp = this.getSprite(p, scale, pc);
           ctx.save();
-          if (focus && focus.y < p.y - 4 && (p.k === 'tree' || p.k === 'sakura' || p.k === 'pine' || p.k === 'bigtree' || p.k === 'house' || p.k === 'shop' || p.k === 'windmill' || p.k === 'lighthouse')) {
+          if (focus && focus.y < p.y - 4 && FADE.has(p.k)) {
             const fx = focus.x, fy = focus.y - 16;
             if (fx > p.x + b[0] * pw && fx < p.x + b[2] * pw && fy > p.y + b[1] * pw) ctx.globalAlpha = 0.42;
           }
           ctx.translate(p.x, p.y);
           if (p.k === 'boat') ctx.translate(0, Math.sin(T * 1.4 + p.id) * 2);
           if (p.k === 'lily') ctx.translate(Math.sin(T * 0.5 + p.id) * 1.5, 0);
-          const sway = p.k === 'tree' || p.k === 'sakura' || p.k === 'pine' || p.k === 'bigtree' || p.k === 'reed' || p.k === 'crop' || p.k === 'flower' || p.k === 'bush';
+          const sway = SWAY.has(p.k);
           if (sway) {
             const sk = Math.sin(T * 1.3 + p.x * 0.013) * 0.025 * wind * (p.k === 'bush' ? 0.4 : 1);
             ctx.transform(1, 0, sk, 1, 0, 0);
@@ -909,34 +985,7 @@ export class WorldScene implements Scene {
     const lw = 1.7;
     for (const e of this.ents.values()) {
       if (e.x < bx0 - 60 || e.x > bx1 + 60 || e.y < by0 - 20 || e.y > by1 + 120) continue;
-      items.push({
-        y: e.y,
-        f: () => {
-          const pen = v.pen;
-          pen.begin(boil * 19 + (e.st.genes.seed % 97), 0.5, lw);
-          if (e.mine) {
-            ctx.strokeStyle = 'rgba(255,214,102,0.9)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([4, 4]);
-            ctx.lineDashOffset = -T * 10;
-            ctx.beginPath();
-            ctx.ellipse(e.x, e.y + 2, 26, 8, 0, 0, 7);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          if (e.actor) e.actor.draw(pen);
-          else {
-            const npc = NPC_MAP[e.st.id];
-            if (npc) {
-              ctx.save();
-              ctx.translate(e.x, e.y);
-              if (T > e.blinkAt + 0.14) e.blinkAt = T + 2 + Math.random() * 4;
-              drawNpc(pen, npc.genes, npc.outfit, { anim: e.anim, t: T + e.st.genes.seed, phase: e.phase, moving: e.moving, dir: e.dir, blink: T > e.blinkAt, talking: !!e.bubble && T - e.bubble.start < Math.min(3, e.bubble.until - e.bubble.start) });
-              ctx.restore();
-            }
-          }
-        },
-      });
+      items.push({ y: e.y, f: () => this.drawEnt(e, v, T, boil, lw) });
     }
     // butterflies are drawn in the sorted list too
     for (const c of this.critters) {
@@ -953,6 +1002,15 @@ export class WorldScene implements Scene {
     // fireflies glow above the darkness
     v.world();
     for (const c of this.critters) if (c.k === 'firefly') this.drawCritter(ctx, c, T);
+  }
+
+  /** Bubbles, name tags and emotes on top of whatever is being drawn. */
+  private drawOverlays(v: Viewport, T: number) {
+    const ctx = v.ctx;
+    const [bx0, by0, bx1, by1] = v.bounds(10);
+    const boil = Math.floor(T * 7) % 3;
+    const lw = 1.7;
+    v.world();
     // emotes
     for (const e of this.ents.values()) {
       if (e.x < bx0 - 60 || e.x > bx1 + 60 || e.y < by0 - 20 || e.y > by1 + 120) continue;
@@ -1018,6 +1076,224 @@ export class WorldScene implements Scene {
       ctx.textAlign = 'center';
       ctx.fillText('正在连接小镇…', v.w / 2, v.midY);
     }
+    }
+
+  private drawEnt(e: WEnt, v: Viewport, T: number, boil: number, lw: number) {
+    const ctx = v.ctx;
+    const pen = v.pen;
+    pen.begin(boil * 19 + (e.st.genes.seed % 97), 0.5, lw);
+    if (e.mine) {
+      ctx.strokeStyle = 'rgba(255,214,102,0.9)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -T * 10;
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y + 2, 26, 8, 0, 0, 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (e.actor) e.actor.draw(pen);
+    else {
+      const npc = NPC_MAP[e.st.id];
+      if (npc) {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        if (T > e.blinkAt + 0.14) e.blinkAt = T + 2 + Math.random() * 4;
+        drawNpc(pen, npc.genes, npc.outfit, { anim: e.anim, t: T + e.st.genes.seed, phase: e.phase, moving: e.moving, dir: e.dir, blink: T > e.blinkAt, talking: !!e.bubble && T - e.bubble.start < Math.min(3, e.bubble.until - e.bubble.start) });
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---------------- rooms ----------------
+  /** Point the camera somewhere; through a door, the view blinks to the other side. */
+  private moveCamera(x: number, y: number) {
+    const before = roomAt(this.camX, this.camY), after = roomAt(x, y);
+    if (before !== after) {
+      this.fade = 0.9;
+      if (!before) this.townZoom = this.targetZoom;
+      else if (!after) this.zoom = this.targetZoom = this.townZoom;
+    }
+    this.camX = x;
+    this.camY = y - 20;
+  }
+
+  /** A room fills the screen like the nest does. */
+  private fitRoom(v: Viewport, r: Room) {
+    const wallH = (WALL_H * TILE) / CELL;
+    const w = r.w * TILE + 36, h = r.h * TILE + wallH + 70;
+    const availH = v.h - v.insetTop - v.insetBottom;
+    this.zoom = Math.max(0.5, Math.min(1.8, Math.min(v.w / w, availH / h)));
+    this.camX = r.ox + (r.w * TILE) / 2;
+    this.camY = r.oy + (r.h * TILE - wallH) / 2 + 6;
+  }
+
+  /** The shop whose front was tapped in town. */
+  private shopAt(x: number, y: number): Room | null {
+    const tx = x / TILE, ty = y / TILE;
+    for (const r of getRooms()) {
+      const b = r.building;
+      if (tx >= b.x && tx <= b.x + b.w && ty >= b.y - 3 && ty <= b.y + b.h + 0.4) return r;
+    }
+    return null;
+  }
+
+  /** Who is inside each shop right now (cats only, townsfolk aside). */
+  shopVisitors(id: string): { cats: number; keeper: boolean } {
+    const r = roomById(id);
+    let cats = 0, keeper = false;
+    for (const e of this.ents.values()) {
+      if (roomAt(e.x, e.y) !== r) continue;
+      if (e.st.kind === 'cat') cats++;
+      else if (r?.keeper === e.st.id) keeper = true;
+    }
+    return { cats, keeper };
+  }
+
+  /** Look inside without going in. */
+  peek(id: string) {
+    const r = roomById(id);
+    if (!r) return;
+    this.follow = null;
+    ui.set({ worldShop: null, worldTarget: null });
+    this.moveCamera(r.ox + (r.w * TILE) / 2, r.oy + (r.h * TILE) / 2);
+  }
+
+  /** Take my cat into a shop. */
+  goInto(id: string) {
+    const r = roomById(id);
+    const me = this.myCatId;
+    ui.set({ worldShop: null });
+    if (!r) return;
+    if (!me || !this.ents.has(me)) return this.peek(id);
+    if (this.controlling) this.setControl(false);
+    this.g.ws.send({ t: 'goto', catId: me, x: r.door[0], y: r.door[1], room: r.id });
+    this.follow = me;
+  }
+
+  /** Back out to the street: my cat walks out, or the camera just leaves. */
+  leaveRoom() {
+    const r = roomAt(this.camX, this.camY);
+    if (!r) return;
+    const me = this.myCatId ? this.ents.get(this.myCatId) : undefined;
+    if (me && roomAt(me.x, me.y) === r) {
+      if (this.controlling) this.setControl(false);
+      this.g.ws.send({ t: 'goto', catId: me.st.id, x: r.outside[0], y: r.outside[1] + TILE * 0.8 });
+      this.follow = me.st.id;
+      return;
+    }
+    this.follow = me && !roomAt(me.x, me.y) ? me.st.id : null;
+    this.moveCamera(r.outside[0], r.outside[1]);
+  }
+
+  private drawRoomItem(it: Room['items'][number], d: DrawCtx, layer: 'back' | 'front') {
+    const x = it.x * CELL, y = it.y * CELL;
+    if (isShopPiece(it.k)) {
+      if (layer === 'back') drawShopPiece(it.k, d, x, y, it.w, it.h, it.v ?? 0);
+    } else drawFurniture(it.k, { ...d, flip: !!it.flip }, x, y, it.w, it.h, layer);
+  }
+
+  private drawRoom(v: Viewport, r: Room, T: number) {
+    const ctx = v.ctx;
+    const pen = v.pen;
+    const ck = clock.worldClock();
+    const night = 1 - daylight(ck.hour);
+    const wthr = clock.weather();
+    const sky: SkyInfo = { sky: skyColor(ck.hour, wthr), sun: daylight(ck.hour), rain: wthr.rain, snow: wthr.snow, hour: ck.hour };
+    const open = roomOpen(r, ck.hour);
+    const boil = Math.floor(T * 7) % 3;
+    const k = TILE / CELL, W = r.w * CELL, H = r.h * CELL;
+    const plw = 2 / (k * Math.max(0.6, v.zoom));
+    // backdrop, like the nest's
+    v.screen();
+    const bg = ctx.createLinearGradient(0, 0, 0, v.h);
+    bg.addColorStop(0, mix('#f3e7d3', '#2e3150', night * 0.85));
+    bg.addColorStop(1, mix('#e9dcc4', '#3c3a55', night * 0.85));
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, v.w, v.h);
+    v.world();
+    const d: DrawCtx = { pen, t: T, night: open ? night * 0.6 : night, flip: false };
+    const inRoom = (f: () => void) => {
+      ctx.save();
+      ctx.translate(r.ox, r.oy);
+      ctx.scale(k, k);
+      pen.begin(boil * 31 + 5, 0.45, plw);
+      f();
+      ctx.restore();
+    };
+    inRoom(() => {
+      ctx.fillStyle = 'rgba(74,58,52,0.12)';
+      ctx.beginPath();
+      ctx.ellipse(W / 2, H + 26, W * 0.56, 18, 0, 0, 7);
+      ctx.fill();
+      drawWallpaper(r.wallpaper, pen, 0, -WALL_H, W, WALL_H);
+      const ws = ctx.createLinearGradient(0, -WALL_H, 0, 0);
+      ws.addColorStop(0, 'rgba(74,58,52,0.14)');
+      ws.addColorStop(0.25, 'rgba(74,58,52,0)');
+      ws.addColorStop(1, 'rgba(74,58,52,0.06)');
+      ctx.fillStyle = ws;
+      ctx.fillRect(0, -WALL_H, W, WALL_H);
+      ctx.fillStyle = mix(wallpaperBase(r.wallpaper), '#b98d61', 0.55);
+      ctx.fillRect(0, -9, W, 9);
+      pen.line([0, -9, W, -9], plw * 0.8);
+      drawFloor(r.floor, pen, 0, 0, W, H);
+      const fs = ctx.createLinearGradient(0, 0, 0, H);
+      fs.addColorStop(0, 'rgba(74,58,52,0.12)');
+      fs.addColorStop(0.18, 'rgba(74,58,52,0)');
+      ctx.fillStyle = fs;
+      ctx.fillRect(0, 0, W, H);
+      pen.line([0, -WALL_H, W, -WALL_H], plw);
+      pen.line([0, -WALL_H, 0, H], plw);
+      pen.line([W, -WALL_H, W, H], plw);
+      for (const wi of r.wall) if (!drawShopWall(wi.k, d, wi.x * CELL, wi.w, wi.v ?? 0)) drawWallItem(wi.k, d, wi.x * CELL, wi.w, sky);
+      drawPlaque(pen, W / 2, r.name);
+      for (const it of r.items) if (it.walk) this.drawRoomItem(it, d, 'back');
+      // the front edge, open where the door is
+      const dx0 = (r.w / 2 - 1) * CELL, dx1 = (r.w / 2 + 1) * CELL;
+      pen.line([0, H, dx0, H], plw * 1.3);
+      pen.line([dx1, H, W, H], plw * 1.3);
+    });
+    const items: { y: number; f: () => void }[] = [];
+    for (const it of r.items) {
+      if (it.walk) continue;
+      const bottom = r.oy + (it.y + it.h) * TILE;
+      items.push({ y: bottom - 0.5, f: () => inRoom(() => this.drawRoomItem(it, d, 'back')) });
+      if (HAS_FRONT.has(it.k)) items.push({ y: bottom + 0.6, f: () => inRoom(() => this.drawRoomItem(it, d, 'front')) });
+    }
+    const [bx0, by0, bx1, by1] = v.bounds(40);
+    for (const e of this.ents.values()) {
+      if (e.x < bx0 || e.x > bx1 || e.y < by0 || e.y > by1 + 100) continue;
+      items.push({ y: e.y, f: () => this.drawEnt(e, v, T, boil, 1.7) });
+    }
+    items.sort((a, b) => a.y - b.y);
+    for (const it of items) it.f();
+    // evenings: a little dimmer, with the lamps on; after hours it's dark inside
+    const dim = open ? night * 0.22 : 0.18 + night * 0.4;
+    if (dim > 0.02) {
+      const wallH = (WALL_H * TILE) / CELL;
+      ctx.fillStyle = `rgba(18,26,78,${dim})`;
+      ctx.fillRect(r.ox, r.oy - wallH, r.w * TILE, r.h * TILE + wallH);
+      if (open) {
+        ctx.globalCompositeOperation = 'lighter';
+        const cx = r.ox + (r.w * TILE) / 2, cy = r.oy + r.h * TILE * 0.35;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r.w * TILE * 0.55);
+        g.addColorStop(0, `rgba(255,190,110,${0.22 * night})`);
+        g.addColorStop(1, 'rgba(255,190,110,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(r.ox, r.oy - wallH, r.w * TILE, r.h * TILE + wallH);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    if (!open) {
+      const cx = r.ox + (r.w * TILE) / 2, cy = r.oy + r.h * TILE - 40;
+      pen.begin(7, 0.4, 1.6);
+      pen.poly([cx - 56, cy - 16, cx + 56, cy - 16, cx + 56, cy + 14, cx - 56, cy + 14], '#fff8e8', 1.6);
+      ctx.fillStyle = INK_TEXT;
+      ctx.font = 'bold 14px "PingFang SC","Microsoft YaHei",system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('打烊啦，明天见', cx, cy - 1);
+    }
   }
 
   private drawPropLive(p: Prop, s: number, T: number, night: number) {
@@ -1052,6 +1328,39 @@ export class WorldScene implements Scene {
           ctx.beginPath();
           ctx.ellipse(p.x, p.y - 9, 12 + k * 34, 4 + k * 10, 0, 0, 7);
           ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'hotspring': {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        for (let i = 0; i < 9; i++) {
+          const k = (T * 0.18 + i / 9) % 1;
+          const sx = p.x - 80 + ((i * 37) % 160) + Math.sin(k * 5 + i) * 10, sy = p.y - 70 - k * 90;
+          ctx.globalAlpha = Math.sin(k * Math.PI) * 0.75;
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, 10 + k * 18, 6 + k * 10, 0, 0, 7);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        break;
+      }
+      case 'campfire': {
+        const hour = clock.worldClock().hour;
+        if (hour > 7 && hour < 17.5) break; // lit from dusk to morning
+        for (let i = 0; i < 3; i++) {
+          const fl = Math.sin(T * 9 + i * 2) * 3, h = 22 + Math.sin(T * 6 + i) * 5;
+          const x = p.x + (i - 1) * 7;
+          pen.begin(9 + i, 0.3, 1.4);
+          pen.shape([x - 7, p.y - 8, x + fl, p.y - 8 - h, x + 7, p.y - 8], ['#f39a45', '#ffd45e', '#f08a5d'][i]);
+        }
+        ctx.fillStyle = 'rgba(255,240,170,0.7)';
+        for (let i = 0; i < 4; i++) {
+          const k = (T * 0.6 + i / 4) % 1;
+          ctx.globalAlpha = 1 - k;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.sin(k * 7 + i) * 8, p.y - 30 - k * 50, 1.6, 0, 7);
+          ctx.fill();
         }
         ctx.globalAlpha = 1;
         break;
@@ -1197,6 +1506,9 @@ export class WorldScene implements Scene {
         if (p.k === 'lamp') lights.push([p.x, p.y - 66, 120, 1]);
         else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
         else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
+        else if (p.k === 'campfire') lights.push([p.x, p.y - 16, 170, 1]);
+        else if (p.k === 'stonelamp') lights.push([p.x, p.y - 26, 70, 0.8]);
+        else if (p.k === 'gazebo') lights.push([p.x, p.y - 52, 80, 0.8]);
         else if (p.k === 'house' || p.k === 'shop') {
           const s = p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136);
           const off = p.k === 'shop' ? 70 : 42;
@@ -1265,19 +1577,30 @@ export class WorldScene implements Scene {
           return;
         }
         ui.set({ worldTarget: null });
+        const room = roomAt(this.camX, this.camY);
+        // in town, a shop's front opens its card; in a shop, the doormat leads back out
+        if (!room) {
+          const shop = this.shopAt(x, y);
+          if (shop) {
+            ui.set({ worldShop: shop.id });
+            return;
+          }
+        } else if (Math.abs(x - room.door[0]) < TILE * 1.3 && y > room.door[1] - TILE * 0.7) {
+          this.leaveRoom();
+          return;
+        }
+        if (ui.state.worldShop) ui.set({ worldShop: null });
         const id = this.myCatId;
         if (id && this.ents.has(id)) {
-          if (!walkable(this.w, x, y)) return;
+          if (!walkableAt(this.w, x, y)) return;
           const e = this.ents.get(id)!;
-          if (this.controlling && e.actor) {
-            const path = findPath(this.w.grid, Math.floor(e.x / TILE), Math.floor(e.y / TILE), Math.floor(x / TILE), Math.floor(y / TILE), 20000);
-            if (path) {
-              const pts = smoothPath(this.w.grid, path).slice(1).map(([tx, ty]) => [(tx + 0.5) * TILE, (ty + 0.5) * TILE] as [number, number]);
-              pts.push([x, y]);
-              e.actor.speed = CAT_SPEED / e.actor.scale;
-              e.actor.setPath(pts, Math.hypot(x - e.x, y - e.y) > 400);
-            }
+          const legs = this.controlling && e.actor ? planRoute(this.w, e.x, e.y, x, y) : null;
+          if (legs && legs.length === 1 && e.actor) {
+            const pts = legs[0].pts;
+            e.actor.speed = CAT_SPEED / e.actor.scale;
+            e.actor.setPath(pts, Math.hypot(x - e.x, y - e.y) > 400);
           } else {
+            if (this.controlling) this.setControl(false);
             this.g.ws.send({ t: 'goto', catId: id, x, y, run: Math.hypot(x - e.x, y - e.y) > 500 });
           }
           this.follow = id;
@@ -1333,7 +1656,12 @@ export class WorldScene implements Scene {
   }
 
   catPositions(): { id: string; x: number; y: number; mine: boolean; npc: boolean }[] {
-    return [...this.ents.values()].map((e) => ({ id: e.st.id, x: e.x / TILE, y: e.y / TILE, mine: e.mine, npc: e.st.kind === 'npc' }));
+    return [...this.ents.values()].map((e) => {
+      // the map shows anyone inside a shop at its door
+      const r = roomAt(e.x, e.y);
+      const [x, y] = r ? r.outside : [e.x, e.y];
+      return { id: e.st.id, x: x / TILE, y: y / TILE - (r ? 0.6 : 0), mine: e.mine, npc: e.st.kind === 'npc' };
+    });
   }
 
   visitTarget(id: string) {

@@ -3,9 +3,9 @@
 import type { WebSocket } from 'ws';
 import type { CatRecord } from '../../shared/types';
 import type { EntState, ServerMsg, ClientMsg } from '../../shared/protocol';
-import { getWorld, POIS, POI_MAP, TILE, HOME_SPAWN, walkable, zoneAt, poiPoint, ZONE_NAME, type Poi } from '../../shared/world';
-import { findPath, smoothPath } from '../../shared/path';
-import { NPCS, scheduleAt, type NpcDef } from '../../shared/npcs';
+import { getWorld, getRooms, roomAt, roomById, planRoute, POIS, POI_MAP, TILE, HOME_SPAWN, walkableAt, zoneAt, poiPoint, ZONE_NAME, type Poi, type Leg, type Room } from '../../shared/world';
+import { roomOpen } from '../../shared/rooms';
+import { NPCS, NPC_MAP, scheduleAt, walkBusy, type NpcDef } from '../../shared/npcs';
 import { clockAt, weatherAt } from '../../shared/time';
 import { ITEMS, type ItemDef } from '../../shared/items';
 import { ageOf, applyDelta } from '../../shared/stats';
@@ -13,7 +13,8 @@ import { CAT_NAMES } from '../../shared/genes';
 import { Rng, hashf } from '../../shared/rng';
 import * as game from './game';
 import * as db from './db';
-import { catLine, catDialogue, npcLine, journalEntry, type NpcPersona } from './llm';
+import { catLine, catDialogue, npcLine, npcStory, journalEntry, type NpcPersona } from './llm';
+import { befriend, bondOf, usedToday, markToday, usedEver, markEver, errandOf, setErrand } from './townsfolk';
 import { progressWish } from './wish';
 
 const world = getWorld();
@@ -38,8 +39,10 @@ interface Ent {
   npc?: NpcDef;
   controlledBy?: string;
   trip?: Trip;
-  // movement
+  // movement: the stretch being walked now, then any after a door
   path: [number, number][];
+  legs: Leg[];
+  run?: boolean;
   t0: number;
   sx: number;
   sy: number;
@@ -51,6 +54,21 @@ interface Ent {
   nextSay: number;
   onArrive?: () => void;
   meetWith?: string;
+  // walking along with someone's cat
+  companion?: Companion;
+  busyUntil?: number; // doing a resident's little thing together
+  nextGreet?: number;
+}
+
+interface Companion {
+  leader: string; // the cat being accompanied
+  owner: string;
+  since: number;
+  places: string[];
+  lastSay: number;
+  lastPlan: number;
+  lx: number; // where the leader was when the walk was last planned
+  ly: number;
 }
 
 interface Client {
@@ -128,37 +146,54 @@ function pathDone(e: Ent, now: number): boolean {
   return (e.speed * (now - e.t0)) / 1000 >= total;
 }
 
-function planPath(fx: number, fy: number, tx: number, ty: number): [number, number][] | null {
-  const p = findPath(world.grid, Math.floor(fx / TILE), Math.floor(fy / TILE), Math.floor(tx / TILE), Math.floor(ty / TILE));
-  if (!p) return null;
-  const s = smoothPath(world.grid, p);
-  const pts: [number, number][] = s.slice(1).map(([x, y]) => [(x + 0.5) * TILE, (y + 0.5) * TILE]);
-  if (pts.length) pts[pts.length - 1] = walkable(world, tx, ty) ? [tx, ty] : pts[pts.length - 1];
-  else pts.push([tx, ty]);
-  return pts;
+function startLeg(e: Ent, x: number, y: number, path: [number, number][], now: number) {
+  e.path = path;
+  e.sx = x;
+  e.sy = y;
+  e.st.x = x;
+  e.st.y = y;
+  e.t0 = now;
+  if (path.length) e.st.dir = path[0][0] >= x ? 1 : -1;
+  broadcast({ t: 'move', id: e.st.id, path, speed: e.speed, run: e.run, t0: now, x, y });
 }
 
 function walkTo(e: Ent, tx: number, ty: number, now: number, run = false, onArrive?: () => void): boolean {
   const [x, y] = posOf(e, now);
   e.st.x = x;
   e.st.y = y;
-  const path = planPath(x, y, tx, ty);
-  if (!path) return false;
-  e.path = path;
-  e.sx = x;
-  e.sy = y;
-  e.t0 = now;
+  const legs = planRoute(world, x, y, tx, ty);
+  if (!legs) return false;
   e.speed = (e.npc ? NPC_SPEED : CAT_SPEED) * (run ? 2.4 : 1);
+  e.run = run;
   e.mode = 'walk';
   e.onArrive = onArrive;
   e.st.anim = run ? 'run' : 'walk';
-  if (path.length) e.st.dir = path[0][0] >= x ? 1 : -1;
-  broadcast({ t: 'move', id: e.st.id, path, speed: e.speed, run, t0: now, x, y });
+  e.legs = legs.slice(1);
+  startLeg(e, x, y, legs[0].pts, now);
   return true;
+}
+
+/** Step through a doorway: everyone sees the cat (or townsfolk) appear on the other side. */
+function warp(e: Ent, x: number, y: number) {
+  e.st.x = e.sx = x;
+  e.st.y = e.sy = y;
+  e.path = [];
+  broadcast({ t: 'door', id: e.st.id, x, y, room: roomAt(x, y)?.id ?? null });
+}
+
+/** Advance a walk; true once the whole route (every leg) is done. */
+function walkDone(e: Ent, now: number): boolean {
+  if (!pathDone(e, now)) return false;
+  const next = e.legs.shift();
+  if (!next) return true;
+  warp(e, next.from[0], next.from[1]);
+  startLeg(e, next.from[0], next.from[1], next.pts, now);
+  return false;
 }
 
 function setAct(e: Ent, anim: string, dur: number, now: number) {
   e.path = [];
+  e.legs = [];
   e.mode = 'idle';
   e.until = now + dur;
   e.st.anim = anim;
@@ -192,7 +227,7 @@ function catState(c: CatRecord, x: number, y: number): EntState {
 function spawnCat(c: CatRecord, x: number, y: number, now: number, trip?: Trip): Ent {
   const existing = ents.get(c.id);
   if (existing) return existing;
-  const e: Ent = { st: catState(c, x, y), cat: c, path: [], t0: now, sx: x, sy: y, speed: CAT_SPEED, mode: 'idle', until: now + 1500, nextSay: now + 8000 + Math.random() * 20000, trip };
+  const e: Ent = { st: catState(c, x, y), cat: c, path: [], legs: [], t0: now, sx: x, sy: y, speed: CAT_SPEED, mode: 'idle', until: now + 1500, nextSay: now + 8000 + Math.random() * 20000, trip };
   ents.set(c.id, e);
   c.location = 'world';
   c.wx = x;
@@ -255,13 +290,16 @@ function choosePoi(e: Ent, now: number): Poi {
   const ck = clockAt(now);
   const night = ck.hour < 6 || ck.hour > 20;
   const rng = new Rng(now ^ hashf(c.genes.seed) * 1e9);
-  const weights: [Poi, number][] = POIS.filter((poi) => poi.id !== 'home_lane').map((poi) => {
+  const here = anchorOf(e.st.x, e.st.y);
+  const weights: [Poi, number][] = POIS.filter((poi) => poi.id !== 'home_lane' && placeOpen(poi, ck.hour)).map((poi) => {
     let w = 1;
     if (!c.discovered.includes(poi.id)) w += p.curious * 2.5;
     if (e.trip?.places.includes(poi.name)) w *= 0.15;
     if (poi.id === e.poi) w = 0;
-    const d = Math.hypot(poi.x * TILE - e.st.x, poi.y * TILE - e.st.y) / TILE;
+    const [ax, ay] = poiAnchor(poi);
+    const d = Math.hypot(ax - here[0], ay - here[1]) / TILE;
     w *= Math.max(0.15, 1.6 - d / 45);
+    if (poi.room) w *= 0.55 + p.social * 0.4 + (poi.id === 'bakery_in' || poi.id === 'cafe_in' ? p.foodie * 0.5 : 0);
     if (poi.acts.includes('play') || poi.acts.includes('roll')) w *= 0.6 + p.playful;
     if (poi.acts.includes('nap') || poi.acts.includes('loaf')) w *= 0.6 + p.lazy;
     if (poi.id === 'bakery' || poi.id === 'pier' || poi.id === 'cafe') w *= 0.7 + p.foodie;
@@ -271,6 +309,19 @@ function choosePoi(e: Ent, now: number): Poi {
     return [poi, w];
   });
   return rng.weighted(weights);
+}
+
+/** Where a place is on the town map: a shop's rooms count as being at its front door. */
+function poiAnchor(poi: Poi): [number, number] {
+  const r = poi.room ? roomById(poi.room) : null;
+  return r ? r.outside : [poi.x * TILE, poi.y * TILE];
+}
+function anchorOf(x: number, y: number): [number, number] {
+  return roomAt(x, y)?.outside ?? [x, y];
+}
+function placeOpen(poi: Poi, hour: number) {
+  const r = poi.room ? roomById(poi.room) : null;
+  return !r || roomOpen(r, hour);
 }
 
 const ACT_ANIM: Record<string, string[]> = {
@@ -434,8 +485,255 @@ async function meet(a: Ent, b: Ent, now: number, forced = false) {
 }
 
 function placeName(x: number, y: number): string {
+  const room = roomAt(x, y);
+  if (room) return room.name;
   const poi = POIS.find((p) => Math.hypot(p.x * TILE - x, p.y * TILE - y) < (p.r + 1.5) * TILE);
   return poi?.name ?? ZONE_NAME[zoneAt(world, x, y)];
+}
+
+// ---------- residents: walking together, their little things, familiarity ----------
+const WALK_MAX = 20 * 60_000;
+const persona = (o: Ent): NpcPersona => (o.npc ? personaOf(o.npc) : { npc: true, name: o.st.name, role: '小镇的猫', desc: '在小镇里自由自在生活的猫', voice: '软软的' });
+
+function startCompanion(o: Ent, leader: Ent, owner: string, now: number) {
+  for (const x of ents.values()) if (x !== o && x.companion?.leader === leader.st.id) endCompanion(x, now, 'swap');
+  o.companion = { leader: leader.st.id, owner, since: now, places: [], lastSay: now, lastPlan: 0, lx: 0, ly: 0 };
+  o.legs = [];
+  o.path = [];
+  o.mode = 'idle';
+  o.until = 0;
+  o.onArrive = undefined;
+  if (leader.cat) toOwners(leader.cat, { t: 'companion', catId: leader.st.id, id: o.st.id, name: o.st.name });
+}
+
+function endCompanion(o: Ent, now: number, why: 'home' | 'long' | 'busy' | 'bye' | 'swap') {
+  const c = o.companion;
+  if (!c) return;
+  o.companion = undefined;
+  o.mode = 'idle';
+  o.until = now + 2500;
+  const leader = ents.get(c.leader);
+  const cat = leader?.cat ?? game.getCat(c.leader);
+  if (why !== 'swap') {
+    const fallback = o.npc?.bye ?? ['今天就逛到这儿啦', '下次再一起走走', '谢谢你陪我'];
+    const situation = why === 'busy' ? `陪${cat?.name ?? '小猫'}逛了一会儿，现在要回去忙了，跟它道别` : `陪${cat?.name ?? '小猫'}在小镇逛了一圈，现在要分开了，跟它道别`;
+    say(o, o.npc ? npcLine(personaOf(o.npc), situation, fallback) : fallback[Math.floor(Math.random() * fallback.length)]);
+    broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
+  }
+  if (!cat || cat.ownerId === 'town') return;
+  toOwners(cat, { t: 'companion', catId: cat.id, id: null });
+  const mins = (now - c.since) / 60_000;
+  if (mins < 1) return;
+  const places = c.places.slice(0, 4);
+  const r = befriend(cat.id, o.st.id, mins >= 5 ? 3 : 1, true);
+  cat.stats = applyDelta(cat.stats, { social: 10, mood: 6 });
+  game.markDirty(cat);
+  db.addJournal(cat.id, 'friend', `和${o.st.name}一起逛了${places.length ? places.join('、') : '一小圈'}。`, { npc: o.st.id });
+  if (why !== 'swap') game.remember(cat, `和${o.st.name}一起散了步`);
+  if (r.up) bondUp(cat, o, r.level, r.name);
+}
+
+/** A walk companion keeps up with the cat it's walking with; true while it's busy doing so. */
+function tickCompanion(o: Ent, now: number): boolean {
+  const c = o.companion!;
+  const leader = ents.get(c.leader);
+  const hour = clockAt(now).hour;
+  const why = !leader ? 'home' : now - c.since > WALK_MAX ? 'long' : o.npc && walkBusy(o.npc, hour) ? 'busy' : o.cat && (hour >= 22 || hour < 6) ? 'busy' : null;
+  if (why) {
+    endCompanion(o, now, why);
+    return false;
+  }
+  if ((o.mode === 'meet' || o.mode === 'talk') && now < o.until) return true;
+  if (o.busyUntil && now < o.busyUntil) return true;
+  const [lx, ly] = posOf(leader!, now);
+  const [x, y] = posOf(o, now);
+  const side = leader!.st.dir === 1 ? -1 : 1;
+  const tx = lx + side * 44, ty = ly + 6;
+  if (o.mode === 'walk') {
+    const done = walkDone(o, now);
+    if (!done && now - c.lastPlan > 1200 && Math.hypot(lx - c.lx, ly - c.ly) > 90) {
+      c.lastPlan = now;
+      c.lx = lx;
+      c.ly = ly;
+      if (!walkTo(o, tx, ty, now, Math.hypot(lx - x, ly - y) > 260)) warp(o, lx - side * 30, ly);
+    }
+    if (!done) return true;
+    o.mode = 'idle';
+    o.path = [];
+    o.st.x = x;
+    o.st.y = y;
+  }
+  const dist = Math.hypot(lx - x, ly - y);
+  if (dist > 70 || roomAt(lx, ly) !== roomAt(x, y)) {
+    c.lastPlan = now;
+    c.lx = lx;
+    c.ly = ly;
+    if (!walkTo(o, tx, ty, now, dist > 300)) warp(o, tx, ty);
+    return true;
+  }
+  // standing by: face the cat, and now and then say something about where they are
+  const place = placeName(x, y);
+  if (!c.places.includes(place) && c.places.length < 8) c.places.push(place);
+  if (o.st.anim === 'walk' || o.st.anim === 'run' || now > o.until) {
+    o.st.dir = lx > x ? 1 : -1;
+    setAct(o, o.npc ? 'stand' : leader!.st.anim === 'sit' ? 'sit' : 'stand', 6000, now);
+  }
+  if (clients.size && now - c.lastSay > 40_000 + (hashf(now) * 30_000)) {
+    c.lastSay = now;
+    const name = leader!.st.name;
+    if (o.npc) say(o, npcLine(personaOf(o.npc), `陪着${name}一起散步，走到了${place}`, o.npc.lines));
+    else if (o.cat) say(o, catLine(o.cat, 'place', { place }));
+  }
+  return true;
+}
+
+/** Old friends get a hello when they pass by. */
+const greeted = new Map<string, number>();
+function greetFriends(o: Ent, n: NpcDef, now: number) {
+  o.nextGreet = now + 5000;
+  for (const e of ents.values()) {
+    if (!e.cat || e.cat.ownerId === 'town' || e.companion || Math.hypot(e.st.x - o.st.x, e.st.y - o.st.y) > 130) continue;
+    const key = `${n.id}|${e.st.id}`;
+    if ((greeted.get(key) ?? 0) > now) continue;
+    greeted.set(key, now + 30 * 60_000);
+    const b = bondOf(e.st.id, n.id);
+    if (b.level < 2) continue;
+    o.st.dir = e.st.x > o.st.x ? 1 : -1;
+    say(o, npcLine(personaOf(n), `看到${b.name === '好朋友' ? '好朋友' : '熟悉的'}小猫${e.st.name}路过，叫着它的名字打招呼`, [`${e.st.name}，你好呀！`, `是${e.st.name}呀`]));
+    broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
+    return;
+  }
+}
+
+function bondUp(cat: CatRecord, o: Ent, level: number, name: string) {
+  db.addJournal(cat.id, 'friend', `和${o.st.name}变得${name}了。`, { npc: o.st.id });
+  toOwners(cat, { t: 'event', kind: 'friend', text: `${cat.name}和${o.st.name}变得${name}了`, catId: cat.id });
+  if (level >= 3 && o.npc) {
+    for (const uid of game.ownersOf(cat)) game.notify(uid, 'town', `${o.npc.name}的信`, `${cat.name}：谢谢你常常来看我。一起走过的路、说过的话，我都记着呢。以后路过${o.npc.role.replace(/的.*$/, '')}，记得进来坐坐。——${o.npc.name}`);
+  }
+}
+
+function inviteWalk(e: Ent, o: Ent, c: Client, now: number) {
+  const cat = e.cat!;
+  if (o.companion?.leader === e.st.id) return;
+  if (o.companion) {
+    say(o, '我在陪别的小猫逛呢，下次吧');
+    return;
+  }
+  const hour = clockAt(now).hour;
+  const busy = o.npc ? walkBusy(o.npc, hour) : hour >= 22 || hour < 6 || o.st.anim === 'sleep' ? '有点困了' : null;
+  if (busy) {
+    say(o, o.npc ? npcLine(personaOf(o.npc), `${cat.name}邀请你一起去逛逛，可你${busy}，温柔地婉拒，约它下次`, [`${busy}，下次一起吧`]) : '呼……下次吧……');
+    send(c, { t: 'event', kind: 'busy', text: `${o.st.name}${busy}`, catId: cat.id });
+    return;
+  }
+  startCompanion(o, e, c.uid!, now);
+  say(o, o.npc ? npcLine(personaOf(o.npc), `${cat.name}邀请你一起去小镇逛逛，你很高兴地答应了`, ['好呀，一起走走！', '走吧，我陪你']) : catLine(o.cat!, 'friend', { other: cat.name }));
+  broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
+  befriend(cat.id, o.st.id, 1);
+}
+
+function giveTo(uid: string, item: string) {
+  const def = ITEMS.find((i) => i.id === item);
+  if (!def) return;
+  if (def.cat === 'wear' && db.invCount(uid, item) > 0) return;
+  db.invAdd(uid, item, 1);
+  if (def.cat === 'collect') game.markFound(uid, item);
+}
+
+async function doSpecial(e: Ent, o: Ent, c: Client, now: number) {
+  const n = o.npc;
+  const cat = e.cat!;
+  const sp = n?.special;
+  if (!n || !sp || !c.uid) return;
+  const key = `npcsp:${n.id}:${cat.id}`;
+  if (usedToday(key)) {
+    say(o, npcLine(personaOf(n), `${cat.name}今天已经和你「${sp.label}」过了，你笑着让它明天再来`, ['今天已经来过啦，明天再来吧']));
+    return;
+  }
+  markToday(key);
+  e.st.dir = o.st.x > e.st.x ? 1 : -1;
+  o.st.dir = e.st.x > o.st.x ? 1 : -1;
+  setAct(e, sp.anim, sp.secs * 1000, now);
+  if (sp.npcAnim) setAct(o, sp.npcAnim, sp.secs * 1000 + 1500, now);
+  o.busyUntil = now + sp.secs * 1000;
+  game.refresh(cat, now);
+  cat.stats = applyDelta(cat.stats, sp.effect);
+  game.markDirty(cat);
+  const b = befriend(cat.id, n.id, 2);
+  let diary = `${sp.done}。`;
+  if (sp.story) {
+    const lines = await npcStory(personaOf(n), cat.name, sp.story, n.id === 'npc_travel' ? 'travel' : 'default');
+    let delay = 400;
+    for (const l of lines) {
+      setTimeout(() => ents.has(o.st.id) && say(o, l), delay);
+      delay += 2800 + l.length * 110;
+    }
+    o.busyUntil = Math.max(o.busyUntil, Date.now() + delay);
+    e.until = Math.max(e.until, Date.now() + delay);
+    o.until = Math.max(o.until, Date.now() + delay);
+    diary = `${n.name}讲了一个故事：「${lines.join('')}」`;
+  } else say(o, npcLine(personaOf(n), `${sp.done}，你对${cat.name}说的话`, n.lines));
+  if (sp.errand) {
+    const to = NPCS.filter((x) => x.id !== n.id && x.id !== 'npc_night' && ents.has(x.id));
+    const target = to[Math.floor(Math.random() * to.length)];
+    if (target) {
+      setErrand(cat.id, { from: n.id, to: target.id, day: clockAt(now).day });
+      diary = `${n.name}托我把一封信送给${target.name}。`;
+      send(c, { t: 'event', kind: 'npc', text: `${n.name}请${cat.name}把一封信送给${target.name}（${target.role}），找到它打个招呼就好`, catId: cat.id });
+    }
+  } else send(c, { t: 'event', kind: 'npc', text: sp.done, catId: cat.id });
+  const gift = sp.gift;
+  if (gift && b.level >= (gift.minLevel ?? 0) && Math.random() < gift.chance && !(gift.once && usedEver(`npcgift:${n.id}:${cat.id}`))) {
+    if (gift.once) markEver(`npcgift:${n.id}:${cat.id}`);
+    setTimeout(() => {
+      giveTo(c.uid!, gift.item);
+      send(c, { t: 'event', kind: 'gift', text: gift.text, item: gift.item });
+      broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
+    }, Math.min(sp.secs * 1000, 9000));
+  }
+  db.addJournal(cat.id, 'friend', diary, { npc: n.id });
+  if (b.up) bondUp(cat, o, b.level, b.name);
+}
+
+/** Delivering a letter someone gave the cat to carry. */
+function deliverErrand(e: Ent, o: Ent, c: Client): boolean {
+  const cat = e.cat!;
+  const job = errandOf(cat.id);
+  if (!job || job.to !== o.st.id || !c.uid) return false;
+  setErrand(cat.id, null);
+  const from = NPC_MAP[job.from];
+  game.addFish(c.uid, 15);
+  befriend(cat.id, o.st.id, 2);
+  const r = befriend(cat.id, job.from, 2);
+  say(o, npcLine(personaOf(o.npc!), `${cat.name}替${from?.name ?? '邮递员'}把一封信送到了你手里，你很惊喜地道谢`, ['哎呀，是给我的信！谢谢你', '辛苦啦，小信使']));
+  db.addJournal(cat.id, 'friend', `把${from?.name ?? '阿信'}的信送给了${o.st.name}，它很高兴。`, { npc: o.st.id });
+  send(c, { t: 'event', kind: 'npc', text: `信送到啦！${o.st.name}很高兴（+15 小鱼干）`, catId: cat.id });
+  if (r.up && from) {
+    const fe = ents.get(from.id);
+    if (fe) bondUp(cat, fe, r.level, r.name);
+  }
+  return true;
+}
+
+/** What the target card shows about a resident. */
+export function npcInfo(catId: string, id: string) {
+  const o = ents.get(id);
+  const n = NPC_MAP[id];
+  const b = bondOf(catId, id);
+  const hour = clockAt(Date.now()).hour;
+  const job = errandOf(catId);
+  return {
+    level: b.level,
+    name: b.name,
+    points: b.points,
+    next: b.next,
+    walks: b.walks,
+    walking: o?.companion?.leader === catId,
+    busy: o?.companion && o.companion.leader !== catId ? '在陪别的小猫逛' : n ? walkBusy(n, hour) : hour >= 22 || hour < 6 ? '有点困了' : null,
+    special: n?.special ? { label: n.special.label, done: usedToday(`npcsp:${n.id}:${catId}`) } : null,
+    errand: job ? { to: NPC_MAP[job.to]?.name ?? '', from: NPC_MAP[job.from]?.name ?? '', here: job.to === id } : null,
+  };
 }
 
 function personaOf(n: NpcDef): NpcPersona {
@@ -446,8 +744,9 @@ function personaOf(n: NpcDef): NpcPersona {
 function tickCat(e: Ent, now: number) {
   const c = e.cat!;
   if (e.controlledBy) return;
+  if (e.companion && tickCompanion(e, now)) return;
   if (e.mode === 'walk') {
-    if (pathDone(e, now)) {
+    if (walkDone(e, now)) {
       const [x, y] = posOf(e, now);
       e.st.x = x;
       e.st.y = y;
@@ -493,6 +792,7 @@ function tickCat(e: Ent, now: number) {
   // look for a nearby cat to meet
   for (const o of ents.values()) {
     if (o === e || o.mode === 'meet' || o.mode === 'walk' || o.controlledBy) continue;
+    if (o.companion?.leader === e.st.id || e.companion?.leader === o.st.id) continue;
     if (Math.hypot(o.st.x - e.st.x, o.st.y - e.st.y) > 110) continue;
     const key = pairKey(e.st.id, o.st.id);
     if ((meetCooldown.get(key) ?? 0) > now) continue;
@@ -523,16 +823,18 @@ function tickNpc(n: NpcDef, now: number) {
     }
     return;
   }
+  if (e?.companion && tickCompanion(e, now)) return;
   const poi = POI_MAP[s.poi];
+  const post = keeperPost(n, s.act, poi);
   if (!e) {
-    const [x, y] = poiPoint(world, poi, hashf(n.genes.seed) * 1000);
-    e = { st: npcState(n, x, y), npc: n, path: [], t0: now, sx: x, sy: y, speed: NPC_SPEED, mode: 'idle', until: 0, nextSay: now + 5000 + Math.random() * 30000 };
+    const [x, y] = post ?? poiPoint(world, poi, hashf(n.genes.seed) * 1000);
+    e = { st: npcState(n, x, y), npc: n, path: [], legs: [], t0: now, sx: x, sy: y, speed: NPC_SPEED, mode: 'idle', until: 0, nextSay: now + 5000 + Math.random() * 30000 };
     ents.set(n.id, e);
     npcEnts.set(n.id, e);
     broadcast({ t: 'spawn', e: e.st });
   }
   if (e.mode === 'walk') {
-    if (pathDone(e, now)) {
+    if (walkDone(e, now)) {
       const [x, y] = posOf(e, now);
       e.st.x = x;
       e.st.y = y;
@@ -545,6 +847,7 @@ function tickNpc(n: NpcDef, now: number) {
     return;
   }
   if (now < e.until) {
+    if (clients.size && now > (e.nextGreet ?? 0)) greetFriends(e, n, now);
     // chatter
     if (now > e.nextSay && clients.size) {
       e.nextSay = now + 25_000 + Math.random() * 50_000;
@@ -562,11 +865,14 @@ function tickNpc(n: NpcDef, now: number) {
     walkTo(e, tx, ty, now, false, () => setAct(e!, 'stand', 6000 + Math.random() * 8000, Date.now()));
     return;
   }
-  const dist = Math.hypot(poi.x * TILE - e.st.x, poi.y * TILE - e.st.y);
-  if (dist > poi.r * TILE * 1.5) {
-    const [tx, ty] = poiPoint(world, poi, hashf(n.genes.seed, ck.day) * 1000);
+  const [px, py] = post ?? [poi.x * TILE, poi.y * TILE];
+  if (Math.hypot(px - e.st.x, py - e.st.y) > (post ? 24 : poi.r * TILE * 1.5)) {
+    const [tx, ty] = post ?? poiPoint(world, poi, hashf(n.genes.seed, ck.day) * 1000);
     e.poi = poi.id;
-    walkTo(e, tx, ty, now, false, () => setAct(e!, s.act, 30_000, Date.now()));
+    walkTo(e, tx, ty, now, false, () => {
+      if (post) e!.st.dir = 1;
+      setAct(e!, s.act, 30_000, Date.now());
+    });
     return;
   }
   // small idle wander around the spot for lively feel
@@ -576,6 +882,13 @@ function tickNpc(n: NpcDef, now: number) {
     return;
   }
   setAct(e, s.act, 20_000 + Math.random() * 30_000, now);
+}
+
+/** Shopkeepers work behind their own counter. */
+function keeperPost(n: NpcDef, act: string, poi: Poi): [number, number] | null {
+  const r = poi.room ? roomById(poi.room) : null;
+  if (!r?.counter || r.keeper !== n.id || (act !== 'work' && act !== 'read')) return null;
+  return [r.ox + r.counter[0] * TILE, r.oy + r.counter[1] * TILE];
 }
 
 async function npcChat(a: Ent, b: Ent, now: number) {
@@ -672,8 +985,8 @@ function restoreCats() {
   for (const { id } of rows) {
     const c = game.getCat(id);
     if (!c || c.location !== 'world') continue;
-    const x = walkable(world, c.wx, c.wy) ? c.wx : HOME_SPAWN[0];
-    const y = walkable(world, c.wx, c.wy) ? c.wy : HOME_SPAWN[1];
+    const x = walkableAt(world, c.wx, c.wy) ? c.wx : HOME_SPAWN[0];
+    const y = walkableAt(world, c.wx, c.wy) ? c.wy : HOME_SPAWN[1];
     const e = spawnCat(c, x, y, now, newTrip(now, false, new Rng(now)));
     e.trip!.ends = now + 5 * 60_000;
   }
@@ -903,7 +1216,8 @@ function handle(c: Client, m: ClientMsg) {
       c.lastPos = now;
       const d = Math.hypot(m.x - e.st.x, m.y - e.st.y);
       if (d > (dt / 1000) * CAT_SPEED * 3.5 + 40) return; // too fast, ignore
-      if (!walkable(world, m.x, m.y)) return;
+      if (!walkableAt(world, m.x, m.y)) return;
+      if (roomAt(m.x, m.y) !== roomAt(e.st.x, e.st.y)) return; // doors are taken with a 'door' message
       e.st.x = m.x;
       e.st.y = m.y;
       e.st.dir = m.dir === -1 ? -1 : 1;
@@ -926,11 +1240,39 @@ function handle(c: Client, m: ClientMsg) {
       const cat = ownCat(c, m.catId);
       const e = cat && ents.get(cat.id);
       if (!e) return;
-      const poi = POIS.find((p) => Math.hypot(p.x * TILE - m.x, p.y * TILE - m.y) < p.r * TILE);
+      let [tx, ty] = [m.x, m.y];
+      const room = typeof m.room === 'string' ? roomById(m.room) : roomAt(tx, ty);
+      if (room && !roomOpen(room, clockAt(now).hour) && roomAt(e.st.x, e.st.y) !== room) {
+        send(c, { t: 'event', kind: 'closed', text: `${room.name}已经打烊啦，明天再来吧`, catId: cat!.id });
+        return;
+      }
+      if (typeof m.room === 'string' && room) [tx, ty] = poiPoint(world, POI_MAP[room.poi.id], now);
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+      const poi = POIS.find((p) => Math.hypot(p.x * TILE - tx, p.y * TILE - ty) < p.r * TILE);
       e.controlledBy = undefined;
       e.st.controlled = false;
-      walkTo(e, m.x, m.y, now, !!m.run, () => (poi ? arriveAtPoi(e, poi, Date.now()) : setAct(e, 'sit', 20_000, Date.now())));
+      walkTo(e, tx, ty, now, !!m.run, () => (poi ? arriveAtPoi(e, poi, Date.now()) : setAct(e, 'sit', 20_000, Date.now())));
       if (e.trip) e.trip.ends = Math.max(e.trip.ends, now + 10 * 60_000);
+      return;
+    }
+    case 'door': {
+      // a cat being steered by hand walked into a doorway
+      const cat = ownCat(c, m.catId);
+      const e = cat && ents.get(cat.id);
+      if (!e || e.controlledBy !== c.uid) return;
+      const inside = roomAt(e.st.x, e.st.y);
+      if (inside) {
+        if (Math.hypot(e.st.x - inside.door[0], e.st.y - inside.door[1]) > 56) return;
+        warp(e, inside.outside[0], inside.outside[1]);
+      } else {
+        const r = getRooms().find((rr) => Math.hypot(e.st.x - rr.outside[0], e.st.y - rr.outside[1]) < 56);
+        if (!r) return;
+        if (!roomOpen(r, clockAt(now).hour)) {
+          send(c, { t: 'event', kind: 'closed', text: `${r.name}已经打烊啦，明天再来吧`, catId: cat!.id });
+          return;
+        }
+        warp(e, r.door[0], r.door[1] - 6);
+      }
       return;
     }
     case 'act':
@@ -950,6 +1292,28 @@ function handle(c: Client, m: ClientMsg) {
         setAct(e, anim, 15_000, now);
         if (anim === 'meow') say(e, catLine(cat!, 'idle'));
       }
+      return;
+    }
+    case 'npcAct': {
+      const cat = ownCat(c, m.catId);
+      const e = cat && ents.get(cat.id);
+      const o = ents.get(m.npc);
+      if (!e || !o || e === o || (o.cat && o.cat.ownerId !== 'town')) return;
+      if (m.act === 'bye') {
+        if (o.companion?.leader === e.st.id) endCompanion(o, now, 'bye');
+        return;
+      }
+      if (m.act === 'special' && !o.npc?.special) return;
+      e.controlledBy = undefined;
+      e.st.controlled = false;
+      const ox = o.st.x + (e.st.x < o.st.x ? -42 : 42), oy = o.st.y + 4;
+      walkTo(e, ox, oy, now, false, () => {
+        const t = Date.now();
+        e.st.dir = o.st.x > e.st.x ? 1 : -1;
+        if (m.act === 'walk') inviteWalk(e, o, c, t);
+        else void doSpecial(e, o, c, t);
+      });
+      if (e.trip) e.trip.ends = Math.max(e.trip.ends, now + 10 * 60_000);
       return;
     }
     case 'interact': {
@@ -980,9 +1344,13 @@ function talkNpc(e: Ent, o: Ent, c: Client, now: number) {
   o.st.dir = e.st.x > o.st.x ? 1 : -1;
   broadcast({ t: 'act', id: o.st.id, anim: o.st.anim, x: o.st.x, y: o.st.y, dir: o.st.dir });
   say(e, catLine(e.cat!, 'meet', { other: n.name }));
+  const b = befriend(e.st.id, n.id, 1);
+  if (b.up) bondUp(e.cat!, o, b.level, b.name);
   setTimeout(() => {
-    say(o, npcLine(personaOf(n), `${e.cat!.name}（一只${e.cat!.personality.voice.split('，')[0]}的猫）跑过来跟你打招呼`, n.lines));
-    if (n.gift && c.uid && Math.random() < n.gift.chance) {
+    if (deliverErrand(e, o, c)) return;
+    const known = b.level >= 1 ? `，你们已经${b.name}了，叫它的名字` : '';
+    say(o, npcLine(personaOf(n), `${e.cat!.name}（一只${e.cat!.personality.voice.split('，')[0]}的猫）跑过来跟你打招呼${known}`, n.lines));
+    if (n.gift && c.uid && Math.random() < n.gift.chance * (1 + b.level * 0.25)) {
       const key = `gift:${n.id}:${c.uid}:${clockAt(now).day}`;
       if (!db.kvGet(key)) {
         db.kvSet(key, 1);
@@ -1009,9 +1377,14 @@ export function onlineUsers(): Set<string> {
 export function worldSnapshot() {
   const now = Date.now();
   const list = [...ents.values()].map((e) => {
-    const [x, y] = posOf(e, now);
-    const dest = e.path.length ? e.path[e.path.length - 1] : null;
+    let [x, y] = posOf(e, now);
+    let dest = e.legs.length ? e.legs[e.legs.length - 1].pts.at(-1) ?? null : e.path.length ? e.path[e.path.length - 1] : null;
+    // the sandbox shows people inside a shop on its doorstep
+    const room = roomAt(x, y);
+    if (room) [x, y] = [room.outside[0] + ((x - room.ox) / (room.w * TILE) - 0.5) * room.building.w * TILE, room.outside[1] - TILE * 0.6];
+    if (dest && roomAt(dest[0], dest[1])) dest = roomAt(dest[0], dest[1])!.outside;
     return {
+      room: room?.name ?? null,
       id: e.st.id,
       kind: e.npc ? ('npc' as const) : e.cat?.ownerId === 'town' ? ('town' as const) : ('cat' as const),
       name: e.st.name,
@@ -1024,7 +1397,7 @@ export function worldSnapshot() {
       speed: e.speed,
       anim: e.st.anim,
       mode: e.mode,
-      place: placeName(x, y),
+      place: room?.name ?? placeName(x, y),
       controlled: !!e.controlledBy,
       trip: e.trip ? { since: e.trip.started, finds: e.trip.finds, friends: e.trip.friends, places: e.trip.places.length, goingHome: e.trip.goingHome, userSent: e.trip.userSent } : null,
     };

@@ -194,6 +194,72 @@ export function collectIcon(pen: Pen, id: string) {
       pen.ellipse(0, 0, 12, 12, '#ffffff');
       pen.ellipse(-3, -3, 3, 3, '#eaf4fb', 0, null);
       break;
+    case 'apple':
+      pen.shape([0, -7, 8, -10, 13, -2, 10, 9, 0, 12, -10, 9, -13, -2, -8, -10], '#e9574f');
+      pen.ellipse(-5, -3, 3, 4.5, 'rgba(255,255,255,0.45)', 0, null);
+      pen.line([0, -7, 2, -15], 1.6, '#8a5a3c');
+      pen.shape([2, -12, 9, -16, 12, -12, 5, -10], '#8cc66a', 1);
+      break;
+    case 'blossom':
+      pen.line([-12, 12, 10, -10], 1.6, '#a07455');
+      for (const [bx, by] of [[-4, 2], [6, -6], [-8, -6]]) {
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          pen.ellipse(bx + Math.cos(a) * 3.6, by + Math.sin(a) * 3.6, 3, 3, '#fff6f8', 0.8);
+        }
+        pen.ellipse(bx, by, 1.8, 1.8, '#ffd45e', 0.6);
+      }
+      break;
+    case 'onsen_egg':
+      pen.ellipse(0, 3, 10, 12, '#fbf3e3');
+      pen.ellipse(0, 6, 6, 5, '#ffcf5a', 1);
+      for (const sx of [-6, 0, 6]) pen.line([sx, -12, sx + 2, -16, sx, -20], 1.1, rgba(INK, 0.4));
+      break;
+    case 'bamboo_boat':
+      pen.shape([-14, -2, -6, 4, 6, 4, 14, -2, 6, 1, -6, 1], '#9fd08a');
+      pen.line([-2, 2, 0, -12], 1.2, '#7a9a4a');
+      pen.shape([0, -12, 8, -4, 0, -3], '#e8f4d8', 1);
+      break;
+    case 'bamboo_shoot':
+      pen.shape([-9, 12, -6, -2, 0, -14, 6, -2, 9, 12], '#d9c38a');
+      pen.line([-7, 4, 7, 4], 1, rgba(INK, 0.5));
+      pen.line([-4, -4, 4, -4], 1, rgba(INK, 0.5));
+      pen.shape([0, -14, -5, -6, 0, -8], '#9fd08a', 1);
+      break;
+    case 'starfish': {
+      const pts: number[] = [];
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        const r = i % 2 === 0 ? 14 : 6;
+        pts.push(Math.cos(a) * r, Math.sin(a) * r + 1);
+      }
+      pen.shape(pts, '#f6a04d');
+      for (const [dx, dy] of [[0, -5], [4, 2], [-4, 2]]) pen.ellipse(dx, dy, 1.2, 1.2, '#fff3dc', 0, null);
+      break;
+    }
+    case 'conch':
+      pen.shape([-12, 8, -6, -10, 4, -13, 12, -4, 8, 6, -2, 12], '#f4d9c6');
+      pen.line([-6, -10, 0, -2, 4, -13], 1, rgba(INK, 0.5));
+      pen.line([-12, 8, 0, -2, 8, 6], 1, rgba(INK, 0.5));
+      pen.ellipse(3, 2, 3, 4, '#f49ab0', 0.8);
+      break;
+    case 'marshmallow':
+      pen.line([-14, 14, 4, -4], 1.6, '#a07455');
+      pen.shape([0, -14, 10, -12, 12, -4, 4, 2, -4, -2, -4, -10], '#fbf3e3');
+      pen.shape([6, -13, 11, -11, 12, -5, 8, -3], '#d9a86c', 0.9);
+      break;
+    case 'stone_frog':
+      pen.shape([-13, 8, -12, -2, -6, -8, 6, -8, 12, -2, 13, 8], '#9fb59a');
+      pen.ellipse(-5, -8, 3.4, 3.4, '#b7c9b2', 1);
+      pen.ellipse(5, -8, 3.4, 3.4, '#b7c9b2', 1);
+      ctx.fillStyle = INK;
+      for (const ex of [-5, 5]) {
+        ctx.beginPath();
+        ctx.arc(ex, -8, 1.2, 0, 7);
+        ctx.fill();
+      }
+      pen.line([-4, 1, 0, 3, 4, 1], 1, rgba(INK, 0.6));
+      break;
     default:
       pen.ellipse(0, 0, 10, 10, '#eee');
   }

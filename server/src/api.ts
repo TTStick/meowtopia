@@ -11,6 +11,9 @@ import type { CatRecord, NestLayout, UserSettings } from '../../shared/types';
 import type { SpeechCtx } from '../../shared/speech';
 import { catLine, interpretCommand, llmEnabled } from './llm';
 import { progressWish, wishState, addBond } from './wish';
+import { npcInfo } from './world';
+import { bondsOf } from './townsfolk';
+import { NPCS } from '../../shared/npcs';
 import { localClock, WORLD_TZ } from '../../shared/time';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -169,6 +172,21 @@ function pickOne<T>(a: T[]): T {
 route('GET', '/api/cat/:id/wish', (r) => {
   const c = myCat(r.user.id, r.params.id);
   return wishState(c);
+});
+
+// ---------- townsfolk ----------
+route('GET', '/api/cat/:id/townsfolk/:npc', (r) => {
+  const c = myCat(r.user.id, r.params.id);
+  return npcInfo(c.id, r.params.npc);
+});
+
+/** Everyone in town this cat has got to know. */
+route('GET', '/api/cat/:id/townsfolk', (r) => {
+  const c = myCat(r.user.id, r.params.id);
+  const bonds = bondsOf(c.id);
+  return NPCS.filter((n) => bonds[n.id])
+    .map((n) => ({ id: n.id, name: n.name, role: n.role, level: bonds[n.id].level, levelName: bonds[n.id].name, points: bonds[n.id].points, walks: bonds[n.id].walks }))
+    .sort((a, b) => b.points - a.points);
 });
 
 route('POST', '/api/cat/:id/outfit', (r) => {

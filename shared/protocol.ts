@@ -38,6 +38,8 @@ export type ServerMsg =
   | { t: 'event'; kind: string; text: string; item?: string; catId?: string }
   | { t: 'online'; n: number }
   | { t: 'cmd'; reply: string; action: string }
+  | { t: 'door'; id: string; x: number; y: number; room: string | null } // went through a door (in or out)
+  | { t: 'companion'; catId: string; id: string | null; name?: string } // who is walking along with my cat
   | { t: 'error'; text: string };
 
 export type ClientMsg =
@@ -46,7 +48,9 @@ export type ClientMsg =
   | { t: 'watch' } // just observe the world
   | { t: 'control'; catId: string; on: boolean }
   | { t: 'pos'; catId: string; x: number; y: number; dir: 1 | -1; anim: string }
-  | { t: 'goto'; catId: string; x: number; y: number; run?: boolean }
+  | { t: 'goto'; catId: string; x: number; y: number; run?: boolean; room?: string } // room: walk into that shop
+  | { t: 'door'; catId: string } // a cat I'm steering stepped into a doorway
+  | { t: 'npcAct'; catId: string; npc: string; act: 'special' | 'walk' | 'bye' } // do something with a resident
   | { t: 'emote'; catId: string; kind: string }
   | { t: 'act'; catId: string; anim: string }
   | { t: 'interact'; catId: string; target: string }

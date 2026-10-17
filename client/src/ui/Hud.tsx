@@ -11,8 +11,11 @@ import { placedCounts } from '../../../shared/nest';
 import { phaseOf, PHASE_NAME, SEASON_NAME } from '../../../shared/time';
 import * as clock from '../game/clock';
 import { NPC_MAP } from '../../../shared/npcs';
+import { roomById } from '../../../shared/world';
+import { roomOpen } from '../../../shared/rooms';
 import * as I from './icons';
 import { ReportLink } from './Account';
+import { api } from '../game/net';
 
 function open(panel: Panel) {
   audio.blip(600, 0.06);
@@ -140,8 +143,10 @@ export function Hint() {
 
 export function Toasts() {
   const toasts = useStore(ui, (s) => s.toasts);
+  // a card open at the bottom of the town pushes them up out of its way
+  const card = useStore(ui, (s) => s.scene === 'world' && !!(s.worldTarget || s.worldShop));
   return (
-    <div class="toasts">
+    <div class={card ? 'toasts high' : 'toasts'}>
       {toasts.map((t) => (
         <div key={t.id} class="toast">
           {t.icon ? `${t.icon} ` : ''}
@@ -264,12 +269,18 @@ export function WorldBar() {
   const catOut = useStore(ui, (s) => s.catOut);
   const controlling = useStore(ui, (s) => s.controlling);
   const target = useStore(ui, (s) => s.worldTarget);
+  const shop = useStore(ui, (s) => s.worldShop);
+  const room = useStore(ui, (s) => s.room);
+  const myRoom = useStore(ui, (s) => s.myRoom);
   const [speak, setSpeak] = useState(false);
   const w = game.world;
+  const peeking = !!room && myRoom !== room;
   return (
     <>
       {speak && catOut && <Speak onClose={() => setSpeak(false)} />}
       {target && <TargetCard />}
+      {shop && !target && <ShopCard id={shop} />}
+      {catOut && !target && !shop && <CompanionPill />}
       <div class="side">
         <button class="iconbtn" aria-label="放大" onClick={() => w?.zoomBy(1.25)}>
           <I.IPlus />
@@ -297,7 +308,20 @@ export function WorldBar() {
             <I.IHome />
             猫窝
           </button>
-          {catOut ? (
+          {peeking ? (
+            <>
+              <button onClick={() => w?.leaveRoom()}>
+                <I.IDoor />
+                回小镇
+              </button>
+              {catOut && (
+                <button onClick={() => room && w?.goInto(room)}>
+                  <I.IPaw />
+                  带它进来
+                </button>
+              )}
+            </>
+          ) : catOut ? (
             <>
               <button class={controlling ? 'on' : ''} onClick={() => (audio.unlock(), w?.setControl(!controlling))}>
                 <I.IJoy />
@@ -307,18 +331,27 @@ export function WorldBar() {
                 <I.IPaw />
                 喵
               </button>
-              <button onClick={() => w?.emote('roll')}>
-                <I.IHeart />
-                打滚
-              </button>
+              {!room && (
+                <button onClick={() => w?.emote('roll')}>
+                  <I.IHeart />
+                  打滚
+                </button>
+              )}
               <button onClick={() => w?.emote('sit')}>
                 <I.IStar />
                 坐下
               </button>
-              <button onClick={() => game.callHome()}>
-                <I.IDoor />
-                回家
-              </button>
+              {room ? (
+                <button onClick={() => w?.leaveRoom()}>
+                  <I.IDoor />
+                  出门
+                </button>
+              ) : (
+                <button onClick={() => game.callHome()}>
+                  <I.IDoor />
+                  回家
+                </button>
+              )}
             </>
           ) : (
             <button onClick={() => game.goOut()}>
@@ -336,26 +369,92 @@ export function WorldBar() {
   );
 }
 
+interface NpcInfo {
+  level: number;
+  name: string;
+  points: number;
+  next: number | null;
+  walks: number;
+  walking: boolean;
+  busy: string | null;
+  special: { label: string; done: boolean } | null;
+  errand: { to: string; from: string; here: boolean } | null;
+}
+
+function Hearts({ level }: { level: number }) {
+  return (
+    <span class="hearts" aria-label={`熟悉度 ${level}/3`}>
+      {[1, 2, 3].map((i) => (
+        <span key={i} style={{ opacity: i <= level ? 1 : 0.25, color: 'var(--coral)', display: 'inline-flex' }}>
+          <I.IHeart size={13} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function TargetCard() {
   const t = useStore(ui, (s) => s.worldTarget)!;
   const catOut = useStore(ui, (s) => s.catOut);
   const e = game.world?.ents.get(t.id);
   const npc = NPC_MAP[t.id];
+  const townCat = !npc && e?.st.ownerId === 'town';
+  const resident = !!npc || townCat;
   const img = e ? catPortrait(e.st.genes, e.st.outfit, 56, e.st.age, 'open') : '';
+  const cat = activeCat();
+  const [info, setInfo] = useState<NpcInfo | null>(null);
+  useEffect(() => {
+    setInfo(null);
+    if (!resident || !cat) return;
+    let live = true;
+    api<NpcInfo>('GET', `/api/cat/${cat.id}/townsfolk/${t.id}`)
+      .then((r) => live && setInfo(r))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [t.id]);
+  const close = () => ui.set({ worldTarget: null });
+  const act = (a: 'special' | 'walk' | 'bye') => (game.world?.npcAct(t.id, a), close());
   return (
     <div class="card target">
       {img && <img src={img} alt="" />}
       <div class="info">
-        <div class="tn">{t.name}</div>
+        <div class="tn">
+          {t.name}
+          {info && info.points > 0 && (
+            <span class="muted" style={{ fontSize: '12px', fontWeight: 400, marginLeft: '6px' }}>
+              <Hearts level={info.level} /> {info.name}
+            </span>
+          )}
+        </div>
         <div class="muted" style={{ fontSize: '13px' }}>
           {npc ? `${npc.role} · ${npc.desc}` : t.owner ? `${t.owner}的猫` : '小镇的猫'}
         </div>
+        {info?.errand?.here && <div style={{ fontSize: '13px', marginTop: '2px' }}>💌 {info.errand.from}托你带的信，就是给它的</div>}
+        {info && !info.walking && info.busy && catOut && <div class="muted" style={{ fontSize: '12px', marginTop: '2px' }}>{info.busy}</div>}
         <div class="tb">
           {catOut && (
-            <button class="btn small primary" onClick={() => (game.world?.interact(t.id), ui.set({ worldTarget: null }))}>
-              {npc ? '去打个招呼' : '去碰碰鼻子'}
+            <button class={`btn small ${info?.errand?.here ? 'primary' : resident ? '' : 'primary'}`} onClick={() => (game.world?.interact(t.id), close())}>
+              {info?.errand?.here ? '把信交给它' : npc ? '打招呼' : '碰碰鼻子'}
             </button>
           )}
+          {catOut && npc?.special && (
+            <button class="btn small primary" disabled={info?.special?.done} onClick={() => act('special')}>
+              {info?.special?.done ? '明天再来' : npc.special.label}
+            </button>
+          )}
+          {catOut &&
+            resident &&
+            (info?.walking ? (
+              <button class="btn small" onClick={() => act('bye')}>
+                说再见
+              </button>
+            ) : (
+              <button class="btn small" disabled={!!info?.busy} onClick={() => act('walk')}>
+                一起逛逛
+              </button>
+            ))}
           {t.shop && (
             <button class="btn small" onClick={() => ui.set({ panel: 'shop', shopKind: t.shop === 'tailor' ? 'tailor' : 'store', worldTarget: null })}>
               进店看看
@@ -367,7 +466,59 @@ function TargetCard() {
             </button>
           )}
           {!npc && e?.st.ownerId && e.st.ownerId !== 'town' && e.st.ownerId !== ui.state.me?.user.id && <ReportLink kind="cat" target={t.id} />}
-          <button class="btn small ghost" onClick={() => ui.set({ worldTarget: null })}>
+          <button class="btn small ghost" onClick={close}>
+            <I.IClose size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Who is walking along with my cat right now. */
+function CompanionPill() {
+  const c = useStore(ui, (s) => s.companion);
+  if (!c) return null;
+  return (
+    <div class="pill companion">
+      <I.IPaw size={15} />
+      <span>{c.name}陪着它散步</span>
+      <button class="link" onClick={() => game.world?.npcAct(c.id, 'bye')}>
+        说再见
+      </button>
+    </div>
+  );
+}
+
+function ShopCard({ id }: { id: string }) {
+  const catOut = useStore(ui, (s) => s.catOut);
+  const r = roomById(id);
+  if (!r) return null;
+  const open = roomOpen(r, clock.worldClock().hour);
+  const v = game.world?.shopVisitors(id) ?? { cats: 0, keeper: false };
+  const keeper = r.keeper ? NPC_MAP[r.keeper] : null;
+  const status = !open ? '已经打烊了，明天再来吧' : keeper ? (v.keeper ? `${keeper.name}在店里` : `${keeper.name}出去了一会儿`) : '';
+  return (
+    <div class="card target">
+      <div class="info">
+        <div class="tn">{r.name}</div>
+        <div class="muted" style={{ fontSize: '13px' }}>
+          {r.desc}
+        </div>
+        <div class="muted" style={{ fontSize: '12px', marginTop: '2px' }}>
+          {status}
+          {v.cats > 0 ? ` · 里面有 ${v.cats} 只猫猫` : ''}
+        </div>
+        <div class="tb">
+          {catOut && open && (
+            <button class="btn small primary" onClick={() => game.world?.goInto(id)}>
+              带它进去
+            </button>
+          )}
+          <button class="btn small" onClick={() => game.world?.peek(id)}>
+            {catOut && open ? '先看看' : '看看里面'}
+          </button>
+          <button class="btn small ghost" onClick={() => ui.set({ worldShop: null })}>
             <I.IClose size={18} />
           </button>
         </div>

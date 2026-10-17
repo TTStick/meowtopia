@@ -282,14 +282,50 @@ function fits(v: any, s: any): boolean {
 }
 
 /**
+ * Mend the JSON slips of models without structured output: quotation marks inside
+ * a line of speech left unescaped (they become “ ”), raw line breaks inside strings,
+ * and trailing commas.
+ */
+function mendJSON(t: string): string {
+  let out = '';
+  let inStr = false, open = true;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (!inStr) {
+      if (ch === '"') inStr = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '\\') {
+      out += ch + (t[i + 1] ?? '');
+      i++;
+    } else if (ch === '\n' || ch === '\r') {
+      if (ch === '\n') out += '\\n';
+    } else if (ch === '"') {
+      // a string really ends where JSON carries on: , : } ] or the end
+      let j = i + 1;
+      while (j < t.length && /\s/.test(t[j])) j++;
+      if (j >= t.length || ',:}]'.includes(t[j])) {
+        inStr = false;
+        out += ch;
+      } else {
+        out += open ? '“' : '”';
+        open = !open;
+      }
+    } else out += ch;
+  }
+  return out.replace(/,\s*([}\]])/g, '$1');
+}
+
+/**
  * Read an answer leniently: code fences, <think> blocks and chatter around the JSON
  * are dropped, and a model that simply wrote the lines still counts for a lines schema.
  */
-function parseAnswer(text: string, schema: any): unknown {
+export function parseAnswer(text: string, schema: any): unknown {
   const t = text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```(?:json)?/gi, '').trim();
   const tries = [t];
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a >= 0 && b > a) tries.push(t.slice(a, b + 1));
+  if (a >= 0 && b > a) tries.push(t.slice(a, b + 1), mendJSON(t.slice(a, b + 1)));
   for (const x of tries) {
     try {
       return JSON.parse(x);
@@ -533,6 +569,31 @@ export function npcLine(n: NpcPersona, situation: string, fallback: string[]): s
       .finally(() => inflight.delete(key));
   }
   return line ?? fallback[Math.floor(Math.random() * fallback.length)];
+}
+
+/** A resident tells a cat a short story (three lines, said one after another). */
+const STORIES: Record<string, string[][]> = {
+  default: [
+    ['从前有一朵云，特别想尝尝鱼的味道', '它下了一场雨，落进了小河里', '后来呀，它变成了一条会发光的小鱼'],
+    ['月亮每天晚上都会数星星', '有一天它数到一半，睡着了', '所以天上总有几颗星星，是没被数过的'],
+    ['小镇的路灯其实会悄悄说话', '它们在问：今天谁最晚回家呀', '要是你走过，它们会亮得更暖一点'],
+  ],
+  travel: [
+    ['我去过一座雪山，山顶的雪是甜的', '那里的猫都戴着毛线帽', '它们说，冷的时候要挤在一起'],
+    ['海的另一边，有一个全是灯笼的港口', '船靠岸的时候，灯笼会一盏盏亮起来', '像是在说：欢迎回来'],
+    ['我在沙漠里遇见过一只骆驼', '它说它也在找一个能晒太阳的窗台', '原来大家要找的，都差不多'],
+  ],
+};
+
+export async function npcStory(n: NpcPersona, catName: string, topic: string, kind: 'default' | 'travel' = 'default'): Promise<string[]> {
+  if (client) {
+    const user = `这次请为小镇居民写话（不是玩家的猫）。\n名字：${n.name}\n身份：${n.role}\n${n.desc}\n说话风格：${n.voice}\n\n${envInfo()}\n一只叫${catName}的小猫趴在${n.name}身边，请${n.name}讲${topic}。分成 3 句，每句不超过 26 字，前后连贯，像在耳边轻声讲，结尾温柔。`;
+    const r = await callJSON<{ lines: string[] }>(user, LINES_SCHEMA, 800);
+    const lines = r?.lines?.map((x) => x.trim().slice(0, 40)).filter((x) => x && !textProblem(x)) ?? [];
+    if (lines.length >= 2) return lines.slice(0, 4);
+  }
+  const pool = STORIES[kind] ?? STORIES.default;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ---- commands ----

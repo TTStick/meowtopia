@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getWorld, POIS, HOME_SPAWN, TILE, poiPoint, walkable } from '../shared/world';
+import { NPCS, NPC_MAP, townBond, walkBusy } from '../shared/npcs';
+import { getWorld, getRooms, POIS, POI_MAP, HOME_SPAWN, TILE, WW, Ter, poiPoint, walkable, walkableAt, planRoute, roomAt, zoneAt, type Room } from '../shared/world';
 import { findPath, makeGrid, smoothPath } from '../shared/path';
 import { starterLayout, STARTER_ITEMS, validateLayout, canPlace } from '../shared/nest';
 import { advanceStats, freshStats, applyDelta, bondLevel, ageOf } from '../shared/stats';
@@ -16,11 +17,54 @@ const world = getWorld();
 test('every place in town is reachable from the home lane', () => {
   const [hx, hy] = HOME_SPAWN;
   for (const poi of POIS) {
-    const [px, py] = poiPoint(world, poi, 1);
-    const path = findPath(world.grid, Math.floor(hx / TILE), Math.floor(hy / TILE), Math.floor(px / TILE), Math.floor(py / TILE), 100000);
-    assert.ok(path, `cannot reach ${poi.id}`);
-    assert.ok(walkable(world, px, py), `${poi.id} target point is not walkable`);
+    for (const seed of [1, 2, 3]) {
+      const [px, py] = poiPoint(world, poi, seed);
+      assert.ok(walkableAt(world, px, py), `${poi.id} target point is not walkable`);
+      const legs = planRoute(world, hx, hy, px, py);
+      assert.ok(legs, `cannot reach ${poi.id}`);
+      assert.equal(legs.length, poi.room ? 2 : 1, `${poi.id}: going in takes one door`);
+      const end = legs.at(-1)!.pts.at(-1)!;
+      assert.ok(Math.hypot(end[0] - px, end[1] - py) < TILE * 1.5, `${poi.id}: the walk ends where it should`);
+    }
   }
+});
+
+test('every shop has a room you can walk into, around and out of', () => {
+  const rooms = getRooms();
+  assert.equal(rooms.length, 7);
+  for (const r of rooms) {
+    assert.ok(walkable(world, ...r.outside), `${r.id}: the street in front of the door is open`);
+    assert.ok(walkableAt(world, ...r.door), `${r.id}: the door is not blocked inside`);
+    assert.equal(roomAt(...r.door), r);
+    assert.equal(roomAt(...r.outside), null);
+    const spots: [string, number, number][] = [['poi', r.poi.x, r.poi.y]];
+    if (r.counter) spots.push(['counter', ...r.counter]);
+    for (const [name, x, y] of spots) {
+      const [ux, uy] = [r.ox + x * TILE, r.oy + y * TILE];
+      assert.ok(walkableAt(world, ux, uy), `${r.id}: ${name} is blocked`);
+      const p = findPath(r.grid, Math.floor((r.door[0] - r.ox) / TILE), Math.floor((r.door[1] - r.oy) / TILE), Math.floor(x), Math.floor(y));
+      assert.ok(p && p.at(-1)![0] === Math.floor(x) && p.at(-1)![1] === Math.floor(y), `${r.id}: cannot walk from the door to the ${name}`);
+    }
+    // room to room goes out one door and in the other
+    const other: Room = rooms[(r.index + 1) % rooms.length];
+    const legs = planRoute(world, r.door[0], r.door[1], other.door[0], other.door[1])!;
+    assert.equal(legs.length, 3);
+    assert.deepEqual(legs[1].from, r.outside);
+    assert.deepEqual(legs[2].from, other.door);
+  }
+});
+
+test('the new east and south are in the right zones', () => {
+  const z = (x: number, y: number) => zoneAt(world, x * TILE, y * TILE);
+  assert.equal(z(150, 17), 'spring');
+  assert.equal(z(142, 50), 'orchard');
+  assert.equal(z(167.5, 40), 'bamboo');
+  assert.equal(z(146, 103), 'island');
+  assert.equal(z(40, 101), 'creek');
+  assert.equal(z(24, 111), 'camp');
+  assert.equal(z(130, 71), 'beach');
+  assert.equal(z(97, 80.5), 'pier');
+  assert.equal(world.ter[101 * WW + 40], Ter.Stone);
 });
 
 test('pathfinding avoids walls and smoothing keeps line of sight', () => {
@@ -119,4 +163,21 @@ test('proof-of-work sha256 matches node crypto', async () => {
     assert.equal(w1, ref.readUInt32BE(4));
     assert.ok(zeroBits(w0, w1) >= 0);
   }
+});
+
+test('residents: familiarity levels and when they can go for a walk', () => {
+  assert.deepEqual([0, 2, 3, 9, 10, 25, 99].map((p) => townBond(p).level), [0, 0, 1, 1, 2, 3, 3]);
+  assert.equal(townBond(3).next, 10);
+  assert.equal(townBond(30).next, null);
+  const lib = NPC_MAP.npc_lib;
+  assert.match(walkBusy(lib, 10)!, /20点半以后有空/, 'busy at the library until the evening');
+  assert.equal(walkBusy(lib, 21), null);
+  assert.equal(walkBusy(lib, 3), '已经回家休息了');
+  assert.equal(walkBusy(NPC_MAP.npc_kid1, 10), null, 'kids are always up for a walk');
+  for (const n of NPCS) {
+    for (const s of n.schedule) assert.ok(POI_MAP[s.poi], `${n.id}: unknown place ${s.poi}`);
+    if (n.special?.gift) assert.ok(ITEM_MAP[n.special.gift.item], `${n.id}: unknown gift`);
+  }
+  // every shop's keeper actually works in it
+  for (const r of getRooms()) if (r.keeper) assert.ok(NPC_MAP[r.keeper].schedule.some((s) => POI_MAP[s.poi]?.room === r.id), `${r.keeper} never works in ${r.id}`);
 });

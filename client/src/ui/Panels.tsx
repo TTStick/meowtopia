@@ -248,7 +248,7 @@ function LettersPanel() {
 }
 
 // ---------------- collection ----------------
-const ZONE_HINT: Record<string, string> = { park: '公园', town: '小镇', plaza: '广场', forest: '森林', meadow: '草地花田', river: '河边', pier: '码头', hill: '山坡' };
+const ZONE_HINT: Record<string, string> = { park: '公园', town: '小镇', plaza: '广场', forest: '森林', meadow: '草地花田', river: '河边', pier: '码头', hill: '山坡', spring: '温泉', orchard: '果园', bamboo: '竹林', island: '小岛', creek: '小溪', camp: '露营地', beach: '海边', indoor: '店里' };
 function CollectionPanel() {
   const me = useStore(ui, (s) => s.me)!;
   const [found, setFound] = useState<string[]>([]);
@@ -627,7 +627,7 @@ function MapPanel() {
       const ctx = c.getContext('2d')!;
       ctx.scale(dpr, dpr);
       const s = w / WW;
-      const col: Record<number, string> = { [Ter.Grass]: '#cfe6ae', [Ter.Path]: '#ecdcc0', [Ter.Plaza]: '#efe4d2', [Ter.Water]: '#a9d6ec', [Ter.Sand]: '#f4e4bf', [Ter.Field]: '#e6e3a8', [Ter.Forest]: '#a9cf8c', [Ter.Wood]: '#dcb58a', [Ter.Hill]: '#d5ebb4', [Ter.Deep]: '#93c6e3' };
+      const col: Record<number, string> = { [Ter.Grass]: '#cfe6ae', [Ter.Path]: '#ecdcc0', [Ter.Plaza]: '#efe4d2', [Ter.Water]: '#a9d6ec', [Ter.Sand]: '#f4e4bf', [Ter.Field]: '#e6e3a8', [Ter.Forest]: '#a9cf8c', [Ter.Wood]: '#dcb58a', [Ter.Hill]: '#d5ebb4', [Ter.Deep]: '#93c6e3', [Ter.Stone]: '#c9c6c0', [Ter.Bamboo]: '#b4d79c', [Ter.Orchard]: '#d6ebb0' };
       for (let y = 0; y < WH; y++)
         for (let x = 0; x < WW; x++) {
           ctx.fillStyle = col[world.ter[y * WW + x]];
@@ -638,6 +638,7 @@ function MapPanel() {
       ctx.font = `bold ${Math.max(9, s * 3)}px system-ui`;
       ctx.textAlign = 'center';
       for (const p of POIS) {
+        if (p.room) continue; // shops are marked by their buildings
         const known = cat?.discovered.includes(p.id);
         ctx.fillStyle = known ? '#f08a5d' : 'rgba(74,58,52,0.35)';
         ctx.beginPath();
@@ -669,6 +670,7 @@ function MapPanel() {
     const tx = ((e.clientX - r.left) / r.width) * WW, ty = ((e.clientY - r.top) / r.height) * WH;
     let best = POIS[0], bd = 1e9;
     for (const p of POIS) {
+      if (p.room) continue;
       const d = Math.hypot(p.x - tx, p.y - ty);
       if (d < bd) {
         bd = d;

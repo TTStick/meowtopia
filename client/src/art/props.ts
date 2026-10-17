@@ -26,7 +26,133 @@ export const BOUNDS: Partial<Record<PropKind, [number, number, number, number]>>
   telescope: [-16, -44, 16, 6], table: [-26, -56, 26, 6], well: [-26, -64, 26, 8], crop: [-12, -26, 12, 4], post: [-6, -26, 6, 4],
   cart: [-32, -64, 32, 8], hive: [-14, -28, 14, 4], kite: [-20, -20, 20, 20],
   snowman: [-22, -62, 22, 6], flowerarch: [-50, -96, 50, 8], parasol: [-34, -66, 34, 14], pumpkins: [-26, -30, 26, 6], lanterns: [-130, -110, 130, 6],
+  fruittree: [-38, -92, 38, 8], bamboo: [-24, -134, 24, 6], hotspring: [-128, -132, 128, 10], stonelamp: [-14, -50, 14, 6],
+  tent: [-62, -84, 62, 8], campfire: [-24, -22, 24, 8], log: [-28, -20, 28, 6], palm: [-58, -132, 58, 8], gazebo: [-58, -124, 58, 8],
+  fruitbasket: [-17, -24, 17, 5],
 };
+
+const FRUIT: [string, string, string][] = [
+  // blossom, summer fruit, autumn fruit
+  ['#fffaf6', '#b8d86a', '#e9574f'], // apple
+  ['#fbd3df', '#f7a98a', '#f2c45a'], // peach
+  ['#fff6e6', '#9fcf72', '#f39a45'], // persimmon
+];
+
+function fruitTree(pen: Pen, c: PropCtx, v: number) {
+  const ctx = pen.ctx;
+  pen.tube([0, 2, -1, -16, 1, -30], 6.5, TRUNK);
+  pen.line([0, -22, -10, -32], 3.4, TRUNK);
+  pen.line([1, -26, 11, -36], 3, TRUNK);
+  const [bloom, summer, autumn] = FRUIT[v % 3];
+  if (c.season === 3) {
+    // bare branches; persimmons hang on through winter
+    for (const [x1, y1, x2, y2] of [[-10, -32, -18, -50], [11, -36, 20, -52], [1, -30, 2, -58], [-4, -44, -12, -60], [6, -46, 12, -62]]) pen.line([x1, y1, x2, y2], 2.2, TRUNK);
+    for (const [x, y] of [[-18, -50], [20, -52], [2, -58]]) pen.ellipse(x, y - 3, 6, 2.2, '#ffffff', 1, rgba(INK, 0.5));
+    if (v % 3 === 2) for (const [x, y] of [[-12, -52], [14, -50], [6, -60]]) pen.ellipse(x, y, 3.6, 3.4, autumn, 1);
+    return;
+  }
+  const leaf = c.season === 2 ? (v % 3 === 1 ? ['#f2cf62', '#e2b44a'] : ['#c9d97a', '#a8c062']) : c.season === 1 ? ['#8fcb7a', '#73b462'] : ['#b8de96', '#96c87a'];
+  const lobes: [number, number, number][] = [[-14, -48, 17], [14, -50, 17], [0, -62, 20], [0, -42, 16]];
+  for (const [x, y, r] of lobes) blobCluster(pen, x, y, r, 4, v * 5 + x, leaf[1]);
+  ctx.fillStyle = leaf[0];
+  for (const [x, y, r] of lobes) {
+    ctx.beginPath();
+    ctx.ellipse(x - r * 0.15, y - r * 0.2, r * 0.68, r * 0.58, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const dots = (col: string, r: number, n: number, lw = 1) => {
+    for (let i = 0; i < n; i++) pen.ellipse((hashf(v, i, 41) - 0.5) * 50, -40 - hashf(v, i, 42) * 32, r, r * 0.95, col, lw);
+  };
+  if (c.season === 0) dots(bloom, 3.2, 12, 0.8);
+  else if (c.season === 1) dots(summer, 3.4, 6);
+  else dots(autumn, 4, 8);
+}
+
+function bamboo(pen: Pen, c: PropCtx, v: number) {
+  const stalks: [number, number, number][] = v === 0 ? [[-8, -118, -0.05], [4, -128, 0.03], [14, -100, 0.08]] : v === 1 ? [[-12, -104, -0.08], [0, -124, 0], [10, -112, 0.05]] : [[-4, -126, -0.02], [9, -108, 0.06]];
+  const green = c.season === 3 ? '#9fbf9a' : '#8cc47a';
+  for (const [x, top, lean] of stalks) {
+    const tx = x + top * -lean;
+    pen.tube([x, 2, (x + tx) / 2, top / 2, tx, top], 5, green, 1.4);
+    for (let k = 1; k < 6; k++) {
+      const yy = (top * k) / 6, xx = x + (tx - x) * (k / 6);
+      pen.line([xx - 3, yy, xx + 3, yy], 1.2, rgba(INK, 0.55));
+    }
+    // leaf sprays
+    for (let k = 0; k < 3; k++) {
+      const yy = top * (0.55 + k * 0.17), xx = x + (tx - x) * (0.55 + k * 0.17);
+      const side = k % 2 === 0 ? 1 : -1;
+      for (let j = 0; j < 3; j++) pen.shape([xx, yy, xx + side * (10 + j * 4), yy - 6 + j * 5, xx + side * (18 + j * 4), yy - 2 + j * 6, xx + side * 6, yy + 2], c.season === 3 ? '#e8efe6' : j === 1 ? '#a9d68f' : '#94c77c', 1);
+    }
+  }
+}
+
+function hotspring(pen: Pen, c: PropCtx) {
+  const ctx = pen.ctx;
+  const cy = -66;
+  // rocks all the way round
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const rx = 112 + hashf(i, 3) * 8, ry = 64 + hashf(i, 4) * 6;
+    pen.ellipse(Math.cos(a) * rx, cy + Math.sin(a) * ry, 14 + hashf(i, 5) * 6, 10 + hashf(i, 6) * 4, ['#c9c6c0', '#bdb7ae', '#d6d0c6'][i % 3], 1.4);
+  }
+  const water = ctx.createRadialGradient(-20, cy - 10, 10, 0, cy, 110);
+  water.addColorStop(0, c.night > 0.4 ? '#8fc9d6' : '#b9e6ea');
+  water.addColorStop(1, c.night > 0.4 ? '#5f9fb3' : '#86cbd6');
+  pen.ellipse(0, cy, 104, 56, water, 1.8);
+  // ripples and a floating yuzu or two
+  for (let i = 0; i < 5; i++) {
+    const x = -60 + i * 30, y = cy - 18 + (i % 2) * 22;
+    pen.line([x - 10, y, x - 4, y - 3, x + 2, y], 1.1, 'rgba(255,255,255,0.75)');
+  }
+  pen.ellipse(-30, cy + 14, 5, 4.5, '#ffd45e', 1);
+  pen.ellipse(36, cy - 4, 5, 4.5, '#ffd45e', 1);
+  if (c.season === 2) pen.shape([12, cy + 22, 18, cy + 16, 22, cy + 24, 16, cy + 28], '#e9674f', 0.8);
+  // a little wooden bucket on the rocks
+  pen.poly([86, -18, 104, -18, 102, -2, 88, -2], WOOD, 1.4);
+  pen.line([88, -12, 102, -12], 1, rgba(INK, 0.5));
+}
+
+function tent(pen: Pen, v: number) {
+  const col = ['#f0a35e', '#7fc0b0'][v % 2];
+  pen.shape([-58, 2, 0, -78, 58, 2], col);
+  pen.shape([-12, 2, 0, -50, 12, 2], shade(col, -0.25), 1.6);
+  pen.line([0, -78, 0, -88], 2, WOOD_D);
+  pen.shape([0, -88, 12, -84, 0, -80], '#e0605e', 1);
+  pen.line([-58, 2, -66, 6], 1.2, rgba(INK, 0.6));
+  pen.line([58, 2, 66, 6], 1.2, rgba(INK, 0.6));
+  pen.line([-30, -36, -2, -76], 1, rgba('#ffffff', 0.6));
+}
+
+function palm(pen: Pen, c: PropCtx, v: number) {
+  const lean = v === 0 ? 1 : -1;
+  pen.tube([0, 2, 6 * lean, -40, 14 * lean, -96], 9, '#c99a6b', 1.6);
+  for (let k = 1; k < 7; k++) {
+    const t = k / 7;
+    const x = 14 * lean * t * t + 6 * lean * t, y = -96 * t;
+    pen.line([x - 4, y, x + 4, y + 2], 1, rgba(INK, 0.5));
+  }
+  const tx = 14 * lean, ty = -98;
+  const frond = c.season === 3 ? '#a9c39a' : '#7fbf6a';
+  for (const [dx, dy] of [[-48, 14], [-40, -16], [-10, -26], [24, -22], [46, -2], [40, 20]]) {
+    pen.shape([tx, ty, tx + dx * 0.5, ty + dy * 0.5 - 8, tx + dx, ty + dy, tx + dx * 0.55, ty + dy * 0.5 + 4], frond, 1.4);
+  }
+  pen.ellipse(tx - 4, ty + 6, 5, 5, '#8a6440', 1);
+  pen.ellipse(tx + 5, ty + 7, 5, 5, '#8a6440', 1);
+}
+
+function gazebo(pen: Pen, c: PropCtx) {
+  pen.poly([-40, 2, 40, 2, 36, -6, -36, -6], '#d8cfc2', 1.4);
+  for (const x of [-32, -11, 11, 32]) pen.tube([x, -6, x, -66], 4.5, '#e9dccb');
+  pen.line([-36, -40, 36, -40], 2, rgba(INK, 0.6));
+  const roof = pen.poly([-56, -62, 0, -112, 56, -62, 40, -58, 0, -64, -40, -58], '#d98f6a');
+  pen.clip(roof, () => {
+    for (let i = 1; i < 5; i++) pen.line([-60, -62 - i * 11, 60, -62 - i * 11], 1, rgba(INK, 0.25), 0.4);
+  });
+  pen.ellipse(0, -114, 4, 4, '#ffd45e', 1);
+  if (c.season === 3) pen.shape([-40, -72, 0, -110, 40, -72, 0, -80], '#ffffff', 1);
+  if (c.night > 0.4) pen.ellipse(0, -52, 6, 7, '#ffe39a', 1.2);
+}
 
 function canopyColors(season: number, v: number): [string, string] {
   switch (season) {
@@ -602,6 +728,44 @@ export function drawProp(pen: Pen, kind: PropKind, v: number, c: PropCtx) {
       big(-10, 0, 12);
       big(10, 2, 9);
       big(-2, -16, 7);
+      return;
+    }
+    case 'fruittree': return fruitTree(pen, c, v);
+    case 'bamboo': return bamboo(pen, c, v % 3);
+    case 'hotspring': return hotspring(pen, c);
+    case 'tent': return tent(pen, v);
+    case 'palm': return palm(pen, c, v % 2);
+    case 'gazebo': return gazebo(pen, c);
+    case 'stonelamp': {
+      pen.poly([-10, 2, 10, 2, 7, -6, -7, -6], '#bdb7ae', 1.4);
+      pen.tube([0, -6, 0, -18], 7, '#c9c6c0', 1.4);
+      pen.poly([-11, -18, 11, -18, 9, -32, -9, -32], '#d6d0c6', 1.4);
+      pen.poly([-5, -21, 5, -21, 5, -29, -5, -29], c.night > 0.4 ? '#ffe39a' : '#8f8a82', 1);
+      pen.shape([-14, -32, 0, -44, 14, -32], '#bdb7ae', 1.4);
+      pen.ellipse(0, -46, 3, 3, '#bdb7ae', 1);
+      if (c.season === 3) pen.shape([-11, -35, 0, -45, 11, -35, 0, -37], '#ffffff', 1);
+      return;
+    }
+    case 'campfire': {
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        pen.ellipse(Math.cos(a) * 17, -4 + Math.sin(a) * 7, 5.5, 4, '#bdb7ae', 1.2);
+      }
+      pen.tube([-12, -2, 10, -10], 5, '#8a6440', 1.3);
+      pen.tube([12, -2, -9, -10], 5, '#a07455', 1.3);
+      return;
+    }
+    case 'log': {
+      pen.tube([-24, -8, 24, -8], 14, v === 0 ? '#a07455' : '#8a6440', 1.6);
+      pen.ellipse(24, -8, 4, 7, '#e8c9a0', 1.4);
+      pen.ellipse(24, -8, 1.6, 3, null, 0.8, rgba(INK, 0.5));
+      return;
+    }
+    case 'fruitbasket': {
+      const fruit = v === 0 ? '#e9574f' : '#f7a98a';
+      for (const [x, y] of [[-8, -14], [0, -17], [8, -14], [-4, -20], [4, -21]]) pen.ellipse(x, y, 5, 4.6, fruit, 1);
+      pen.poly([-15, -12, 15, -12, 11, 2, -11, 2], '#d9ab70', 1.6);
+      pen.line([-13, -6, 13, -6], 1, rgba(INK, 0.4));
       return;
     }
     case 'lanterns': {

@@ -8,6 +8,7 @@ const POLL = 2000;
 const TER_COLOR: Record<number, string> = {
   [Ter.Grass]: '#cfe6ae', [Ter.Path]: '#ecdcc0', [Ter.Plaza]: '#efe4d2', [Ter.Water]: '#a9d6ec', [Ter.Sand]: '#f4e4bf',
   [Ter.Field]: '#e6e3a8', [Ter.Forest]: '#a9cf8c', [Ter.Wood]: '#dcb58a', [Ter.Hill]: '#d5ebb4', [Ter.Deep]: '#93c6e3',
+  [Ter.Stone]: '#c9c6c0', [Ter.Bamboo]: '#b4d79c', [Ter.Orchard]: '#d6ebb0',
 };
 const ACT: Record<string, string> = {
   walk: '在走路', run: '在跑', sit: '坐着', loaf: '揣着手', sleep: '睡觉', groom: '舔毛', stretch: '伸懒腰', play: '在玩',
@@ -151,6 +152,7 @@ export function Sandbox() {
       const fs = Math.max(10, Math.min(15, k.scale * 1.6));
       x.font = `600 ${fs}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
       for (const p of POIS) {
+        if (p.room) continue;
         const px = sx(p.x), py = sy(p.y);
         if (px < -60 || py < -20 || px > W + 60 || py > H + 20) continue;
         x.fillStyle = 'rgba(74,58,52,0.35)';

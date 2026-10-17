@@ -529,6 +529,10 @@ test('model settings: an Anthropic-compatible model without structured output (e
     said = (await owner.call('POST', `/api/cat/${talker}/command`, { text: '去睡觉' })).data;
     assert.equal(said.action, 'sleep');
     assert.equal(said.reply, '那我睡啦');
+    // quotation marks left unescaped inside the reply, and a line break, are mended
+    reply = () => [{ type: 'text', text: '{"action":"unknown","place":null,"reply":"它说"喵"\n就跑开了",}' }];
+    said = (await owner.call('POST', `/api/cat/${talker}/command`, { text: '你在干嘛' })).data;
+    assert.equal(said.reply, '它说“喵”\n就跑开了'.slice(0, 40), JSON.stringify(said));
   } finally {
     fake.close();
     await admin.call('POST', '/api/admin/llm/reset');

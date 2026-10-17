@@ -669,6 +669,8 @@ class Game {
 
   private onServer(m: ServerMsg) {
     this.world?.onServer(m);
+    if (m.t === 'companion' && m.catId === activeCat()?.id) ui.set({ companion: m.id ? { id: m.id, name: m.name ?? '' } : null });
+    if (m.t === 'despawn' && m.id === activeCat()?.id) ui.set({ companion: null });
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
     // only kinds the server also files as letters; live-only toasts (friend, home) would leave an empty mailbox with a badge
     if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'town')) ui.set((s) => ({ unread: s.unread + 1 }));
@@ -680,7 +682,7 @@ class Game {
       setTimeout(() => this.nest?.say('wish'), 600);
     }
     if (m.t === 'event') {
-      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : m.kind === 'town' ? '💌' : '🐾';
+      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : m.kind === 'town' ? '💌' : m.kind === 'closed' || m.kind === 'busy' ? '🌙' : m.kind === 'npc' ? '🐾' : '🐾';
       toast(m.text, icon, 4200);
       if (m.kind === 'find' || m.kind === 'gift') audio.sparkle();
       if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift' || m.kind === 'town') this.refreshMe().catch(() => {});
