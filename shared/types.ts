@@ -72,7 +72,19 @@ export interface CatRecord {
   wx: number; // last world position
   wy: number;
   stage?: number; // 0 kitten, 1 young, 2 adult (last announced)
+  guestAt?: GuestAt | null; // visiting a neighbour's house
 }
+
+export interface GuestAt {
+  visit: number; // the visit's id
+  hostCat: string;
+  hostCatName: string;
+  hostName: string;
+  until: number;
+}
+
+/** Who answers the door when a neighbour's cat comes to play. */
+export type DoorSetting = 'open' | 'ask' | 'closed';
 
 export interface PlacedItem {
   uid: string;
@@ -107,6 +119,7 @@ export interface UserSettings {
   tzOffset: number; // minutes, from Date.getTimezoneOffset()
   sound: boolean;
   music: boolean;
+  door?: DoorSetting; // default open
 }
 
 export interface JournalEntry {

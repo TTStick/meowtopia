@@ -60,6 +60,7 @@ interface Ent {
   busyUntil?: number; // doing a resident's little thing together
   nextGreet?: number;
   nextNote?: number;
+  date?: number; // on its way to (or waiting at) an appointment to play
 }
 
 interface Companion {
@@ -438,6 +439,13 @@ function watchedNear(e: Ent): boolean {
 }
 
 async function meet(a: Ent, b: Ent, now: number, forced = false) {
+  // either may still be mid-walk (two cats arriving for an appointment): stop them where they really are
+  for (const x of [a, b]) {
+    [x.st.x, x.st.y] = posOf(x, now);
+    x.sx = x.st.x;
+    x.sy = x.st.y;
+    x.legs = [];
+  }
   const key = pairKey(a.st.id, b.st.id);
   const talk = forced || chatterAllowed(a.st.x, a.st.y, now);
   meetCooldown.set(key, now + 12 * 60_000);
@@ -774,6 +782,7 @@ function tickCat(e: Ent, now: number) {
   }
   if (now < e.until) return;
   if (e.mode === 'meet') e.mode = 'idle';
+  if (e.date && dateWaiting(e, now)) return;
   // trip end?
   const ck = clockAt(now);
   const w = weatherAt(now);
@@ -901,6 +910,117 @@ function tickNpc(n: NpcDef, now: number) {
     return;
   }
   setAct(e, s.act, 20_000 + Math.random() * 30_000, now);
+}
+
+// ---------- neighbours: visits and appointments ----------
+/** Set by the neighbourhood module (which builds on this one). */
+export const hooks: { endVisit?: (c: CatRecord) => void } = {};
+const dates = new Map<number, { place: string; until: number }>();
+
+/** A cat going to a neighbour's house: if it's out, it walks to the door and knocks first. */
+export function goVisit(c: CatRecord, door: [number, number], inside: () => void) {
+  const e = ents.get(c.id);
+  if (!e) return inside();
+  const now = Date.now();
+  e.controlledBy = undefined;
+  e.st.controlled = false;
+  e.date = undefined;
+  const knock = () => {
+    broadcastNear({ t: 'emote', id: e.st.id, kind: 'exclaim' }, e.st.x, e.st.y);
+    setAct(e, 'sit_happy', 4000, Date.now());
+    setTimeout(() => {
+      if (!ents.has(c.id)) return;
+      despawn(e, 'home');
+      c.location = 'nest';
+      game.markDirty(c);
+      inside();
+      if (c.guestAt) toOwners(c, { t: 'event', kind: 'guestin', text: `${c.name}进了${c.guestAt.hostName}家，和${c.guestAt.hostCatName}玩去啦`, catId: c.id });
+    }, 1400);
+  };
+  const far = Math.hypot(door[0] - e.st.x, door[1] - e.st.y);
+  if (!walkTo(e, door[0], door[1], now, far > 30 * TILE, knock)) knock();
+}
+
+/** Send a cat to an appointment: out of its nest if need be, then to the place. */
+export function keepDate(c: CatRecord, id: number, poiId: string, side: number): boolean {
+  const poi = POI_MAP[poiId];
+  if (!poi || c.guestAt) return false;
+  const now = Date.now();
+  if (!ents.has(c.id)) startTrip(c, false);
+  const e = ents.get(c.id);
+  if (!e) return false;
+  if (e.trip) e.trip.ends = Math.max(e.trip.ends, now + 40 * 60_000);
+  dates.set(id, { place: poi.name, until: now + 30 * 60_000 });
+  e.date = id;
+  if (e.controlledBy) return true; // its person is steering; they'll bring it along
+  const [tx, ty] = poiPoint(world, poi, id * 7 + side);
+  const far = Math.hypot(tx - e.st.x, ty - e.st.y);
+  walkTo(e, tx + side * 30, ty, now, far > 35 * TILE, () => setAct(e, 'sit', 25 * 60_000, Date.now()));
+  return true;
+}
+
+/** While a cat waits for a friend at an appointment it stays where it is. */
+function dateWaiting(e: Ent, now: number): boolean {
+  const d = dates.get(e.date!);
+  if (!d || now > d.until) {
+    e.date = undefined;
+    return false;
+  }
+  setAct(e, Math.random() < 0.5 ? 'sit' : 'watch', 20_000, now);
+  return true;
+}
+
+/** Is this cat on its way to (or waiting at) this appointment? */
+export function onDate(catId: string, id: number): boolean {
+  return ents.get(catId)?.date === id;
+}
+
+/** Is this cat at a place (in its room, if it's a shop)? */
+export function atPlace(catId: string, poiId: string, slack = 3): boolean {
+  const e = ents.get(catId), poi = POI_MAP[poiId];
+  if (!e || !poi) return false;
+  const [x, y] = posOf(e, Date.now());
+  if ((poi.room ?? null) !== (roomAt(x, y)?.id ?? null)) return false;
+  return Math.hypot(x - poi.x * TILE, y - poi.y * TILE) < (poi.r + slack) * TILE;
+}
+
+/** Are both cats out, and close? */
+export function catsTogether(a: string, b: string, tiles = 3): boolean {
+  const ea = ents.get(a), eb = ents.get(b);
+  if (!ea || !eb || roomAt(ea.st.x, ea.st.y) !== roomAt(eb.st.x, eb.st.y)) return false;
+  const [ax, ay] = posOf(ea, Date.now()), [bx, by] = posOf(eb, Date.now());
+  return Math.hypot(ax - bx, ay - by) < tiles * TILE;
+}
+
+/** Two cats who kept their appointment play together for a while. */
+export function playTogether(id: number, a: string, b: string) {
+  const ea = ents.get(a), eb = ents.get(b);
+  dates.delete(id);
+  if (!ea || !eb) return;
+  ea.date = eb.date = undefined;
+  const now = Date.now();
+  meetCooldown.delete(pairKey(a, b));
+  void meet(ea, eb, now, true).then(() => {
+    for (const [x, k] of [[ea, 0], [eb, 1]] as const) {
+      setTimeout(() => {
+        if (!ents.has(x.st.id)) return;
+        setAct(x, k ? 'pounce' : 'bat', 12_000, Date.now());
+        broadcastNear({ t: 'emote', id: x.st.id, kind: 'heart' }, x.st.x, x.st.y);
+      }, 600 + k * 400);
+    }
+  });
+}
+
+/** Where a cat is, in words. */
+export function whereIs(catId: string): string | null {
+  const e = ents.get(catId);
+  return e ? placeName(e.st.x, e.st.y) : null;
+}
+
+/** Called off: let a waiting cat get on with its day. */
+export function dropDate(id: number) {
+  dates.delete(id);
+  for (const e of ents.values()) if (e.date === id) e.date = undefined;
 }
 
 // ---------- the open-air stage ----------
@@ -1075,7 +1195,7 @@ function autoTrips(now: number) {
     if (wandering >= MAX_WANDERERS) break;
     if (ents.has(id)) continue;
     const c = game.getCat(id);
-    if (!c || c.location !== 'nest') continue;
+    if (!c || c.location !== 'nest' || c.guestAt) continue;
     if (ownerOnline(c)) continue; // the owner is with it
     game.refresh(c, now);
     if (c.stats.energy < 35) continue;
@@ -1304,6 +1424,7 @@ function handle(c: Client, m: ClientMsg) {
     case 'enter': {
       const cat = ownCat(c, m.catId);
       if (!cat) return;
+      if (cat.guestAt) hooks.endVisit?.(cat); // called home from a neighbour's first
       c.cats.add(cat.id);
       startTrip(cat, true);
       return;

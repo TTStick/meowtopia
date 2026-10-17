@@ -30,6 +30,7 @@ export const BOUNDS: Partial<Record<PropKind, [number, number, number, number]>>
   tent: [-62, -84, 62, 8], campfire: [-24, -22, 24, 8], log: [-28, -20, 28, 6], palm: [-58, -132, 58, 8], gazebo: [-58, -124, 58, 8],
   fruitbasket: [-17, -24, 17, 5],
   stage: [-174, -128, 174, 18], stageback: [-186, -236, 186, 8], speaker: [-17, -48, 17, 4], stagelight: [-26, -100, 26, 6],
+  hoodsign: [-40, -92, 40, 8],
 };
 
 /** The low wooden platform (drawn flat, under whoever stands on it). Base = front edge. */
@@ -796,6 +797,20 @@ export function drawProp(pen: Pen, kind: PropKind, v: number, c: PropCtx) {
       big(-10, 0, 12);
       big(10, 2, 9);
       big(-2, -16, 7);
+      return;
+    }
+    case 'hoodsign': {
+      // the neighbourhood's name on a wooden board, with a little cat-ear roof
+      for (const x of [-26, 26]) pen.tube([x, 4, x, -60], 5, WOOD_D);
+      pen.shape([-36, -58, -30, -82, -22, -74, 22, -74, 30, -82, 36, -58], '#d98f6a', 1.8);
+      pen.poly([-34, -58, 34, -58, 34, -32, -34, -32], '#fff8e8', 1.8);
+      ctx.fillStyle = INK;
+      ctx.font = 'bold 15px "PingFang SC","Microsoft YaHei",system-ui';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('猫窝小区', 0, -45);
+      for (let i = 0; i < 4; i++) pen.ellipse(-24 + i * 16, -24 + (i % 2) * 2, 3, 3, ['#f49ab0', '#ffd666', '#c7a8f0', '#f49ab0'][i], 0.8);
+      pen.line([-30, -22, 30, -20], 1.2, '#7fb36b');
       return;
     }
     case 'stage': return stage(pen, c);

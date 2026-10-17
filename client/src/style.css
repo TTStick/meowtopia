@@ -1011,3 +1011,29 @@ textarea {
     white-space: normal;
   }
 }
+
+/* choices in the invitation sheet */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+.chip {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.chip.on {
+  background: var(--coral);
+  color: #fff;
+}
+.chip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

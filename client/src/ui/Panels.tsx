@@ -14,6 +14,8 @@ import { ITEMS, ITEM_MAP, WEAR_SLOT, type ItemCat } from '../../../shared/items'
 import { coatName, traitWords } from '../../../shared/genes';
 import { ageOf, bondLevel, moodWord } from '../../../shared/stats';
 import { getWorld, TILE, WW, WH, Ter, POIS, ZONE_NAME } from '../../../shared/world';
+import { clockAt } from '../../../shared/time';
+import { now as clockNow } from '../game/clock';
 import type { CatRecord, JournalEntry } from '../../../shared/types';
 import * as I from './icons';
 import { Sheet, Tabs, when } from './Sheet';
@@ -302,9 +304,9 @@ function CollectionPanel() {
 }
 
 // ---------------- social ----------------
-type SocialTab = 'friends' | 'visit' | 'bond' | 'notes';
+type SocialTab = 'hood' | 'friends' | 'visit' | 'bond' | 'notes';
 function SocialPanel() {
-  const [tab, setTab] = useState<SocialTab>('friends');
+  const [tab, setTab] = useState<SocialTab>('hood');
   return (
     <Sheet
       title="小镇邻里"
@@ -313,6 +315,7 @@ function SocialPanel() {
           value={tab}
           set={setTab}
           items={[
+            ['hood', '小区'],
             ['friends', '猫友'],
             ['visit', '去串门'],
             ['bond', '共养'],
@@ -321,10 +324,262 @@ function SocialPanel() {
         />
       }
     >
+      {tab === 'hood' && <HoodTab />}
       {tab === 'friends' && <Friends />}
       {tab === 'visit' && <VisitList />}
       {tab === 'bond' && <Bond />}
       {tab === 'notes' && <Notes />}
+    </Sheet>
+  );
+}
+
+interface DateV {
+  id: number;
+  mine: boolean;
+  with: string;
+  myCat: string;
+  theirCat: string;
+  place: string;
+  when: string;
+  note: string | null;
+  status: string;
+}
+
+/** 猫窝小区: knocks at the door, invitations, appointments, and the neighbours. */
+function HoodTab() {
+  const hood = useStore(ui, (s) => s.hood);
+  const me = activeCat();
+  const [data, setData] = useState<{ dates: DateV[]; knocks: { id: number; cat: string; owner: string }[] } | null>(null);
+  const load = () =>
+    api<{ dates: DateV[]; knocks: { id: number; cat: string; owner: string }[] }>('GET', '/api/playdates')
+      .then(setData)
+      .catch(() => setData({ dates: [], knocks: [] }));
+  useEffect(() => {
+    void load();
+    void game.loadHood();
+  }, []);
+  const act = async (fn: () => Promise<unknown>, msg?: string) => {
+    try {
+      await fn();
+      if (msg) toast(msg, '📅');
+    } catch (e) {
+      toast((e as Error).message);
+    }
+    void load();
+    void game.loadHood();
+  };
+  const dates = data?.dates ?? [];
+  const incoming = dates.filter((d) => !d.mine && d.status === 'asked');
+  const waiting = dates.filter((d) => d.mine && d.status === 'asked');
+  const upcoming = dates.filter((d) => d.status === 'yes' || d.status === 'going');
+  const recent = dates.filter((d) => d.status === 'done' || d.status === 'missed').slice(-4).reverse();
+  const houses = [...(hood?.houses ?? [])].sort((a, b) => Number(b.close) - Number(a.close) || a.n - b.n);
+  return (
+    <>
+      <p class="muted" style={{ marginTop: 0 }}>
+        猫窝小区里住着和你最熟的邻居：常一起玩的猫友、串过门的、一起约过玩的。可以带猫去做客，也可以约个时间一起玩，到时候猫猫会自己去赴约。
+      </p>
+      {!!data?.knocks.length && (
+        <>
+          <div class="sec">来敲门的客人</div>
+          <div class="list">
+            {data.knocks.map((k) => (
+              <div key={k.id} class="row">
+                <I.IDoor />
+                <div class="grow">
+                  <div class="t1">
+                    {k.owner}家的{k.cat}来敲门
+                  </div>
+                  <div class="t2">请它进来，它会和你的猫玩一会儿</div>
+                </div>
+                <button class="btn small primary" onClick={() => act(() => api('POST', '/api/neighbors/answer', { id: k.id, yes: true }), `${k.cat}进来玩啦`)}>
+                  请进来
+                </button>
+                <button class="btn small ghost" onClick={() => act(() => api('POST', '/api/neighbors/answer', { id: k.id, yes: false }))}>
+                  下次吧
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {incoming.length > 0 && (
+        <>
+          <div class="sec">收到的邀请</div>
+          <div class="list">
+            {incoming.map((d) => (
+              <div key={d.id} class="row">
+                <I.ISparkle />
+                <div class="grow">
+                  <div class="t1">
+                    {d.theirCat}约{d.myCat}一起玩
+                  </div>
+                  <div class="t2">
+                    {d.when} · {d.place}
+                    {d.note ? ` ·「${d.note}」` : ''}
+                  </div>
+                </div>
+                <button class="btn small primary" onClick={() => act(() => api('POST', `/api/playdates/${d.id}/answer`, { yes: true }), `约好啦，到时候${d.myCat}会自己过去`)}>
+                  好呀
+                </button>
+                <button class="btn small ghost" onClick={() => act(() => api('POST', `/api/playdates/${d.id}/answer`, { yes: false }))}>
+                  下次吧
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {(upcoming.length > 0 || waiting.length > 0) && (
+        <>
+          <div class="sec">约好的</div>
+          <div class="list">
+            {[...upcoming, ...waiting].map((d) => (
+              <div key={d.id} class="row">
+                <I.IStar />
+                <div class="grow">
+                  <div class="t1">
+                    {d.when} · {d.place}
+                  </div>
+                  <div class="t2">
+                    {d.status === 'asked' ? `等${d.with}回复` : d.status === 'going' ? `${d.myCat}正在赴约` : `和${d.with}家的${d.theirCat}`}
+                  </div>
+                </div>
+                {d.status !== 'going' && (
+                  <button class="btn small ghost" onClick={() => act(() => api('POST', `/api/playdates/${d.id}/cancel`), '好，改天再约')}>
+                    {d.status === 'asked' ? '算了' : '改天'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {recent.length > 0 && (
+        <div class="list" style={{ marginTop: 8 }}>
+          {recent.map((d) => (
+            <div key={d.id} class="row">
+              <div class="grow">
+                <div class="t2">
+                  {d.when} · {d.place} · {d.status === 'done' ? `${d.myCat}和${d.theirCat}玩得很开心` : '这次没碰上'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div class="sec">邻居</div>
+      {!hood ? (
+        <div class="empty">…</div>
+      ) : houses.length === 0 ? (
+        <div class="empty">小区里还空空的。等有了新的猫友，他们就会搬到你家附近。</div>
+      ) : (
+        <div class="list">
+          {houses.map((h) => {
+            const c = h.cats[0];
+            return (
+              <div key={h.uid} class="row">
+                {c && <img src={catPortrait(c.genes, c.outfit, 48, ageOf(c.born))} alt="" />}
+                <div class="grow">
+                  <div class="t1">
+                    {h.name}家
+                    {h.close && (
+                      <span style={{ color: 'var(--coral)', marginLeft: 3 }} title="老朋友">
+                        ♥
+                      </span>
+                    )}
+                  </div>
+                  <div class="t2">
+                    {h.n + 1}号 · {h.cats.map((x) => x.name).join('、')}
+                  </div>
+                </div>
+                {c && (
+                  <button class="btn small" onClick={() => game.visit(c.id)}>
+                    串门
+                  </button>
+                )}
+                {c && h.door !== 'closed' && !c.out && !c.away && me && !me.guestAt && (
+                  <button class="btn small" onClick={() => (ui.set({ panel: null }), game.knock(h.uid, h.name))}>
+                    做客
+                  </button>
+                )}
+                {c && (
+                  <button class="btn small" onClick={() => ui.set({ panel: 'playdate', playdateTo: { uid: h.uid, name: h.name, cat: c.name } })}>
+                    约玩
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Ask a neighbour's cat to play: where, which day, what time. */
+function PlaydatePanel() {
+  const to = useStore(ui, (s) => s.playdateTo);
+  const cat = activeCat();
+  const [places, setPlaces] = useState<{ id: string; name: string }[]>([]);
+  const [poi, setPoi] = useState('fountain');
+  const [day, setDay] = useState(0);
+  const [hour, setHour] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+  useEffect(() => {
+    api<{ places: { id: string; name: string }[] }>('GET', '/api/playdates')
+      .then((r) => setPlaces(r.places))
+      .catch(() => {});
+  }, []);
+  if (!to || !cat) return null;
+  const nowH = clockAt(clockNow()).hour;
+  const HOURS = [9, 10, 11, 14, 15, 16, 17, 18, 19, 20];
+  const open = (h: number) => day > 0 || h > nowH + 0.25;
+  const send = async () => {
+    if (hour === null) return;
+    const dayStart = clockNow() - nowH * 3600_000;
+    try {
+      await api('POST', '/api/playdates', { catId: cat.id, to: to.uid, poi, at: Math.round(dayStart + (day * 24 + hour) * 3600_000), note: note.trim() || undefined });
+      toast(`邀请送出去啦，等${to.name}回复`, '📅');
+      ui.set({ panel: 'social' });
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  return (
+    <Sheet title={`约${to.cat}一起玩`}>
+      <div class="sec">去哪儿</div>
+      <div class="chips">
+        {places.map((p) => (
+          <button key={p.id} class={`chip ${poi === p.id ? 'on' : ''}`} onClick={() => setPoi(p.id)}>
+            {p.name}
+          </button>
+        ))}
+      </div>
+      <div class="sec">哪天</div>
+      <div class="chips">
+        {['今天', '明天'].map((d, i) => (
+          <button key={d} class={`chip ${day === i ? 'on' : ''}`} onClick={() => (setDay(i), setHour(null))}>
+            {d}
+          </button>
+        ))}
+      </div>
+      <div class="sec">几点（小镇时间）</div>
+      <div class="chips">
+        {HOURS.map((h) => (
+          <button key={h} class={`chip ${hour === h ? 'on' : ''}`} disabled={!open(h)} onClick={() => setHour(h)}>
+            {h}:00
+          </button>
+        ))}
+      </div>
+      <div class="sec">想说的话</div>
+      <input class="field" maxLength={30} placeholder="可以不填，比如“一起去看鱼吧”" value={note} onInput={(e) => setNote((e.target as HTMLInputElement).value)} />
+      <p class="muted" style={{ fontSize: 13 }}>
+        对方答应以后，到点两只猫会自己过去，你们不在线也没关系。
+      </p>
+      <button class="btn primary" style={{ width: '100%' }} disabled={hour === null} onClick={send}>
+        送出邀请
+      </button>
     </Sheet>
   );
 }
@@ -927,6 +1182,19 @@ function SettingsPanel() {
           </select>
         </span>
       </div>
+      <div class="toggle">
+        <span>
+          猫窝的门
+          <div class="muted" style={{ fontSize: 12 }}>
+            邻居家的猫来做客时
+          </div>
+        </span>
+        <select class="field" style={{ width: 120, minHeight: 36, padding: '0 6px' }} value={st.door ?? 'open'} onChange={(e) => save({ door: (e.target as HTMLSelectElement).value })}>
+          <option value="open">总是开着</option>
+          <option value="ask">先问问我</option>
+          <option value="closed">先关着</option>
+        </select>
+      </div>
       <SecuritySection />
     </Sheet>
   );
@@ -971,6 +1239,7 @@ function HelpPanel() {
         <div>· 小镇的店都能进去坐坐。点一下店门口，就能带它进去；打烊以后要等第二天。</div>
         <div>· 点小镇居民，可以和它们做点小事，或者请它们陪你的猫一起逛逛。常来常往，它们会记得你的猫。</div>
         <div>· 有些晚上 19:30 到 21:00，河东的露天舞台有演出。开演时会有提示，点一下就能带它去看。</div>
+        <div>· 你的家在猫窝小区。点邻居家的房子，可以带猫去做客，或者约个时间一起玩；「邻里 · 小区」里能看到所有邀请和约定。</div>
         <div>· 它会自己出门、捡回宝贝、交到朋友，晚上一定会回家。你不在的时候它也过得很好，不用担心。</div>
       </div>
     </Sheet>
@@ -1050,6 +1319,8 @@ export function Panels() {
       return <CollectionPanel />;
     case 'social':
       return <SocialPanel />;
+    case 'playdate':
+      return <PlaydatePanel />;
     case 'map':
       return <MapPanel />;
     case 'cat':

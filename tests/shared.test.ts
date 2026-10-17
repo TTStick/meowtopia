@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { NPCS, NPC_MAP, townBond, walkBusy } from '../shared/npcs';
 import { roomOpen } from '../shared/rooms';
 import { SHOWS, showOn, showAt, showRole, STAGE_SPOTS, AUDIENCE_SPOTS } from '../shared/shows';
-import { getWorld, getRooms, POIS, POI_MAP, HOME_SPAWN, TILE, WW, Ter, poiPoint, walkable, walkableAt, planRoute, roomAt, zoneAt, type Room } from '../shared/world';
+import { getWorld, getRooms, HOUSES, MY_HOUSE, houseDoor, POIS, POI_MAP, HOME_SPAWN, TILE, WW, Ter, poiPoint, walkable, walkableAt, planRoute, roomAt, zoneAt, type Room } from '../shared/world';
 import { findPath, makeGrid, smoothPath } from '../shared/path';
 import { starterLayout, STARTER_ITEMS, validateLayout, canPlace } from '../shared/nest';
 import { advanceStats, freshStats, applyDelta, bondLevel, ageOf } from '../shared/stats';
@@ -220,4 +220,18 @@ test('shows: about four nights a week, 19:30 to 21:00, everyone has a reachable 
     const spots = [...show.cast.map((c) => c.id), ...show.crowd].map((id) => showRole(id, now)!.spot.join(','));
     assert.equal(new Set(spots).size, spots.length, `${show.id}: two townsfolk share a spot`);
   }
+});
+
+test('the neighbourhood: fifteen houses, every door on a path you can reach, mine by the home lane', () => {
+  assert.equal(HOUSES.length, 15);
+  assert.ok(MY_HOUSE >= 0);
+  const [hx, hy] = HOME_SPAWN;
+  for (const b of HOUSES) {
+    const [dx, dy] = houseDoor(b);
+    assert.ok(walkable(world, dx, dy), `door of the house at ${b.x},${b.y} is blocked`);
+    assert.ok(planRoute(world, hx, hy, dx, dy), `can't walk to the house at ${b.x},${b.y}`);
+    assert.equal(zoneAt(world, dx, dy), 'residential');
+  }
+  const [mx, my] = houseDoor(HOUSES[MY_HOUSE]);
+  assert.ok(Math.hypot(mx - hx, my - hy) < 3 * TILE, 'my door is right by the home lane');
 });

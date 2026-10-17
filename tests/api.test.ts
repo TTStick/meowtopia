@@ -611,3 +611,76 @@ test('admin: the roster, a page per player, letters, pausing, and unlocking for 
   await admin.call('POST', '/api/admin/ban', { user: uid, unban: true });
   assert.ok(!(await admin.call('GET', '/api/admin/players?filter=paused')).data.rows.some((r: { id: string }) => r.id === uid));
 });
+
+test('the neighbourhood: closest move in and stay; knocking, guests, the door, and invitations to play', async () => {
+  const join = async (name: string, seed: number) => {
+    const p = new Player();
+    const me = await p.join(name);
+    const cat = (await p.call('POST', '/api/adopt', { name: `${name}猫`, seed })).data.cats[0].id as string;
+    return { p, uid: me.user.id as string, cat };
+  };
+  const a = await join('甲', 21), b = await join('乙', 22), c = await join('丙', 23);
+  // a leaves two notes at b's door: b is a close neighbour now
+  for (const text of ['你好呀', '下次一起玩']) assert.equal((await a.p.call('POST', '/api/notes', { catId: b.cat, sticker: 'paw', text })).status, 200);
+  const hood = (await a.p.call('GET', '/api/neighbors')).data;
+  assert.equal(hood.me.uid, a.uid);
+  assert.equal(typeof hood.mine, 'number');
+  const hb = hood.houses.find((h: any) => h.uid === b.uid);
+  assert.ok(hb, 'b lives on my street');
+  assert.equal(hb.close, true);
+  assert.equal(hb.cats[0].id, b.cat);
+  assert.ok(hood.houses.some((h: any) => h.uid === c.uid), 'empty houses go to other players');
+  assert.ok(!hood.houses.some((h: any) => h.uid === a.uid), 'I live in my own house only');
+  const again = (await a.p.call('GET', '/api/neighbors')).data;
+  assert.deepEqual(again.houses.map((h: any) => [h.n, h.uid]), hood.houses.map((h: any) => [h.n, h.uid]), 'neighbours stay put');
+
+  // b's door is open: a's cat goes straight in
+  const k = (await a.p.call('POST', '/api/neighbors/knock', { catId: a.cat, host: b.uid })).data;
+  assert.equal(k.status, 'in', JSON.stringify(k));
+  const nest = (await b.p.call('GET', `/api/nest/${b.cat}`)).data;
+  assert.deepEqual(nest.guests.map((g: any) => g.cat.id), [a.cat]);
+  assert.equal(nest.guests[0].ownerName, '甲');
+  assert.equal((await a.p.call('GET', '/api/me')).data.cats[0].guestAt.hostName, '乙');
+  assert.equal((await a.p.call('POST', '/api/neighbors/knock', { catId: a.cat, host: c.uid })).status, 400, 'one house at a time');
+  assert.equal((await a.p.call('POST', '/api/neighbors/home', { catId: a.cat })).status, 200);
+  assert.equal((await a.p.call('GET', '/api/me')).data.cats[0].guestAt, null);
+  assert.deepEqual((await b.p.call('GET', `/api/nest/${b.cat}`)).data.guests, []);
+  const diary = (await b.p.call('GET', `/api/cat/${b.cat}/journal`)).data.map((e: any) => e.text).join('\n');
+  assert.match(diary, /甲家的甲猫来家里做客/);
+
+  // with "ask", b answers the door
+  await b.p.call('POST', '/api/settings', { door: 'ask' });
+  assert.equal((await a.p.call('POST', '/api/neighbors/knock', { catId: a.cat, host: b.uid })).data.status, 'asked');
+  const knocks = (await b.p.call('GET', '/api/playdates')).data.knocks;
+  assert.equal(knocks.length, 1);
+  assert.equal((await b.p.call('POST', '/api/neighbors/answer', { id: knocks[0].id, yes: true })).status, 200);
+  assert.equal((await a.p.call('GET', '/api/me')).data.cats[0].guestAt.hostName, '乙');
+  await a.p.call('POST', '/api/neighbors/home', { catId: a.cat });
+  // and with the door closed, nobody comes in
+  await b.p.call('POST', '/api/settings', { door: 'closed' });
+  assert.equal((await a.p.call('POST', '/api/neighbors/knock', { catId: a.cat, host: b.uid })).status, 400);
+
+  // an invitation to play
+  const places = (await a.p.call('GET', '/api/playdates')).data.places;
+  assert.ok(places.some((p: any) => p.id === 'pond'));
+  const soon = (await a.p.call('POST', '/api/playdates', { catId: a.cat, to: b.uid, poi: 'pond', at: Date.now() + 60_000 })).status;
+  assert.equal(soon, 400, 'not in the next few minutes');
+  const tz = (await a.p.call('GET', '/api/status')).data.worldTz;
+  const day = Math.floor((Date.now() + tz * 3600_000) / 86400_000) + 1;
+  const at = (day * 24 + 15 - tz) * 3600_000; // tomorrow, 15:00 in town
+  assert.equal((await a.p.call('POST', '/api/playdates', { catId: a.cat, to: b.uid, poi: 'nowhere', at })).status, 400);
+  const d = (await a.p.call('POST', '/api/playdates', { catId: a.cat, to: b.uid, poi: 'pond', at, note: '一起看鱼' })).data;
+  assert.equal(d.status, 'asked', JSON.stringify(d));
+  assert.equal((await a.p.call('POST', '/api/playdates', { catId: a.cat, to: b.uid, poi: 'pond', at })).status, 400, 'one at a time per pair');
+  const incoming = (await b.p.call('GET', '/api/playdates')).data.dates.find((x: any) => x.id === d.id);
+  assert.equal(incoming.mine, false);
+  assert.equal(incoming.note, '一起看鱼');
+  assert.match(incoming.when, /明天 15:00/);
+  assert.equal((await a.p.call('POST', `/api/playdates/${d.id}/answer`, { yes: true })).status, 404, 'only the one invited answers');
+  assert.equal((await b.p.call('POST', `/api/playdates/${d.id}/answer`, { yes: true })).data.status, 'yes');
+  assert.equal((await a.p.call('POST', `/api/playdates/${d.id}/cancel`)).status, 200);
+  assert.equal((await b.p.call('GET', '/api/playdates')).data.dates.find((x: any) => x.id === d.id)?.status, 'off');
+  const letters = (await b.p.call('GET', '/api/events')).data.map((e: any) => e.title).join('\n');
+  assert.match(letters, /甲猫约乙猫一起玩/);
+  assert.match(letters, /约定改天啦/);
+});

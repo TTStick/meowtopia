@@ -56,7 +56,7 @@ export function TopBar() {
         <img src={catPortrait(shown.genes, shown.outfit, 64, ageOf(shown.born), 'happy')} alt="" />
         <span style={{ textAlign: 'left', minWidth: 0 }}>
           <div class="nm">{shown.name}</div>
-          <div class="md">{visiting ? `${visiting.ownerName}家的猫` : shown.location === 'world' ? '在外面探险' : moodWord(shown.stats)}</div>
+          <div class="md">{visiting ? `${visiting.ownerName}家的猫` : shown.guestAt ? `在${shown.guestAt.hostName}家做客` : shown.location === 'world' ? '在外面探险' : moodWord(shown.stats)}</div>
         </span>
       </button>
       <div class="spacer" />
@@ -200,7 +200,33 @@ export function NestBar() {
   const play = useStore(ui, (s) => s.play);
   const catOut = useStore(ui, (s) => s.catOut);
   const [speak, setSpeak] = useState(false);
+  useStore(ui, (s) => s.me);
   const cat = activeCat();
+  if (cat?.guestAt) {
+    const g = cat.guestAt;
+    return (
+      <div class="bar">
+        <div class="dock">
+          <button onClick={() => game.visit(g.hostCat)}>
+            <I.IHome />
+            去看看它
+          </button>
+          <button onClick={() => game.fetchHome()}>
+            <I.IDoor />
+            接它回家
+          </button>
+          <button onClick={() => open('social')}>
+            <I.IPeople />
+            邻里
+          </button>
+          <button onClick={() => game.startBuild()}>
+            <I.IBrush />
+            装修
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       {speak && <Speak onClose={() => setSpeak(false)} />}
@@ -272,6 +298,7 @@ export function WorldBar() {
   const controlling = useStore(ui, (s) => s.controlling);
   const target = useStore(ui, (s) => s.worldTarget);
   const shop = useStore(ui, (s) => s.worldShop);
+  const house = useStore(ui, (s) => s.worldHouse);
   const room = useStore(ui, (s) => s.room);
   const myRoom = useStore(ui, (s) => s.myRoom);
   const [speak, setSpeak] = useState(false);
@@ -282,7 +309,8 @@ export function WorldBar() {
       {speak && catOut && <Speak onClose={() => setSpeak(false)} />}
       {target && <TargetCard />}
       {shop && !target && <ShopCard id={shop} />}
-      {catOut && !target && !shop && <CompanionPill />}
+      {house !== null && !target && !shop && <HouseCard n={house} />}
+      {catOut && !target && !shop && house === null && <CompanionPill />}
       <div class="side">
         <button class="iconbtn" aria-label="放大" onClick={() => w?.zoomBy(1.25)}>
           <I.IPlus />
@@ -563,6 +591,66 @@ export function ShowPill() {
       <span aria-hidden="true">🎵</span>
       <span class="st">{on.live ? `露天舞台正在演出：${on.show.name}` : `${hm(SHOW_START)} 露天舞台：${on.show.name}`}</span>
     </button>
+  );
+}
+
+/** A house in the neighbourhood: who lives there, and what we could do. */
+function HouseCard({ n }: { n: number }) {
+  const hood = useStore(ui, (s) => s.hood);
+  const me = activeCat();
+  const close = () => ui.set({ worldHouse: null });
+  const mine = hood && n === hood.mine;
+  const h = mine ? hood!.me : hood?.houses.find((x) => x.n === n);
+  const cat = h?.cats[0];
+  const img = cat ? catPortrait(cat.genes, cat.outfit, 56, ageOf(cat.born), 'open') : '';
+  const where = cat ? (cat.away ? `${cat.name}去${cat.away}家玩了` : cat.out ? `${cat.name}出门了` : `${cat.name}在家`) : '';
+  return (
+    <div class="card target">
+      {img && <img src={img} alt="" />}
+      <div class="info">
+        <div class="tn">
+          {mine ? '我的家' : h ? `${h.name}家` : '空房子'}
+          <span class="muted" style={{ fontSize: '12px', fontWeight: 400, marginLeft: 6 }}>
+            猫窝小区 {n + 1} 号
+          </span>
+        </div>
+        <div class="muted" style={{ fontSize: '13px' }}>
+          {!h ? '还没有人住，说不定哪天就有新邻居了' : mine ? h.cats.map((c) => c.name).join('、') : `${h.cats.map((c) => c.name).join('、')} · ${where}`}
+        </div>
+        {h && !mine && h.door !== 'open' && (
+          <div class="muted" style={{ fontSize: '12px', marginTop: '2px' }}>
+            {h.door === 'ask' ? '这家有客人会先问问主人' : '这家的门先关着'}
+          </div>
+        )}
+        <div class="tb">
+          {mine ? (
+            <button class="btn small primary" onClick={() => (close(), game.openNest())}>
+              回猫窝
+            </button>
+          ) : (
+            h &&
+            cat && (
+              <>
+                {h.door !== 'closed' && !cat.out && !cat.away && me && !me.guestAt && (
+                  <button class="btn small primary" onClick={() => game.knock(h.uid, h.name)}>
+                    带{me.name}去做客
+                  </button>
+                )}
+                <button class="btn small" onClick={() => (close(), game.visit(cat.id))}>
+                  看看猫窝
+                </button>
+                <button class="btn small" onClick={() => ui.set({ worldHouse: null, panel: 'playdate', playdateTo: { uid: h.uid, name: h.name, cat: cat.name } })}>
+                  约一起玩
+                </button>
+              </>
+            )
+          )}
+          <button class="btn small ghost" onClick={close}>
+            <I.IClose size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

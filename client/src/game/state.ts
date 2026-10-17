@@ -1,8 +1,32 @@
 import { Store } from './store';
-import type { MeResponse, NestLayout, CatRecord } from '../../../shared/types';
+import type { MeResponse, NestLayout, CatRecord, CatGenes, DoorSetting } from '../../../shared/types';
 
 export type Panel =
-  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo' | 'protect' | 'privacy';
+  | null | 'shop' | 'wardrobe' | 'journal' | 'letters' | 'social' | 'settings' | 'map' | 'feed' | 'collection' | 'cat' | 'note' | 'coparent' | 'command' | 'help' | 'away' | 'photo' | 'protect' | 'privacy' | 'playdate';
+
+/** 猫窝小区: who lives in which house, as this player sees it. */
+export interface HoodCat {
+  id: string;
+  name: string;
+  genes: CatGenes;
+  outfit: string[];
+  born: number;
+  out: boolean;
+  away: string | null; // visiting someone's house
+}
+export interface HoodHouse {
+  n: number;
+  uid: string;
+  name: string;
+  cats: HoodCat[];
+  door: DoorSetting;
+  close: boolean;
+}
+export interface Hood {
+  mine: number;
+  me: HoodHouse;
+  houses: HoodHouse[];
+}
 
 export interface Toast {
   id: number;
@@ -40,6 +64,9 @@ export interface UIState {
   room: string | null; // the room the town camera is looking into
   myRoom: string | null; // the room my cat is in
   companion: { id: string; name: string } | null; // a resident walking along with my cat
+  hood: Hood | null;
+  worldHouse: number | null; // a house tapped in town
+  playdateTo: { uid: string; name: string; cat: string } | null; // whom the invitation sheet is for
   llm: boolean;
   busy: boolean;
   photo: string | null;
@@ -70,6 +97,9 @@ export const ui = new Store<UIState>({
   room: null,
   myRoom: null,
   companion: null,
+  hood: null,
+  worldHouse: null,
+  playdateTo: null,
   llm: false,
   busy: false,
   photo: null,

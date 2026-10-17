@@ -34,7 +34,7 @@ export type PropKind =
   | 'sandbox' | 'windmill' | 'lighthouse' | 'boat' | 'picnic' | 'telescope' | 'bigtree' | 'table' | 'well' | 'crop'
   | 'post' | 'cart' | 'hive' | 'kite' | 'snowman' | 'flowerarch' | 'parasol' | 'pumpkins' | 'lanterns'
   | 'fruittree' | 'bamboo' | 'hotspring' | 'stonelamp' | 'tent' | 'campfire' | 'log' | 'palm' | 'gazebo' | 'fruitbasket'
-  | 'stage' | 'stageback' | 'speaker' | 'stagelight';
+  | 'stage' | 'stageback' | 'speaker' | 'stagelight' | 'hoodsign';
 
 export interface Prop {
   id: number;
@@ -130,6 +130,8 @@ export const POI_ALIASES: Record<string, string[]> = {
   post_in: ['邮局', '寄信', '信'], flowers_in: ['花店', '买花'], tailor_in: ['裁缝', '衣服'],
 };
 export const HOME_SPAWN: [number, number] = [24 * TILE, 47.6 * TILE];
+/** The neighbourhood's notice board, where appointments to play are pinned up. */
+export const HOOD_BOARD: [number, number] = [34.8, 50.6];
 
 // ---------- geometry helpers ----------
 type V = [number, number];
@@ -182,9 +184,10 @@ const islandK = (x: number, y: number) => ((x - ISLAND.x) / ISLAND.rx) ** 2 + ((
 const inRect = (x: number, y: number, [rx, ry, rw, rh]: readonly number[]) => x >= rx && x <= rx + rw && y >= ry && y <= ry + rh;
 
 export const PATHS: { pts: V[]; w: number }[] = [
-  { pts: [[53, 46], [40, 47], [24, 47.5], [6, 47.5]], w: 1.4 }, // west road
+  { pts: [[53, 46], [40, 47], [24, 47.5], [5, 47.5]], w: 1.4 }, // west road, through the neighbourhood
   { pts: [[36.5, 47], [36.5, 56.5], [36, 64], [32, 70]], w: 1.1 }, // residential lane
-  { pts: [[8, 56.5], [37, 56.5]], w: 1.1 }, // south lane
+  { pts: [[3, 56.5], [37, 56.5]], w: 1.1 }, // south lane
+  { pts: [[3, 63.8], [36, 63.8]], w: 1 }, // back lane, in front of the third row
   { pts: [[54, 41], [46, 31], [40, 26.5], [30, 26.5], [21, 25], [17, 18], [22, 10.5], [34, 10.5], [40, 16], [40, 26.5]], w: 1.1 }, // park
   { pts: [[66, 41], [76, 29], [80.5, 20], [89, 20], [98, 14], [104, 11]], w: 1.1 }, // NE to hill
   { pts: [[67, 46], [84, 46.5], [93, 46], [100, 43], [104, 37], [104, 26]], w: 1.4 }, // east road to field
@@ -243,12 +246,21 @@ export const BUILDINGS: Building[] = [
   { k: 'shop', x: 74, y: 41, w: 6, h: 4.5, label: '邮局', v: 4, shop: 'post' },
   { k: 'shop', x: 50, y: 55, w: 5.5, h: 4.5, label: '花店', v: 5, shop: 'flowers' },
   { k: 'shop', x: 65, y: 55, w: 5.5, h: 4.5, label: '裁缝铺', v: 6, shop: 'tailor' },
-  // houses north of west road
-  ...[12, 18, 24, 30].map((x, i) => ({ k: 'house' as const, x, y: 41.5, w: 4.5, h: 4, v: i })),
-  ...[10, 16, 22, 28].map((x, i) => ({ k: 'house' as const, x, y: 51, w: 4.5, h: 4.5, v: i + 4 })),
+  // 猫窝小区: three rows of houses; the first two rows are where the town began
+  ...[12, 18, 24, 30, 6].map((x, i) => ({ k: 'house' as const, x, y: 41.5, w: 4.5, h: 4, v: i })),
+  ...[10, 16, 22, 28, 4].map((x, i) => ({ k: 'house' as const, x, y: 51, w: 4.5, h: 4.5, v: i + 4 })),
+  ...[4, 10, 16, 22, 28].map((x, i) => ({ k: 'house' as const, x, y: 58.5, w: 4.5, h: 4, v: i + 9 })),
   { k: 'house', x: 137, y: 6.5, w: 4.5, h: 4, v: 6, label: '温泉小屋' },
   { k: 'house', x: 127, y: 31.5, w: 4.5, h: 4, v: 4, label: '果园小屋' },
 ];
+
+/** The neighbourhood's houses, numbered in this order; mine is the one by the home lane. */
+export const HOUSES: Building[] = BUILDINGS.filter((b) => b.k === 'house' && !b.label);
+export const MY_HOUSE = HOUSES.findIndex((b) => b.x === 24 && b.y === 41.5);
+/** On the path in front of a house's door, in units. */
+export function houseDoor(b: Building): [number, number] {
+  return [(b.x + b.w / 2) * TILE, (b.y + b.h + 0.75) * TILE];
+}
 
 function terrainAt(tx: number, ty: number): Ter {
   const x = tx + 0.5, y = ty + 0.5;
@@ -347,7 +359,7 @@ export function getWorld(): World {
     add('reed', 28 + Math.cos(a) * 6.6, 17.3 + Math.sin(a) * 4.6, i % 2, 1);
   }
   // signposts
-  add('sign', 51.5, 44.5, 0, 1, undefined, '← 住宅区');
+  add('sign', 51.5, 44.5, 0, 1, undefined, '← 猫窝小区');
   add('sign', 68.5, 44.5, 1, 1, undefined, '花田 →');
   add('sign', 62.5, 55.5, 2, 1, undefined, '↓ 草地 · 码头');
   add('sign', 44.5, 30, 3, 1, undefined, '↖ 公园');
@@ -373,19 +385,24 @@ export function getWorld(): World {
   add('post', 104, 87.5, 0, 1);
   add('post', 106.2, 87.5, 0, 1);
   add('picnic', 43, 76.8, 0, 1);
-  add('well', 33, 61.5, 0, 1, [32.4, 60.9, 1.2, 0.6]);
+  add('well', 34.2, 61.2, 0, 1, [33.6, 60.6, 1.2, 0.6]);
   add('stump', 13, 13.2, 0, 1.2, [12.4, 12.6, 1.2, 0.6]);
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
     add('mushroom', 8 + Math.cos(a) * 1.8, 27 + Math.sin(a) * 1.2, i % 3, 1);
   }
-  // fences around residential gardens
+  // fences around residential gardens, a mailbox at every door in the neighbourhood
   for (const b of BUILDINGS.filter((b) => b.k === 'house')) {
     add('fence', b.x - 0.2, b.y + b.h + 0.3, 0, 1);
     add('fence', b.x + b.w - 0.6, b.y + b.h + 0.3, 1, 1);
     add('flowers', b.x + 0.4, b.y + b.h + 0.1, b.v % 4, 0.8);
+    if (!b.label) add('mailbox', b.x + 1.3, b.y + b.h + 0.55, b.v % 2, 0.9, [b.x + 1, b.y + b.h - 0.1, 0.6, 0.5]);
   }
   add('mailbox', 34.6, 46.2, 1, 1, [34.3, 45.7, 0.6, 0.5]);
+  add('hoodsign', 38.8, 45.8, 0, 1, [37.9, 45.4, 1.8, 0.4]);
+  add('board', HOOD_BOARD[0], HOOD_BOARD[1], 1, 1, [HOOD_BOARD[0] - 0.6, HOOD_BOARD[1] - 0.6, 1.2, 0.6]);
+  for (const [lx, ly] of [[8.5, 65], [20.5, 65], [32, 65], [3.4, 49.2]] as V[]) add('lamp', lx, ly, 0, 1, [lx - 0.3, ly - 0.4, 0.6, 0.4]);
+  for (const bx of [14.6, 26.6]) add('bench', bx, 65.6, 0, 1, [bx - 1, 65.1, 2, 0.5]);
 
   // ---- the east ----
   // hot spring in the highlands
@@ -456,7 +473,7 @@ export function getWorld(): World {
       } else if (t === Ter.Grass && !nearPath) {
         const park = jx > 13 && jx < 46 && jy > 6 && jy < 30;
         const meadow = jy > 62 && jx < 70;
-        const residential = jx < 38 && jy > 38 && jy < 62;
+        const residential = jx < 38 && jy > 38 && jy < 67;
         const town = jx > 38 && jx < 82 && jy > 28 && jy < 64;
         let pTree = park ? 0.05 : meadow ? 0.012 : residential ? 0.03 : town ? 0.012 : 0.03;
         if (jx > 82 && jx < 96 && jy < 70) pTree = 0.05; // riverside
@@ -533,14 +550,15 @@ export function zoneAt(w: World, x: number, y: number): string {
   if (distPolyline(tx, ty, CREEK_E) < 3.5 || distPolyline(tx, ty, CREEK_S) < 4) return 'creek';
   if (Math.hypot(tx - CAMP[0], ty - CAMP[1]) < 8) return 'camp';
   if (t === Ter.Field) return 'field';
+  if (tx < 38 && ty > 37 && ty < 67) return 'residential';
   if (ty > 62 && tx < 70) return 'meadow';
   if (tx > 13 && tx < 46 && ty > 5 && ty < 30) return 'park';
-  if (tx < 38 && ty > 37 && ty < 64) return 'residential';
+  if (tx < 38 && ty > 37 && ty < 67) return 'residential';
   return 'town';
 }
 
 export const ZONE_NAME: Record<string, string> = {
-  plaza: '喷泉广场', town: '小镇街道', residential: '住宅区', park: '公园', forest: '森林', river: '河边', meadow: '草地', field: '花田', hill: '小山坡', pier: '码头',
+  plaza: '喷泉广场', town: '小镇街道', residential: '猫窝小区', park: '公园', forest: '森林', river: '河边', meadow: '草地', field: '花田', hill: '小山坡', pier: '码头',
   spring: '温泉山谷', orchard: '果园', bamboo: '竹林', island: '海上小岛', creek: '小溪边', camp: '露营地', beach: '海边', indoor: '屋里', stage: '露天舞台',
 };
 

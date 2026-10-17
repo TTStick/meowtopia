@@ -4,7 +4,8 @@ import { Pen, rgba, mix } from '../engine/pen';
 import { CatActor, type AnimName } from './actor';
 import { drawProp, BOUNDS, type PropCtx } from '../art/props';
 import { drawNpc } from '../art/npc';
-import { drawBubble, drawNameTag, drawEmote, measureBubble, type EmoteKind } from '../art/fx';
+import { drawBubble, drawNameTag, drawEmote, measureBubble, roundRect, type EmoteKind } from '../art/fx';
+import { HOUSES, HOOD_BOARD } from '../../../shared/world';
 import { getWorld, getRooms, roomAt, roomById, planRoute, TILE, WW, WH, Ter, POIS, POI_MAP, BUILDINGS, walkableAt, zoneAt, ZONE_NAME, type Prop, type PropKind, type Room } from '../../../shared/world';
 import { roomOpen } from '../../../shared/rooms';
 import { showAt, STAGE, type ShowNow } from '../../../shared/shows';
@@ -1016,12 +1017,51 @@ export class WorldScene implements Scene {
     for (const c of this.critters) if (c.k === 'firefly' || c.k === 'note') this.drawCritter(ctx, c, T);
   }
 
+  /** Who lives where: a little plaque on each house in the neighbourhood. */
+  private drawHousePlates(v: Viewport) {
+    const hood = ui.state.hood;
+    if (!hood || this.zoom < 0.62) return;
+    const ctx = v.ctx;
+    v.screen();
+    for (let i = 0; i < HOUSES.length; i++) {
+      const h = i === hood.mine ? hood.me : hood.houses.find((x) => x.n === i);
+      const b = HOUSES[i];
+      const [sx, sy] = v.toScreen((b.x + b.w / 2) * TILE, (b.y + b.h) * TILE - 66);
+      if (sx < -80 || sx > v.w + 80 || sy < -40 || sy > v.h + 40) continue;
+      const mine = i === hood.mine;
+      const title = mine ? '我的家' : h ? `${h.name}家` : '空房子';
+      const sub = h && this.zoom > 0.9 ? h.cats.map((c) => c.name).join(' · ') : '';
+      ctx.font = 'bold 12px "PingFang SC","Microsoft YaHei",system-ui';
+      const w = Math.max(ctx.measureText(title).width, sub ? ctx.measureText(sub).width * 0.85 : 0) + 16;
+      const hh = sub ? 32 : 20;
+      ctx.save();
+      ctx.globalAlpha = h || mine ? 0.95 : 0.6;
+      ctx.fillStyle = mine ? '#fde3d3' : '#fff8e8';
+      ctx.strokeStyle = '#4a3a34';
+      ctx.lineWidth = 1.5;
+      roundRect(ctx, sx - w / 2, sy - hh / 2, w, hh, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = mine ? '#c0603e' : '#4a3a34';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(title, sx, sub ? sy - 6 : sy + 0.5);
+      if (sub) {
+        ctx.font = '10px "PingFang SC","Microsoft YaHei",system-ui';
+        ctx.fillStyle = 'rgba(74,58,52,0.75)';
+        ctx.fillText(sub, sx, sy + 8);
+      }
+      ctx.restore();
+    }
+  }
+
   /** Bubbles, name tags and emotes on top of whatever is being drawn. */
   private drawOverlays(v: Viewport, T: number) {
     const ctx = v.ctx;
     const [bx0, by0, bx1, by1] = v.bounds(10);
     const boil = Math.floor(T * 7) % 3;
     const lw = 1.7;
+    if (!roomAt(this.camX, this.camY)) this.drawHousePlates(v);
     v.world();
     // emotes
     for (const e of this.ents.values()) {
@@ -1673,11 +1713,21 @@ export class WorldScene implements Scene {
             ui.set({ worldShop: 'stage' });
             return;
           }
+          // a house in the neighbourhood, or its notice board
+          const house = HOUSES.findIndex((b) => tx >= b.x && tx <= b.x + b.w && ty >= b.y - 2.4 && ty <= b.y + b.h + 0.2);
+          if (house >= 0) {
+            ui.set({ worldHouse: house, worldShop: null });
+            return;
+          }
+          if (Math.abs(tx - HOOD_BOARD[0]) < 1.2 && ty > HOOD_BOARD[1] - 2.2 && ty < HOOD_BOARD[1] + 0.4) {
+            ui.set({ panel: 'social' });
+            return;
+          }
         } else if (Math.abs(x - room.door[0]) < TILE * 1.3 && y > room.door[1] - TILE * 0.7) {
           this.leaveRoom();
           return;
         }
-        if (ui.state.worldShop) ui.set({ worldShop: null });
+        if (ui.state.worldShop || ui.state.worldHouse !== null) ui.set({ worldShop: null, worldHouse: null });
         const id = this.myCatId;
         if (id && this.ents.has(id)) {
           if (!walkableAt(this.w, x, y)) return;

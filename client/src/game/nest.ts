@@ -15,6 +15,8 @@ import { ageOf } from '../../../shared/stats';
 import { Rng } from '../../../shared/rng';
 import type { CatRecord, NestLayout, PlacedItem, WallItem } from '../../../shared/types';
 import type { SpeechCtx } from '../../../shared/speech';
+import { fallbackLine } from '../../../shared/speech';
+import { drawNameTag } from '../art/fx';
 
 export interface NestEnv {
   say(cat: CatRecord, ctx: SpeechCtx, info?: Record<string, string>): Promise<string>;
@@ -71,6 +73,54 @@ export class NestScene implements NestHost {
   collect: string[] = [];
   /** A treasure the cat brought home and left on the floor for you. */
   gift: { item: string; id: string; x: number; y: number } | null = null;
+  /** Neighbours' cats visiting right now, each minding its own business. */
+  guests: { cat: CatActor; brain: NestBrain; rec: CatRecord; owner: string }[] = [];
+
+  setGuests(list: { cat: CatRecord; ownerName: string }[]) {
+    const keep = new Map(this.guests.map((g) => [g.rec.id, g]));
+    this.guests = list.map((g, i) => {
+      const old = keep.get(g.cat.id);
+      if (old) return old;
+      const cat = new CatActor(g.cat.id, g.cat.name, g.cat.genes);
+      cat.scale = 1.4;
+      cat.speed = 34;
+      cat.age = ageOf(g.cat.born);
+      cat.outfit = g.cat.outfit;
+      cat.energy = g.cat.stats.energy;
+      const brain = new NestBrain(cat, g.cat, this.guestHost(cat, g.cat));
+      const [x, y] = this.openFloorNear(W * (0.62 + i * 0.12), H * 0.72);
+      cat.x = x;
+      cat.y = y;
+      return { cat, brain, rec: g.cat, owner: g.ownerName };
+    });
+  }
+
+  /** A guest uses the room like the cat who lives here, but keeps quiet about it to the server. */
+  private guestHost(cat: CatActor, rec: CatRecord): NestHost {
+    const scene = this;
+    let hushed = 0;
+    return {
+      W, H,
+      get spots() {
+        return scene.spots.filter((s) => s.uid !== scene.brain.spot?.uid);
+      },
+      sunSpot: () => this.sunSpot(),
+      floorPath: (a, b, c, d) => this.floorPath(a, b, c, d),
+      openFloorNear: (x, y) => this.openFloorNear(x, y),
+      randomFloor: (r) => this.randomFloor(r),
+      hour: () => this.hour(),
+      night: () => this.night(),
+      weather: () => this.weather(),
+      season: () => this.season(),
+      say: (ctx, info) => {
+        if (this.T < hushed) return;
+        hushed = this.T + 9;
+        cat.say(fallbackLine(ctx, { name: rec.name, p: rec.personality, ...info }), this.T);
+      },
+      onCatEvent: () => {},
+      toyPos: () => this.toyPos(),
+    };
+  }
 
   placeGift(item: string, id: string) {
     const [x, y] = this.openFloorNear(W * 0.32, H - 34);
@@ -98,7 +148,7 @@ export class NestScene implements NestHost {
 
   /** The cat is out exploring the town: the nest is empty. */
   get away() {
-    return this.rec.location === 'world';
+    return this.rec.location === 'world' || !!this.rec.guestAt;
   }
 
   setRecord(rec: CatRecord) {
@@ -286,6 +336,10 @@ export class NestScene implements NestHost {
       if (this.feedItem.t <= 0) this.feedItem = null;
     }
     this.cat.update(dt, T);
+    for (const g of this.guests) {
+      g.brain.update(dt, T);
+      g.cat.update(dt, T);
+    }
   }
 
   // ---------------- drawing ----------------
@@ -403,7 +457,7 @@ export class NestScene implements NestHost {
           ctx.font = '12px "PingFang SC","Microsoft YaHei",system-ui';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(`出去玩啦～ ${this.rec.name}`, 0, -2);
+          ctx.fillText(this.rec.guestAt ? `去${this.rec.guestAt.hostName}家玩啦～` : `出去玩啦～ ${this.rec.name}`, 0, -2);
           ctx.fillStyle = 'rgba(74,58,52,0.55)';
           ctx.fillText('🐾', 32, 10);
           ctx.restore();
@@ -417,6 +471,16 @@ export class NestScene implements NestHost {
         this.cat.draw(pen);
       },
     });
+    for (const g of this.guests) {
+      list.push({
+        y: g.brain.spot ? g.brain.spot.sortY : g.cat.y,
+        f: () => {
+          if (g.cat.z > 2) g.cat.drawShadowAtGround(ctx);
+          pen.begin(boil * 17 + 7, 0.5, lw);
+          g.cat.draw(pen);
+        },
+      });
+    }
     if (this.gift && !this.away) {
       const gf = this.gift;
       list.push({
@@ -484,12 +548,21 @@ export class NestScene implements NestHost {
     v.world();
     pen.begin(boil * 13 + 1, 0.4, lw);
     if (!this.away) this.cat.drawEmotes(pen, T);
+    for (const g of this.guests) g.cat.drawEmotes(pen, T);
     v.screen();
     if (this.cat.bubble && !this.away) {
       const b = this.cat.bubble;
       const [sx, sy] = v.toScreen(this.cat.x, this.cat.headTop() - 4);
       const a = Math.min(1, (T - b.start) * 5, (b.until - T) * 2);
       drawBubble(ctx, sx, sy, b.text, Math.max(0, a));
+    }
+    for (const g of this.guests) {
+      const [nx, ny] = v.toScreen(g.cat.x, g.cat.y + 10);
+      drawNameTag(ctx, nx, ny, `${g.rec.name} · ${g.owner}家`, '#4a3a34', 0.8);
+      const b = g.cat.bubble;
+      if (!b) continue;
+      const [sx, sy] = v.toScreen(g.cat.x, g.cat.headTop() - 4);
+      drawBubble(ctx, sx, sy, b.text, Math.max(0, Math.min(1, (T - b.start) * 5, (b.until - T) * 2)), g.rec.name);
     }
   }
 

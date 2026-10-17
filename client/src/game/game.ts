@@ -213,6 +213,8 @@ class Game {
     await this.openNest();
     this.loadUnread();
     this.loadWish();
+    void this.loadHood();
+    setInterval(() => void this.loadHood(), 5 * 60_000);
     if (!me.user.secured) scheduleProtectNudge();
     // deep links from the Mac menu bar panel: ?panel=letters, ?scene=world
     const q = new URLSearchParams(location.search);
@@ -242,6 +244,45 @@ class Game {
       ui.set({ wish: { ...w.wish, progress: w.progress, done: w.done } });
     } catch {
       /* ignore */
+    }
+  }
+
+  /** Who lives in the neighbourhood (as I see it). */
+  async loadHood() {
+    try {
+      ui.set({ hood: await api<import('./state').Hood>('GET', '/api/neighbors') });
+    } catch {
+      /* the plates just stay blank */
+    }
+  }
+
+  /** Take my cat to a neighbour's house to play. */
+  async knock(hostUid: string, hostName: string) {
+    const c = activeCat();
+    if (!c) return;
+    ui.set({ worldHouse: null });
+    try {
+      const r = await api<{ status: 'in' | 'asked'; hostCat?: string; minutes?: number }>('POST', '/api/neighbors/knock', { catId: c.id, host: hostUid });
+      if (r.status === 'asked') toast(`${c.name}敲了敲${hostName}家的门，等等回音吧`, '🚪', 4200);
+      else toast(`${c.name}去${hostName}家找${r.hostCat}玩啦，会待一刻钟左右`, '🏡', 4200);
+      void this.refreshMe().catch(() => {});
+      void this.loadHood();
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  }
+
+  /** Bring my cat home from a neighbour's. */
+  async fetchHome() {
+    const c = activeCat();
+    if (!c) return;
+    try {
+      await api('POST', '/api/neighbors/home', { catId: c.id });
+      await this.refreshMe();
+      if (ui.state.scene === 'nest' && !ui.state.visiting) await this.openNest();
+      toast(`${c.name}回家啦`, '🏠');
+    } catch (e) {
+      toast((e as Error).message);
     }
   }
 
@@ -329,14 +370,16 @@ class Game {
   async openNest(catId?: string) {
     const cat = catId ? ui.state.me!.cats.find((c) => c.id === catId) : activeCat();
     if (!cat) return;
-    const r = await api<{ layout: NestLayout; cat: CatRecord }>('GET', `/api/nest/${cat.id}`);
+    const r = await api<{ layout: NestLayout; cat: CatRecord; guests?: { cat: CatRecord; ownerName: string }[] }>('GET', `/api/nest/${cat.id}`);
     patchCat(cat.id, r.cat);
     this.nest = new NestScene(r.cat, r.layout, this.nestEnv());
+    this.nest.setGuests(r.guests ?? []);
     this.syncCollect();
     ui.set({ nest: r.layout, visiting: null, scene: 'nest', catOut: r.cat.location === 'world', build: false, play: false });
     this.setScene(this.nest);
     if (ui.state.phase === 'game') this.loadWish();
-    if (r.cat.location === 'world') ui.set({ hint: `${r.cat.name}正在外面探险，可以去小镇看看它` });
+    if (r.cat.guestAt) ui.set({ hint: `${r.cat.name}在${r.cat.guestAt.hostName}家做客，过一会儿就回来` });
+    else if (r.cat.location === 'world') ui.set({ hint: `${r.cat.name}正在外面探险，可以去小镇看看它` });
     else {
       ui.set({ hint: null });
       this.tip();
@@ -346,9 +389,10 @@ class Game {
   }
 
   async visit(catId: string) {
-    const r = await api<{ layout: NestLayout; cat: CatRecord; mine: boolean; ownerName: string }>('GET', `/api/nest/${catId}`);
+    const r = await api<{ layout: NestLayout; cat: CatRecord; mine: boolean; ownerName: string; guests?: { cat: CatRecord; ownerName: string }[] }>('GET', `/api/nest/${catId}`);
     if (r.mine) return this.openNest(catId);
     const scene = new NestScene(r.cat, r.layout, { say: (cat, ctx, info) => Promise.resolve(fallbackLine(ctx, { name: cat.name, p: cat.personality, ...info })), onPet: () => audio.purr(), onPlay: () => {} }, true);
+    scene.setGuests(r.guests ?? []);
     this.nest = scene;
     ui.set({ visiting: { catId, cat: r.cat, layout: r.layout, ownerName: r.ownerName }, scene: 'nest', panel: null, build: false, play: false });
     this.setScene(scene);
@@ -607,6 +651,7 @@ class Game {
   }
   tip() {
     if (ui.state.scene !== 'nest' || ui.state.visiting || ui.state.catOut) return;
+    if (activeCat()?.guestAt) return ui.set({ hint: null });
     const c = activeCat();
     const n = c?.name ?? '猫猫';
     const order: [string, string][] = [
@@ -673,8 +718,18 @@ class Game {
     if (m.t === 'despawn' && m.id === activeCat()?.id) ui.set({ companion: null });
     if (m.t === 'welcome' || m.t === 'online') ui.set({ online: m.t === 'welcome' ? m.online : m.n });
     // only kinds the server also files as letters; live-only toasts (friend, home) would leave an empty mailbox with a badge
-    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'town')) ui.set((s) => ({ unread: s.unread + 1 }));
+    if (m.t === 'event' && (m.kind === 'letter' || m.kind === 'note' || m.kind === 'diary' || m.kind === 'bond' || m.kind === 'town' || m.kind === 'guest' || m.kind === 'knock' || m.kind === 'playdate')) ui.set((s) => ({ unread: s.unread + 1 }));
     if (m.t === 'event' && m.kind === 'bond') this.refreshMe().catch(() => {});
+    // a neighbour's cat came over (or went home), an invitation or a knock: refresh what's shown
+    if (m.t === 'event' && (m.kind === 'guest' || m.kind === 'knock' || m.kind === 'playdate' || m.kind === 'guestin')) {
+      void this.loadHood();
+      this.refreshMe().catch(() => {});
+      const shown = this.nest?.rec.id;
+      if (m.kind === 'guest' && shown && ui.state.scene === 'nest')
+        api<{ guests?: { cat: CatRecord; ownerName: string }[] }>('GET', `/api/nest/${shown}`)
+          .then((r) => this.nest?.rec.id === shown && this.nest.setGuests(r.guests ?? []))
+          .catch(() => {});
+    }
     if (m.t === 'event' && m.kind === 'wish') {
       this.loadWish();
       this.refreshMe().catch(() => {});
@@ -682,7 +737,7 @@ class Game {
       setTimeout(() => this.nest?.say('wish'), 600);
     }
     if (m.t === 'event') {
-      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : m.kind === 'town' ? '💌' : m.kind === 'closed' || m.kind === 'busy' ? '🌙' : m.kind === 'show' ? '🎵' : '🐾';
+      const icon = m.kind === 'find' ? '✨' : m.kind === 'friend' ? '💛' : m.kind === 'home' ? '🏠' : m.kind === 'gift' ? '🎁' : m.kind === 'discover' ? '🗺️' : m.kind === 'diary' ? '📖' : m.kind === 'note' ? '📮' : m.kind === 'bond' ? '💗' : m.kind === 'wish' ? '🌟' : m.kind === 'grow' ? '🌱' : m.kind === 'town' ? '💌' : m.kind === 'closed' || m.kind === 'busy' ? '🌙' : m.kind === 'show' ? '🎵' : m.kind === 'guest' || m.kind === 'knock' || m.kind === 'guestin' ? '🏡' : m.kind === 'playdate' ? '📅' : '🐾';
       toast(m.text, icon, 4200);
       if (m.kind === 'find' || m.kind === 'gift') audio.sparkle();
       if (m.kind === 'home' || m.kind === 'discover' || m.kind === 'find' || m.kind === 'gift' || m.kind === 'town' || (m.kind === 'show' && m.item)) this.refreshMe().catch(() => {});

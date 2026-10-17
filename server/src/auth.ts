@@ -317,6 +317,9 @@ route('GET', '/api/account/export', (r) => {
     letters: db.db.prepare('SELECT ts, kind, title, text FROM events WHERE user_id = ? ORDER BY ts').all(uid),
     notesWritten: db.db.prepare('SELECT cat_id, sticker, text, ts FROM notes WHERE from_user = ? ORDER BY ts').all(uid),
     diaryPages: db.db.prepare('SELECT bond_id, text, ts FROM diary WHERE user_id = ? ORDER BY ts').all(uid),
+    visits: db.db.prepare('SELECT guest_cat, host_cat, status, created, started, ends, guest_user = ? AS mine FROM visits WHERE guest_user = ? OR host_user = ? ORDER BY created').all(uid, uid, uid),
+    playdates: db.db.prepare('SELECT from_cat, to_cat, poi, at, note, status, from_user = ? AS mine FROM playdates WHERE from_user = ? OR to_user = ? ORDER BY at').all(uid, uid, uid),
+    townsfolk: cats.flatMap((c) => db.db.prepare('SELECT cat_id, npc_id, points, walks FROM npc_bonds WHERE cat_id = ?').all(c.id)),
   };
 });
 
@@ -344,6 +347,7 @@ export function deleteAccount(uid: string) {
         for (const t of ['journal', 'notes'] as const) db.db.prepare(`DELETE FROM ${t} WHERE cat_id = ?`).run(c.id);
         db.db.prepare('DELETE FROM nests WHERE cat_id = ?').run(c.id);
         db.db.prepare('DELETE FROM friendships WHERE a = ? OR b = ?').run(c.id, c.id);
+        db.db.prepare('DELETE FROM npc_bonds WHERE cat_id = ?').run(c.id);
         db.db.prepare('DELETE FROM cats WHERE id = ?').run(c.id);
         game.forget(c.id);
       }
@@ -351,6 +355,9 @@ export function deleteAccount(uid: string) {
     db.db.prepare("UPDATE bonds SET status = 'ended' WHERE user_a = ? OR user_b = ?").run(uid, uid);
     for (const t of ['inventory', 'events', 'diary', 'match_queue', 'passkeys'] as const) db.db.prepare(`DELETE FROM ${t} WHERE user_id = ?`).run(uid);
     db.db.prepare('DELETE FROM notes WHERE from_user = ?').run(uid);
+    db.db.prepare('DELETE FROM visits WHERE guest_user = ? OR host_user = ?').run(uid, uid);
+    db.db.prepare('DELETE FROM playdates WHERE from_user = ? OR to_user = ?').run(uid, uid);
+    db.db.prepare('DELETE FROM kv WHERE k = ?').run(`hood:${uid}`);
     db.db.prepare('DELETE FROM kv WHERE k = ?').run(`found:${uid}`);
     deleteUserSessions(uid);
     db.db.prepare('DELETE FROM users WHERE id = ?').run(uid);

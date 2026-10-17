@@ -13,6 +13,7 @@ import { catLine, interpretCommand, llmEnabled } from './llm';
 import { progressWish, wishState, addBond } from './wish';
 import { npcInfo } from './world';
 import { bondsOf } from './townsfolk';
+import { guestsAt } from './neighbors';
 import { NPCS } from '../../shared/npcs';
 import { localClock, WORLD_TZ } from '../../shared/time';
 
@@ -54,6 +55,7 @@ route('POST', '/api/settings', (r) => {
     tzOffset: Number.isFinite(b.tzOffset) ? b.tzOffset : cur.tzOffset,
     sound: typeof b.sound === 'boolean' ? b.sound : cur.sound,
     music: typeof b.music === 'boolean' ? b.music : cur.music,
+    door: b.door === 'open' || b.door === 'ask' || b.door === 'closed' ? b.door : cur.door ?? 'open',
   };
   const patch: Partial<db.UserRow> = { settings: JSON.stringify(next) };
   if (typeof b.nickname === 'string' && b.nickname.trim()) patch.nickname = cleanText(str(b.nickname, 12, '昵称'));
@@ -246,6 +248,7 @@ route('GET', '/api/nest/:catId', (r) => {
     cat: game.refresh(c),
     mine,
     ownerName: owner?.nickname ?? '小镇',
+    guests: guestsAt(c.id), // neighbours' cats visiting right now
   };
 });
 
