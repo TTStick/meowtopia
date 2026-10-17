@@ -5,6 +5,7 @@ import type { CatRecord } from '../../shared/types';
 import { WORLD_VERSION, type EntState, type ServerMsg, type ClientMsg } from '../../shared/protocol';
 import { getWorld, getRooms, roomAt, roomById, planRoute, POIS, POI_MAP, TILE, HOME_SPAWN, walkableAt, zoneAt, poiPoint, ZONE_NAME, type Poi, type Leg, type Room } from '../../shared/world';
 import { roomOpen } from '../../shared/rooms';
+import { showAt, showRole, STAGE, type ShowNow } from '../../shared/shows';
 import { NPCS, NPC_MAP, scheduleAt, walkBusy, type NpcDef } from '../../shared/npcs';
 import { clockAt, weatherAt } from '../../shared/time';
 import { ITEMS, type ItemDef } from '../../shared/items';
@@ -296,7 +297,8 @@ function choosePoi(e: Ent, now: number): Poi {
     let w = 1;
     if (!c.discovered.includes(poi.id)) w += p.curious * 2.5;
     if (e.trip?.places.includes(poi.name)) w *= 0.15;
-    if (poi.id === e.poi) w = 0;
+    if (poi.id === e.poi && !(poi.id === 'stage' && tonight?.live)) w = 0;
+    if (poi.id === 'stage' && tonight) w *= tonight.live ? 12 : 6;
     const [ax, ay] = poiAnchor(poi);
     const d = Math.hypot(ax - here[0], ay - here[1]) / TILE;
     w *= Math.max(0.15, 1.6 - d / 45);
@@ -360,7 +362,9 @@ function arriveAtPoi(e: Ent, poi: Poi, now: number) {
   progressWish(c, 'visit', poi.id);
   const act = rng.pick(poi.acts);
   const anims = ACT_ANIM[act] ?? ['sit'];
-  setAct(e, rng.pick(anims), rng.range(18_000, 45_000) * (0.7 + c.personality.lazy * 0.6), now);
+  const watching = poi.id === 'stage' && tonight?.live;
+  setAct(e, watching ? rng.pick(['watch', 'sit', 'sit_happy']) : rng.pick(anims), watching ? rng.range(60_000, 120_000) : rng.range(18_000, 45_000) * (0.7 + c.personality.lazy * 0.6), now);
+  if (watching) e.st.dir = STAGE.x * TILE > e.st.x ? 1 : -1;
   if (e.trip && !e.trip.places.includes(poi.name)) e.trip.places.push(poi.name);
   if (!c.discovered.includes(poi.id) && c.ownerId !== 'town') {
     c.discovered.push(poi.id);
@@ -507,7 +511,7 @@ function startCompanion(o: Ent, leader: Ent, owner: string, now: number) {
   if (leader.cat) toOwners(leader.cat, { t: 'companion', catId: leader.st.id, id: o.st.id, name: o.st.name });
 }
 
-function endCompanion(o: Ent, now: number, why: 'home' | 'long' | 'busy' | 'bye' | 'swap') {
+function endCompanion(o: Ent, now: number, why: 'home' | 'long' | 'busy' | 'bye' | 'swap' | 'show') {
   const c = o.companion;
   if (!c) return;
   o.companion = undefined;
@@ -518,7 +522,8 @@ function endCompanion(o: Ent, now: number, why: 'home' | 'long' | 'busy' | 'bye'
   if (why !== 'swap') {
     const fallback = o.npc?.bye ?? ['今天就逛到这儿啦', '下次再一起走走', '谢谢你陪我'];
     const situation = why === 'busy' ? `陪${cat?.name ?? '小猫'}逛了一会儿，现在要回去忙了，跟它道别` : `陪${cat?.name ?? '小猫'}在小镇逛了一圈，现在要分开了，跟它道别`;
-    say(o, o.npc ? npcLine(personaOf(o.npc), situation, fallback) : fallback[Math.floor(Math.random() * fallback.length)]);
+    if (why === 'show') say(o, '我要去露天舞台啦，一起来看吧！');
+    else say(o, o.npc ? npcLine(personaOf(o.npc), situation, fallback) : fallback[Math.floor(Math.random() * fallback.length)]);
     broadcastNear({ t: 'emote', id: o.st.id, kind: 'heart' }, o.st.x, o.st.y);
   }
   if (!cat || cat.ownerId === 'town') return;
@@ -622,7 +627,7 @@ function inviteWalk(e: Ent, o: Ent, c: Client, now: number) {
     return;
   }
   const hour = clockAt(now).hour;
-  const busy = o.npc ? walkBusy(o.npc, hour) : hour >= 22 || hour < 6 || o.st.anim === 'sleep' ? '有点困了' : null;
+  const busy = o.npc ? (showRole(o.npc.id, tonight) ? '要去露天舞台啦，一起去看吧' : walkBusy(o.npc, hour)) : hour >= 22 || hour < 6 || o.st.anim === 'sleep' ? '有点困了' : null;
   if (busy) {
     say(o, o.npc ? npcLine(personaOf(o.npc), `${cat.name}邀请你一起去逛逛，可你${busy}，温柔地婉拒，约它下次`, [`${busy}，下次一起吧`]) : '呼……下次吧……');
     send(c, { t: 'event', kind: 'busy', text: `${o.st.name}${busy}`, catId: cat.id });
@@ -736,7 +741,7 @@ export function npcInfo(catId: string, id: string) {
     next: b.next,
     walks: b.walks,
     walking: o?.companion?.leader === catId,
-    busy: o?.companion && o.companion.leader !== catId ? '在陪别的小猫逛' : n ? walkBusy(n, hour) : hour >= 22 || hour < 6 ? '有点困了' : null,
+    busy: o?.companion && o.companion.leader !== catId ? '在陪别的小猫逛' : n && showRole(n.id, tonight) ? '今晚在露天舞台' : n ? walkBusy(n, hour) : hour >= 22 || hour < 6 ? '有点困了' : null,
     special: n?.special ? { label: n.special.label, done: usedToday(`npcsp:${n.id}:${catId}`) } : null,
     errand: job ? { to: NPC_MAP[job.to]?.name ?? '', from: NPC_MAP[job.from]?.name ?? '', here: job.to === id } : null,
   };
@@ -819,6 +824,12 @@ function tickNpc(n: NpcDef, now: number) {
   const ck = clockAt(now);
   const s = scheduleAt(n, ck.hour);
   let e = ents.get(n.id);
+  // a show tonight comes before the usual routine
+  const role = showRole(n.id, tonight);
+  if (role) {
+    tickShowNpc(n, e, role, now);
+    return;
+  }
   if (!s) {
     if (e && e.mode !== 'walk') {
       // walk home and disappear
@@ -888,6 +899,91 @@ function tickNpc(n: NpcDef, now: number) {
     return;
   }
   setAct(e, s.act, 20_000 + Math.random() * 30_000, now);
+}
+
+// ---------- the open-air stage ----------
+let tonight: ShowNow | null = null;
+const showLine = new Map<string, number>(); // how far through the show's lines each performer is
+
+/** A townsfolk with a part in tonight's show: walk over, then perform or watch. */
+function tickShowNpc(n: NpcDef, e: Ent | undefined, role: NonNullable<ReturnType<typeof showRole>>, now: number) {
+  const [px, py] = [role.spot[0] * TILE, role.spot[1] * TILE];
+  if (!e) {
+    e = { st: npcState(n, px, py), npc: n, path: [], legs: [], t0: now, sx: px, sy: py, speed: NPC_SPEED, mode: 'idle', until: 0, nextSay: now + 8000 + Math.random() * 20000 };
+    ents.set(n.id, e);
+    npcEnts.set(n.id, e);
+    broadcast({ t: 'spawn', e: e.st });
+  }
+  if (e.companion) endCompanion(e, now, 'show');
+  if (e.busyUntil && now < e.busyUntil) return;
+  if (e.mode === 'walk') {
+    if (!walkDone(e, now)) return;
+    [e.st.x, e.st.y] = posOf(e, now);
+    e.path = [];
+    e.mode = 'idle';
+    e.onArrive = undefined;
+  }
+  const dist = Math.hypot(px - e.st.x, py - e.st.y);
+  if (dist > 24) {
+    e.poi = 'stage';
+    if (!walkTo(e, px, py, now, dist > 900)) warp(e, px, py);
+    return;
+  }
+  const show = tonight!.show;
+  // the audience faces the stage; performers face the audience, turning now and then
+  const dir: 1 | -1 = role.stage ? (Math.floor(now / 9000 + role.spot[0]) % 2 ? 1 : -1) : STAGE.x * TILE > e.st.x ? 1 : -1;
+  if (e.st.anim !== role.act || now > e.until || e.st.dir !== dir) {
+    e.st.dir = dir;
+    setAct(e, role.act, 60_000, now);
+  }
+  if (!tonight!.live || !clients.size || now < e.nextSay) return;
+  if (role.stage) {
+    const host = n.id === show.host;
+    e.nextSay = now + (host ? 26_000 : 70_000) + Math.random() * 18_000;
+    const i = showLine.get(n.id) ?? 0;
+    showLine.set(n.id, i + 1);
+    // the host keeps to the programme, with something of its own every other time
+    const line = host && i % 2 === 0 ? show.lines[(i / 2) % show.lines.length] : npcLine(personaOf(n), `在露天舞台的《${show.name}》上（${show.blurb}），对台下的观众说一句`, show.lines);
+    say(e, line);
+    if (show.notes) broadcastNear({ t: 'emote', id: e.st.id, kind: 'note' }, e.st.x, e.st.y);
+  } else {
+    e.nextSay = now + 45_000 + Math.random() * 60_000;
+    if (Math.random() < 0.55) say(e, show.cheers[Math.floor(Math.random() * show.cheers.length)], true);
+    else broadcastNear({ t: 'emote', id: e.st.id, kind: Math.random() < 0.5 ? 'heart' : 'note' }, e.st.x, e.st.y);
+  }
+}
+
+let announced = '';
+let lastShowCheck = 0;
+/** Tell the town when a show is about to begin, and thank the cats who watch it. */
+function tickShow(now: number) {
+  tonight = showAt(now);
+  if (!tonight) return;
+  const { show, day, live } = tonight;
+  const key = `${day}:${live ? 'live' : 'gather'}`;
+  if (announced !== key) {
+    announced = key;
+    if (!live) showLine.clear();
+    broadcast({ t: 'event', kind: 'show', text: live ? `露天舞台的《${show.name}》开始啦` : `今晚 19:30，露天舞台有演出：《${show.name}》` });
+  }
+  if (!live || now - lastShowCheck < 5000) return;
+  lastShowCheck = now;
+  const [cx, cy] = [STAGE.x * TILE, (STAGE.front + 3.6) * TILE];
+  for (const e of ents.values()) {
+    const c = e.cat;
+    if (!c || c.ownerId === 'town' || Math.hypot(e.st.x - cx, (e.st.y - cy) * 1.3) > 6 * TILE) continue;
+    const k = `show:${day}:${c.id}`;
+    if (db.kvGet(k)) continue;
+    db.kvSet(k, 1);
+    game.refresh(c, now);
+    c.stats = applyDelta(c.stats, { mood: 10, social: 6 });
+    game.markDirty(c);
+    giveItem(c, 'ticket');
+    befriend(c.id, show.host, 1);
+    db.addJournal(c.id, 'explore', `在露天舞台看了《${show.name}》。${show.blurb}。`, { show: show.id });
+    game.remember(c, `在露天舞台看了${show.name}`);
+    toOwners(c, { t: 'event', kind: 'show', text: `${c.name}在露天舞台看了《${show.name}》，拿到一张票根`, item: 'ticket', catId: c.id });
+  }
 }
 
 /** Shopkeepers work behind their own counter. */
@@ -1002,6 +1098,7 @@ function restoreCats() {
 let lastAuto = 0;
 function tick() {
   const now = Date.now();
+  tickShow(now);
   for (const e of [...ents.values()]) {
     try {
       if (e.cat) tickCat(e, now);

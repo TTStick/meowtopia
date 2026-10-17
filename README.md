@@ -144,20 +144,22 @@
 
 **16 位猫猫居民按自己的作息过日子**：面包房老板娘清晨揉面，邮递员阿信挨家送信，棉花奶奶在巷口织毛线，阿乐傍晚在喷泉边弹琴，果果爷爷守着果园，汤汤泡在温泉边，旅行家阿旅在营地讲远方，深夜还有阿月的热羊奶摊。每位居民都有一件能和你的猫一起做的小事：尝一口刚出炉的面包、听墨墨讲个故事、帮阿信送一封信、泡个温泉……常来常往，它们会记得你的猫，路过时叫它的名字。
 
+**有些晚上，河东草坪上的露天舞台会有演出**：阿乐的星光音乐会、小镇合唱团、灯笼舞会、星空故事会、阿旅的魔术秀，轮流上演。居民们早早坐到台下，音符从台上飘起来；带你的猫去看一场，会记进日记，还能拿到一张票根。
+
 **也可以请居民陪它一起逛。** 不忙的居民和小镇的猫会跟在它身边，一路走一路聊，到了该上班的时候再笑着道别。所有玩家的猫都在同一个小镇里，会在路上碰鼻子、交朋友。
 
 你可以看它自己逛，也可以「接管」亲自带着它走。小镇有实时的昼夜、雨雪和四季：春天的樱花和果花，秋天的枫叶和红苹果，冬天的雪顶和猫耳雪人。
 
 <table>
 <tr>
-<td width="33%" align="center"><img src="docs/images/phone-world.png" alt="小镇" width="100%"><br><sub><b>出门探险</b><br>它会自己逛，捡回 41 种按季节出现的宝贝</sub></td>
-<td width="33%" align="center"><img src="docs/images/phone-map.png" alt="小镇地图" width="100%"><br><sub><b>小镇地图</b><br>33 个地方和 7 家店，点一下它就走过去</sub></td>
+<td width="33%" align="center"><img src="docs/images/phone-world.png" alt="小镇" width="100%"><br><sub><b>出门探险</b><br>它会自己逛，捡回 42 种按季节出现的宝贝</sub></td>
+<td width="33%" align="center"><img src="docs/images/phone-map.png" alt="小镇地图" width="100%"><br><sub><b>小镇地图</b><br>34 个地方和 7 家店，点一下它就走过去</sub></td>
 <td width="33%" align="center"><img src="docs/images/phone-social.png" alt="小镇邻里" width="100%"><br><sub><b>邻里</b><br>猫友是它自己交的；可以串门、贴纸条、共养</sub></td>
 </tr>
 <tr>
 <td width="33%" align="center"><img src="docs/images/phone-shop.png" alt="面包房里，麦麦递来刚出炉的面包" width="100%"><br><sub><b>走进店里</b><br>麦麦掰了一小块刚出炉的鱼形面包</sub></td>
 <td width="33%" align="center"><img src="docs/images/phone-walk.png" alt="小镇的小孩阿花陪着汤圆散步" width="100%"><br><sub><b>一起逛逛</b><br>阿花跟在旁边，一路走一路聊</sub></td>
-<td width="33%" align="center"><img src="docs/images/phone-spring.png" alt="山间温泉，汤圆趴在温泉边" width="100%"><br><sub><b>山间温泉</b><br>汤汤说：泡一泡，什么烦恼都化开了</sub></td>
+<td width="33%" align="center"><img src="docs/images/phone-stage.png" alt="夜里的露天舞台，阿乐在台上弹琴，居民们坐在草坪上听" width="100%"><br><sub><b>露天舞台</b><br>有些晚上，阿乐会在这里开音乐会</sub></td>
 </tr>
 </table>
 

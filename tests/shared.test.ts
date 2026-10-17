@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { NPCS, NPC_MAP, townBond, walkBusy } from '../shared/npcs';
 import { roomOpen } from '../shared/rooms';
+import { SHOWS, showOn, showAt, showRole, STAGE_SPOTS, AUDIENCE_SPOTS } from '../shared/shows';
 import { getWorld, getRooms, POIS, POI_MAP, HOME_SPAWN, TILE, WW, Ter, poiPoint, walkable, walkableAt, planRoute, roomAt, zoneAt, type Room } from '../shared/world';
 import { findPath, makeGrid, smoothPath } from '../shared/path';
 import { starterLayout, STARTER_ITEMS, validateLayout, canPlace } from '../shared/nest';
@@ -10,7 +11,7 @@ import { randomGenes, randomPersonality } from '../shared/genes';
 import { wishFor } from '../shared/wish';
 import { fallbackLine, type SpeechCtx } from '../shared/speech';
 import { ITEMS, ITEM_MAP, WEAR_SLOT } from '../shared/items';
-import { weatherAt, clockAt, setWorldTz } from '../shared/time';
+import { weatherAt, clockAt, setWorldTz, WORLD_TZ } from '../shared/time';
 import type { CatRecord } from '../shared/types';
 
 const world = getWorld();
@@ -190,4 +191,33 @@ test('shops keep daytime hours; the cafe stays open late', () => {
   assert.equal(roomOpen(room('cafe'), 22), true);
   assert.equal(roomOpen(room('cafe'), 23.5), false);
   assert.equal(roomOpen(room('library'), 5), false);
+});
+
+test('shows: about four nights a week, 19:30 to 21:00, everyone has a reachable place', () => {
+  let nights = 0;
+  for (let d = 20000; d < 20700; d++) if (showOn(d)) nights++;
+  assert.ok(nights > 330 && nights < 480, `${nights} show nights in 700 days`);
+  const day = [...Array(60).keys()].map((i) => 20000 + i).find((d) => showOn(d))!;
+  const at = (h: number) => (day * 24 + h - WORLD_TZ) * 3600_000;
+  const hour = (h: number) => {
+    const ms = at(h);
+    return weatherAt(ms).kind === 'rain' ? 'rain' : showAt(ms);
+  };
+  if (hour(19.7) !== 'rain') {
+    assert.equal(showAt(at(18.9)), null);
+    assert.equal(showAt(at(19.2))?.live, false, 'townsfolk gather first');
+    assert.equal(showAt(at(19.6))?.live, true);
+    assert.equal(showAt(at(21.01)), null);
+  }
+  const [hx, hy] = HOME_SPAWN;
+  for (const [x, y] of [...STAGE_SPOTS, ...AUDIENCE_SPOTS]) {
+    assert.ok(walkable(world, x * TILE, y * TILE), `spot ${x},${y} is blocked`);
+    assert.ok(planRoute(world, hx, hy, x * TILE, y * TILE), `spot ${x},${y} can't be reached`);
+  }
+  for (const show of SHOWS) {
+    for (const id of [show.host, ...show.cast.map((c) => c.id), ...show.crowd]) assert.ok(NPC_MAP[id], `${show.id}: unknown ${id}`);
+    const now = { show, day, live: true, progress: 0.5 };
+    const spots = [...show.cast.map((c) => c.id), ...show.crowd].map((id) => showRole(id, now)!.spot.join(','));
+    assert.equal(new Set(spots).size, spots.length, `${show.id}: two townsfolk share a spot`);
+  }
 });

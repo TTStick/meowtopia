@@ -33,7 +33,8 @@ export type PropKind =
   | 'lamp' | 'bench' | 'fence' | 'mailbox' | 'board' | 'sign' | 'fountain' | 'house' | 'shop' | 'slide' | 'swing'
   | 'sandbox' | 'windmill' | 'lighthouse' | 'boat' | 'picnic' | 'telescope' | 'bigtree' | 'table' | 'well' | 'crop'
   | 'post' | 'cart' | 'hive' | 'kite' | 'snowman' | 'flowerarch' | 'parasol' | 'pumpkins' | 'lanterns'
-  | 'fruittree' | 'bamboo' | 'hotspring' | 'stonelamp' | 'tent' | 'campfire' | 'log' | 'palm' | 'gazebo' | 'fruitbasket';
+  | 'fruittree' | 'bamboo' | 'hotspring' | 'stonelamp' | 'tent' | 'campfire' | 'log' | 'palm' | 'gazebo' | 'fruitbasket'
+  | 'stage' | 'stageback' | 'speaker' | 'stagelight';
 
 export interface Prop {
   id: number;
@@ -97,6 +98,8 @@ const OUTDOOR_POIS: Poi[] = [
   { id: 'creek', name: '小溪踏石', zone: 'creek', x: 40, y: 98.5, r: 2, acts: ['watch', 'bat', 'sit'] },
   { id: 'camp', name: '露营地', zone: 'camp', x: 24, y: 111, r: 3, acts: ['loaf', 'sit', 'nap', 'watch'], night: true },
   { id: 'sakura_slope', name: '樱花坡', zone: 'meadow', x: 50, y: 114.5, r: 3, acts: ['roll', 'nap', 'sit', 'pounce'] },
+  // the open-air stage on the lawn east of the river
+  { id: 'stage', name: '露天舞台', zone: 'stage', x: 112, y: 57.8, r: 3, acts: ['watch', 'sit', 'roll'] },
 ];
 
 /** Where each room's floor starts, in tiles. */
@@ -122,7 +125,7 @@ export const POI_ALIASES: Record<string, string[]> = {
   hilltop: ['山顶', '山坡', '看星星', '星星', '山'], meadow: ['草地', '草坪', '打滚'], picnic: ['野餐'],
   pier: ['码头', '大海', '钓鱼', '渔夫'], beach: ['沙滩', '海滩', '贝壳'], lighthouse: ['灯塔'],
   hotspring: ['温泉', '泡澡', '泡温泉'], orchard: ['果园', '果树', '苹果', '摘果子'], bamboo: ['竹林', '竹子'], island: ['小岛', '岛'],
-  creek: ['小溪', '溪边', '踏石'], camp: ['露营', '帐篷', '篝火'], sakura_slope: ['樱花', '樱花坡'],
+  creek: ['小溪', '溪边', '踏石'], camp: ['露营', '帐篷', '篝火'], sakura_slope: ['樱花', '樱花坡'], stage: ['舞台', '演出', '音乐会', '看表演', '舞会'],
   bakery_in: ['面包', '烤'], library_in: ['图书馆', '看书', '书', '讲故事'], cafe_in: ['咖啡', '牛奶'], store_in: ['杂货', '商店', '买东西'],
   post_in: ['邮局', '寄信', '信'], flowers_in: ['花店', '买花'], tailor_in: ['裁缝', '衣服'],
 };
@@ -200,6 +203,8 @@ export const PATHS: { pts: V[]; w: number }[] = [
   { pts: [[105, 74], [118, 72], [132, 71], [146, 71], [160, 70.6]], w: 1 }, // coast path
   { pts: [[146, 71], [146, 74]], w: 1 },
   { pts: [[129.3, 35.8], [129.5, 44]], w: 0.8 }, // orchard hut
+  { pts: [[100, 43.2], [105.6, 48.5], [106, 56.5], [112, 60], [118, 56.5], [118.4, 49]], w: 1 }, // round the stage lawn
+  { pts: [[102, 68.5], [107, 64], [112, 60]], w: 1 },
   // south
   { pts: [[36, 80], [29, 88], [21.5, 93], [21.3, 100], [23, 107.5]], w: 1 }, // meadow to the campsite
   { pts: [[23, 108], [34, 110], [45, 112.5], [53, 114.5]], w: 0.9 }, // campsite to the sakura slope
@@ -405,6 +410,14 @@ export function getWorld(): World {
   add('rock', 153.2, 103.4, 1, 0.8);
   for (const ly of [80, 89]) add('lamp', 145.2, ly, 0, 1, [144.9, ly - 0.4, 0.6, 0.4]);
   add('sign', 148, 70.2, 6, 1, undefined, '↓ 小岛');
+  // the open-air stage: a backdrop, a low wooden platform, speakers, spotlights and a lawn to sit on
+  add('stageback', 112, 50.6, 0, 1, [106.6, 49.6, 10.8, 1]);
+  props.push({ id: id++, k: 'stage', x: 112 * T, y: 54.4 * T, v: 0, s: 1 });
+  for (const sx of [106.9, 117.1]) add('speaker', sx, 54.3, 0, 1, [sx - 0.5, 53.7, 1, 0.6]);
+  for (const lx of [104.9, 119.1]) add('stagelight', lx, 57.6, lx < 112 ? 0 : 1, 1, [lx - 0.3, 57.2, 0.6, 0.4]);
+  for (const bx of [108.4, 115.6]) add('bench', bx, 61.8, 0, 1, [bx - 1, 61.3, 2, 0.5]);
+  props.push({ id: id++, k: 'lanterns', x: 112 * T, y: 62.6 * T, v: 1, s: 1 });
+  add('sign', 101.4, 45.8, 8, 1, undefined, '舞台 →');
 
   // ---- the south ----
   add('tent', 19.6, 108.8, 0, 1, [17.9, 107.6, 3.4, 1.2]);
@@ -419,7 +432,7 @@ export function getWorld(): World {
   for (const [rx, ry] of [[30, 97.6], [52, 101.4], [60, 104.6], [12, 100.6], [157, 33], [160.4, 52]] as V[]) add('reed', rx, ry, 0, 1);
 
   // scattered nature, leaving room around the campsite and the island's landing
-  const inClearing = (x: number, y: number) => Math.hypot(x - 24, (y - 109.5) * 1.3) < 8 || Math.hypot(x - 146, y - 97.5) < 2.5;
+  const inClearing = (x: number, y: number) => Math.hypot(x - 24, (y - 109.5) * 1.3) < 8 || Math.hypot(x - 146, y - 97.5) < 2.5 || (x > 102 && x < 122 && y > 46 && y < 65);
   const occupied = (x: number, y: number) => {
     const tx = Math.floor(x), ty = Math.floor(y);
     return grid.blocked[ty * WW + tx] === 1;
@@ -515,6 +528,7 @@ export function zoneAt(w: World, x: number, y: number): string {
   if (t === Ter.Bamboo || inRect(tx, ty, BAMBOO)) return 'bamboo';
   if (t === Ter.Orchard || inRect(tx, ty, [124, 35, 34, 25])) return 'orchard';
   if (t === Ter.Sand || inPoly(tx, ty, BEACH) || (t === Ter.Wood && ty > 66 && tx > 90)) return tx < 112 ? 'pier' : 'beach';
+  if (Math.hypot(tx - 112, (ty - 56) * 1.2) < 9) return 'stage';
   if (distPolyline(tx, ty, RIVER) < 4.5) return 'river';
   if (distPolyline(tx, ty, CREEK_E) < 3.5 || distPolyline(tx, ty, CREEK_S) < 4) return 'creek';
   if (Math.hypot(tx - CAMP[0], ty - CAMP[1]) < 8) return 'camp';
@@ -527,7 +541,7 @@ export function zoneAt(w: World, x: number, y: number): string {
 
 export const ZONE_NAME: Record<string, string> = {
   plaza: '喷泉广场', town: '小镇街道', residential: '住宅区', park: '公园', forest: '森林', river: '河边', meadow: '草地', field: '花田', hill: '小山坡', pier: '码头',
-  spring: '温泉山谷', orchard: '果园', bamboo: '竹林', island: '海上小岛', creek: '小溪边', camp: '露营地', beach: '海边', indoor: '屋里',
+  spring: '温泉山谷', orchard: '果园', bamboo: '竹林', island: '海上小岛', creek: '小溪边', camp: '露营地', beach: '海边', indoor: '屋里', stage: '露天舞台',
 };
 
 /** Random walkable point within radius r (tiles) of a POI. */

@@ -4,7 +4,7 @@ import { useStore } from '../game/store';
 import { game } from '../game/game';
 import { audio } from '../game/audio';
 import { Welcome, Adopt } from './Onboarding';
-import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge, WishPill, GoodnightOverlay } from './Hud';
+import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge, WishPill, GoodnightOverlay, ShowPill } from './Hud';
 import { Panels } from './Panels';
 import { DialogHost } from './Dialog';
 
@@ -49,6 +49,7 @@ export function App() {
           <GoodnightOverlay />
           {build ? <BuildTray /> : visiting ? <VisitBar /> : scene === 'world' ? <WorldBar /> : <NestBar />}
           <ConnBadge />
+          <ShowPill />
           <Panels />
         </>
       )}

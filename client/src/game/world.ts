@@ -7,6 +7,7 @@ import { drawNpc } from '../art/npc';
 import { drawBubble, drawNameTag, drawEmote, measureBubble, type EmoteKind } from '../art/fx';
 import { getWorld, getRooms, roomAt, roomById, planRoute, TILE, WW, WH, Ter, POIS, POI_MAP, BUILDINGS, walkableAt, zoneAt, ZONE_NAME, type Prop, type PropKind, type Room } from '../../../shared/world';
 import { roomOpen } from '../../../shared/rooms';
+import { showAt, STAGE, type ShowNow } from '../../../shared/shows';
 import { CELL, WALL_H, drawWallpaper, drawFloor, drawFurniture, drawWallItem, wallpaperBase, HAS_FRONT, type DrawCtx, type SkyInfo } from '../art/furniture';
 import { drawShopPiece, drawShopWall, drawPlaque, isShopPiece } from '../art/interior';
 import { hashf, noise2 } from '../../../shared/rng';
@@ -61,7 +62,7 @@ const ANIM_MAP: Record<string, AnimName> = {
 };
 
 interface Critter {
-  k: 'butterfly' | 'petal' | 'leaf' | 'firefly' | 'splash' | 'bird';
+  k: 'butterfly' | 'petal' | 'leaf' | 'firefly' | 'splash' | 'bird' | 'note';
   x: number;
   y: number;
   vx: number;
@@ -103,6 +104,7 @@ export class WorldScene implements Scene {
   private townZoom = 1.15; // remembered while looking into a room
   private fade = 0; // a soft blink when the camera goes through a door
   private lastDoor = 0;
+  private show: ShowNow | null = null; // tonight's show at the stage, if it's on
 
   constructor(g: GameLike) {
     this.g = g;
@@ -429,6 +431,7 @@ export class WorldScene implements Scene {
   // ---------------- update ----------------
   update(dt: number, T: number) {
     this.T = T;
+    this.show = showAt(clock.now());
     const myId = this.myCatId;
     for (const e of this.ents.values()) {
       e.mine = e.st.id === myId;
@@ -603,6 +606,11 @@ export class WorldScene implements Scene {
       const [x, y] = rnd();
       this.critters.push({ k: 'firefly', x, y, vx: 0, vy: 0, t: Math.random() * 10, life: 14 + Math.random() * 10, c: '#fff3a0', z: 10 + Math.random() * 30 });
     }
+    const sh = this.show;
+    if (sh?.live && sh.show.notes && want('note') < 12 && Math.random() < dt * 2.5) {
+      const sx = STAGE.x * TILE + (Math.random() - 0.5) * 220, sy = (STAGE.back + 2.6) * TILE;
+      if (sx > x0 && sx < x1 && sy > y0 - 200 && sy < y1 + 100) this.critters.push({ k: 'note', x: sx, y: sy, vx: 0, vy: -26, t: 0, life: 3.6, c: ['#f08a5d', '#f49ab0', '#8fc3e8', '#ffd45e'][Math.floor(Math.random() * 4)], z: 60 });
+    }
     if (Math.random() < dt * 0.6) {
       const [x, y] = rnd();
       const t = this.w.ter[Math.floor(y / TILE) * WW + Math.floor(x / TILE)];
@@ -624,6 +632,10 @@ export class WorldScene implements Scene {
         case 'firefly':
           c.x += Math.sin(c.t * 0.8 + c.life) * 8 * dt;
           c.y += Math.cos(c.t * 0.6) * 6 * dt;
+          break;
+        case 'note':
+          c.y += c.vy * dt;
+          c.x += Math.sin(c.t * 2.4 + c.life) * 14 * dt;
           break;
       }
     }
@@ -956,7 +968,7 @@ export class WorldScene implements Scene {
       const b = BOUNDS[p.k] ?? [-40, -80, 40, 10];
       const pw = p.k === 'house' || p.k === 'shop' ? p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136) : p.s;
       if (p.x + b[2] * pw < bx0 || p.x + b[0] * pw > bx1 || p.y + b[1] * pw > by1 || p.y + b[3] * pw < by0) continue;
-      const flat = p.k === 'lily' || p.k === 'picnic' || p.k === 'sandbox' || p.k === 'hotspring';
+      const flat = p.k === 'lily' || p.k === 'picnic' || p.k === 'sandbox' || p.k === 'hotspring' || p.k === 'stage';
       items.push({
         y: flat ? p.y - 200 : p.y,
         f: () => {
@@ -1001,7 +1013,7 @@ export class WorldScene implements Scene {
     this.drawLighting(v, night, sunset(ck.hour), T);
     // fireflies glow above the darkness
     v.world();
-    for (const c of this.critters) if (c.k === 'firefly') this.drawCritter(ctx, c, T);
+    for (const c of this.critters) if (c.k === 'firefly' || c.k === 'note') this.drawCritter(ctx, c, T);
   }
 
   /** Bubbles, name tags and emotes on top of whatever is being drawn. */
@@ -1023,6 +1035,7 @@ export class WorldScene implements Scene {
     const showNames = this.zoom > 0.7;
     const placed: [number, number, number, number][] = [];
     const bubbles: { e: WEnt; sx: number; sy: number }[] = [];
+    const tags: { e: WEnt; x: number; y: number; rank: number }[] = [];
     for (const e of this.ents.values()) {
       const top = e.actor ? e.actor.headTop() : e.y - 66;
       const [sx, sy] = v.toScreen(e.x, top);
@@ -1031,8 +1044,21 @@ export class WorldScene implements Scene {
       if (bub) bubbles.push({ e, sx, sy });
       else if (showNames && (e.mine || this.hoverId === e.st.id || this.zoom > 1.05)) {
         const [nx, ny] = v.toScreen(e.x, e.y + 6);
-        drawNameTag(ctx, nx, ny + 10, e.mine ? `${e.st.name} ★` : e.st.kind === 'npc' ? `${e.st.name}·${e.st.owner}` : e.st.name, e.mine ? '#c0846a' : '#4a3a34', e.mine ? 0.95 : 0.75);
+        tags.push({ e, x: nx, y: ny + 10, rank: e.mine ? 0 : this.hoverId === e.st.id ? 1 : 2 });
       }
+    }
+    // in a crowd, names that would sit on top of another are left out (mine always shows)
+    tags.sort((a, b) => a.rank - b.rank || b.y - a.y);
+    const tagged: [number, number, number, number][] = [];
+    ctx.font = 'bold 11px "PingFang SC","Microsoft YaHei",system-ui';
+    for (const t of tags) {
+      const e = t.e;
+      const label = e.mine ? `${e.st.name} ★` : e.st.kind === 'npc' ? `${e.st.name}·${e.st.owner}` : e.st.name;
+      const w = ctx.measureText(label).width + 12;
+      const r: [number, number, number, number] = [t.x - w / 2 - 2, t.y - 9, t.x + w / 2 + 2, t.y + 9];
+      if (t.rank > 0 && tagged.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
+      tagged.push(r);
+      drawNameTag(ctx, t.x, t.y, label, e.mine ? '#c0846a' : '#4a3a34', e.mine ? 0.95 : 0.75);
     }
     // stack bubbles bottom-up so close neighbours don't overlap
     bubbles.sort((a, b) => b.sy - a.sy);
@@ -1332,6 +1358,45 @@ export class WorldScene implements Scene {
         ctx.globalAlpha = 1;
         break;
       }
+      case 'stage': {
+        if (!this.show?.live) break;
+        // coloured pools of light drifting over the boards
+        for (let i = 0; i < 3; i++) {
+          const x = p.x + Math.sin(T * 0.6 + i * 2.1) * 100, y = p.y - 62 + Math.cos(T * 0.5 + i) * 26;
+          const g = ctx.createRadialGradient(x, y, 0, x, y, 56);
+          const col = ['255,236,170', '249,180,196', '185,220,244'][i];
+          g.addColorStop(0, `rgba(${col},${0.35 + night * 0.25})`);
+          g.addColorStop(1, `rgba(${col},0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.ellipse(x, y, 56, 22, 0, 0, 7);
+          ctx.fill();
+        }
+        break;
+      }
+      case 'stagelight': {
+        if (!this.show?.live) break;
+        const sx = p.v === 0 ? 1 : -1;
+        const hx = p.x + sx * 24, hy = p.y - 74;
+        const k = Math.sin(T * 0.7 + p.v * 1.6) * 0.5 + 0.5;
+        const tx = (STAGE.x - 3.4 + k * 6.8) * TILE, ty = ((STAGE.back + STAGE.front) / 2 + 0.4) * TILE;
+        const col = ['255,236,170', '249,180,196', '185,220,244'][(Math.floor(T / 5) + p.v) % 3];
+        const a = 0.12 + night * 0.22;
+        const g = ctx.createLinearGradient(hx, hy, tx, ty);
+        g.addColorStop(0, `rgba(${col},${a * 1.6})`);
+        g.addColorStop(1, `rgba(${col},${a * 0.5})`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy);
+        ctx.lineTo(tx - 44, ty);
+        ctx.lineTo(tx + 44, ty);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(tx, ty, 46, 15, 0, 0, 7);
+        ctx.fill();
+        break;
+      }
       case 'hotspring': {
         ctx.fillStyle = 'rgba(255,255,255,0.5)';
         for (let i = 0; i < 9; i++) {
@@ -1436,6 +1501,20 @@ export class WorldScene implements Scene {
         ctx.restore();
         break;
       }
+      case 'note': {
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, c.t * 3, (c.life - c.t) * 1.5);
+        ctx.font = 'bold 20px system-ui';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,253,246,0.9)';
+        const g = c.life > 3.7 ? '♫' : '♪';
+        ctx.strokeText(g, c.x, c.y - c.z);
+        ctx.fillStyle = c.c;
+        ctx.fillText(g, c.x, c.y - c.z);
+        ctx.restore();
+        break;
+      }
       case 'firefly': {
         const a = 0.4 + Math.sin(c.t * 3 + c.life) * 0.4;
         const g = ctx.createRadialGradient(c.x, c.y - c.z, 0, c.x, c.y - c.z, 9);
@@ -1507,6 +1586,10 @@ export class WorldScene implements Scene {
         else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
         else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
         else if (p.k === 'campfire') lights.push([p.x, p.y - 16, 170, 1]);
+        else if (p.k === 'stageback') {
+          for (let i = 0; i < 5; i++) lights.push([p.x - 150 + i * 75, p.y - 182, 56, 0.8]);
+          if (this.show?.live) lights.push([p.x, p.y + 64, 230, 1]);
+        } else if (p.k === 'stagelight' && this.show?.live) lights.push([p.x, p.y - 74, 60, 0.9]);
         else if (p.k === 'stonelamp') lights.push([p.x, p.y - 26, 70, 0.8]);
         else if (p.k === 'gazebo') lights.push([p.x, p.y - 52, 80, 0.8]);
         else if (p.k === 'house' || p.k === 'shop') {
@@ -1583,6 +1666,11 @@ export class WorldScene implements Scene {
           const shop = this.shopAt(x, y);
           if (shop) {
             ui.set({ worldShop: shop.id });
+            return;
+          }
+          const tx = x / TILE, ty = y / TILE;
+          if (Math.abs(tx - STAGE.x) < 5.5 && ty > STAGE.back - 6 && ty < STAGE.front + 0.6) {
+            ui.set({ worldShop: 'stage' });
             return;
           }
         } else if (Math.abs(x - room.door[0]) < TILE * 1.3 && y > room.door[1] - TILE * 0.7) {

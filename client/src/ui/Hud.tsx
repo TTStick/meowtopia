@@ -13,6 +13,8 @@ import * as clock from '../game/clock';
 import { NPC_MAP } from '../../../shared/npcs';
 import { roomById } from '../../../shared/world';
 import { roomOpen } from '../../../shared/rooms';
+import { showAt, showOn, SHOW_START } from '../../../shared/shows';
+import { clockAt } from '../../../shared/time';
 import * as I from './icons';
 import { ReportLink } from './Account';
 import { api } from '../game/net';
@@ -490,8 +492,83 @@ function CompanionPill() {
   );
 }
 
+const hm = (h: number) => `${Math.floor(h)}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+
+/** Take my cat to the stage (or just look, if it's at home). */
+function goToShow() {
+  ui.set({ worldShop: null });
+  if (ui.state.catOut) {
+    if (ui.state.scene !== 'world') void game.openWorld().then(() => game.world?.goToPoi('stage'));
+    else game.world?.goToPoi('stage');
+  } else if (ui.state.scene !== 'world') {
+    game.goOut();
+    setTimeout(() => game.world?.goToPoi('stage'), 900);
+  } else game.world?.goToPoi('stage');
+}
+
+function StageCard() {
+  const catOut = useStore(ui, (s) => s.catOut);
+  const now = clock.now();
+  const on = showAt(now);
+  const tonight = showOn(clockAt(now).day);
+  const status = on
+    ? on.live
+      ? `正在演出：${on.show.name}`
+      : `今晚 ${hm(SHOW_START)} 开演：${on.show.name}`
+    : tonight && clock.worldClock().hour < SHOW_START
+      ? `今晚 ${hm(SHOW_START)} 有演出：${tonight.name}`
+      : '今晚没有演出。有演出的晚上，19:30 开始';
+  return (
+    <div class="card target">
+      <div class="info">
+        <div class="tn">露天舞台</div>
+        <div class="muted" style={{ fontSize: '13px' }}>
+          {on?.show.blurb ?? tonight?.blurb ?? '河东草坪上的小舞台。有些晚上，小镇的居民会在这里唱歌、跳舞、讲故事。'}
+        </div>
+        <div class="muted" style={{ fontSize: '12px', marginTop: '2px' }}>
+          {status}
+        </div>
+        <div class="tb">
+          {on && (
+            <button class="btn small primary" onClick={goToShow}>
+              {catOut ? '带它去看' : '带它出门去看'}
+            </button>
+          )}
+          <button class="btn small ghost" onClick={() => ui.set({ worldShop: null })}>
+            <I.IClose size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Tonight's show, while it's on: a tap takes the cat there. */
+export function ShowPill() {
+  const [, tick] = useState(0);
+  const scene = useStore(ui, (s) => s.scene);
+  const visiting = useStore(ui, (s) => s.visiting);
+  const build = useStore(ui, (s) => s.build);
+  const companion = useStore(ui, (s) => s.companion);
+  const catOut = useStore(ui, (s) => s.catOut);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 20_000);
+    return () => clearInterval(t);
+  }, []);
+  const on = showAt(clock.now());
+  if (!on || visiting || build) return null;
+  const pos = scene === 'world' ? (companion && catOut ? 'w2' : 'w1') : 'n';
+  return (
+    <button class={`pill showpill ${pos}`} onClick={goToShow}>
+      <span aria-hidden="true">🎵</span>
+      <span class="st">{on.live ? `露天舞台正在演出：${on.show.name}` : `${hm(SHOW_START)} 露天舞台：${on.show.name}`}</span>
+    </button>
+  );
+}
+
 function ShopCard({ id }: { id: string }) {
   const catOut = useStore(ui, (s) => s.catOut);
+  if (id === 'stage') return <StageCard />;
   const r = roomById(id);
   if (!r) return null;
   const open = roomOpen(r, clock.worldClock().hour);

@@ -76,6 +76,7 @@ server/   Node HTTP + WebSocket；SQLite 存储、REST API、小镇模拟、居�
 - `server/src/world.ts`：小镇模拟（路径、探险行程、发现与拾取、相遇与对话、居民作息、陪逛和居民的小互动）。
 - `shared/rooms.ts`：七家店的室内布置。每间屋子放在小镇东边很远的「世界坐标」里，走路、相遇、谁在附近都和室外一样算；进出靠门，`shared/world.ts` 的 `planRoute` 会把一次行走拆成几段，过门时瞬移到另一边。
 - `server/src/townsfolk.ts`：猫和居民的熟悉度（每天有上限）、每天一次的小互动、送信的小委托。
+- `shared/shows.ts`：露天舞台的晚间演出。哪天有演出、演什么，只由小镇时钟算出来，服务端（指挥居民上台、发票根）和客户端（打灯、飘音符）各算各的，结果一样。
 - `client/home.html`：官网（像素图由 `scripts/make-site-art.ts` 生成）；`client/admin.html` + `client/src/admin/`：管理面板，接口在 `server/src/admin.ts`。
 
 ## 账号与安全

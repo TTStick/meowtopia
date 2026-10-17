@@ -124,7 +124,7 @@ export const ITEMS: ItemDef[] = [
   C('petal', '樱花瓣', 1, ['park', 'plaza'], '粉粉的，软软的。', [0]),
   C('acorn', '橡果', 1, ['forest', 'park'], '戴着小帽子的果子。', [2, 3]),
   C('snail_shell', '蜗牛壳', 2, ['forest', 'meadow', 'bamboo', 'creek'], '下雨天才能找到。', undefined, false, true),
-  C('chalk', '彩色粉笔', 1, ['plaza', 'town'], '小镇的孩子们留下的。'),
+  C('chalk', '彩色粉笔', 1, ['plaza', 'town', 'stage'], '小镇的孩子们留下的。'),
   C('yarn_bit', '毛线头', 1, ['town', 'indoor'], '从裁缝铺飘出来的。'),
   C('stamp', '旧邮票', 3, ['town', 'plaza'], '印着一只戴帽子的猫。'),
   C('button', '小纽扣', 1, ['town', 'plaza', 'indoor'], '四个小孔，像一张脸。'),
@@ -134,8 +134,8 @@ export const ITEMS: ItemDef[] = [
   C('ice_crystal', '冰晶', 3, ['hill', 'river', 'spring'], '捧在手心里很快就会化掉。', [3]),
   C('sunflower_seed', '葵花籽', 1, ['meadow'], '夏天的小零食。', [1]),
   C('firefly_jar', '一小瓶萤光', 3, ['river', 'meadow', 'forest', 'creek', 'camp'], '夏夜的萤火虫借给猫猫的光。', [1], true),
-  C('tiny_bell', '小铃铛', 2, ['town', 'plaza'], '叮铃叮铃。'),
-  C('ribbon', '丝带', 1, ['town', 'plaza'], '粉色的丝带。'),
+  C('tiny_bell', '小铃铛', 2, ['town', 'plaza', 'stage'], '叮铃叮铃。'),
+  C('ribbon', '丝带', 1, ['town', 'plaza', 'stage'], '粉色的丝带。'),
   C('old_key', '旧钥匙', 3, ['forest', 'hill', 'town'], '也许能打开某个秘密。'),
   C('postcard', '明信片', 3, ['plaza', 'town', 'pier', 'indoor'], '上面写着“见字如面”。'),
   C('sea_glass', '海玻璃', 3, ['pier', 'beach', 'island'], '被海浪打磨了很多年。'),
@@ -152,6 +152,7 @@ export const ITEMS: ItemDef[] = [
   C('conch', '海螺', 2, ['island', 'beach'], '里面住着一小片海浪声。'),
   C('marshmallow', '烤棉花糖', 2, ['camp'], '篝火边烤得焦焦的，外脆里软。', undefined, true),
   C('stone_frog', '青蛙石', 3, ['creek'], '长得很像一只青蛙的小石头，会不会跳？'),
+  C('ticket', '演出票根', 2, ['show'], '在露天舞台看演出留下的票根，上面印着一只唱歌的猫。'),
 ];
 
 function C(id: string, name: string, rarity: 1 | 2 | 3 | 4, zones: string[], desc: string, seasons?: number[], night = false, rain = false): ItemDef {

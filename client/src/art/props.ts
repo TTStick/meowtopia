@@ -29,7 +29,75 @@ export const BOUNDS: Partial<Record<PropKind, [number, number, number, number]>>
   fruittree: [-38, -92, 38, 8], bamboo: [-24, -134, 24, 6], hotspring: [-128, -132, 128, 10], stonelamp: [-14, -50, 14, 6],
   tent: [-62, -84, 62, 8], campfire: [-24, -22, 24, 8], log: [-28, -20, 28, 6], palm: [-58, -132, 58, 8], gazebo: [-58, -124, 58, 8],
   fruitbasket: [-17, -24, 17, 5],
+  stage: [-174, -128, 174, 18], stageback: [-186, -236, 186, 8], speaker: [-17, -48, 17, 4], stagelight: [-26, -100, 26, 6],
 };
+
+/** The low wooden platform (drawn flat, under whoever stands on it). Base = front edge. */
+function stage(pen: Pen, c: PropCtx) {
+  const ctx = pen.ctx;
+  const W = 166, D = 122;
+  const floor = pen.poly([-W, 0, -W, -D, W, -D, W, 0], '#e2bd8f', 1.8);
+  pen.clip(floor, () => {
+    for (let y = -D + 14; y < 0; y += 14) pen.line([-W, y, W, y], 1, rgba(INK, 0.22), 0.3);
+    for (let i = 0; i < 24; i++) {
+      const y = -D + 14 * (i % 8), x = -W + ((i * 53) % (W * 2));
+      pen.line([x, y, x, y + 14], 1, rgba(INK, 0.2), 0.3);
+    }
+  });
+  // the front face, with little footlights
+  pen.poly([-W, 0, W, 0, W, 14, -W, 14], '#c99a6b', 1.8);
+  for (let x = -W + 30; x < W - 10; x += 40) {
+    pen.ellipse(x, 6, 4, 3, c.night > 0.4 ? '#ffe39a' : '#f6efd9', 1);
+  }
+  // steps at both front corners
+  for (const sx of [-1, 1]) {
+    const x = sx * (W + 2);
+    pen.poly([x, 14, x + sx * 22, 14, x + sx * 22, 6, x, 6], '#d6ab7c', 1.4);
+    pen.poly([x, 6, x + sx * 12, 6, x + sx * 12, -2, x, -2], '#d6ab7c', 1.4);
+  }
+  void ctx;
+}
+
+/** The backdrop: posts, an arched canopy with bulbs, curtains and the name on top. Base = back edge. */
+function stageback(pen: Pen, c: PropCtx) {
+  const ctx = pen.ctx;
+  const lit = c.night > 0.4;
+  for (const sx of [-1, 1]) pen.tube([sx * 168, 4, sx * 168, -186], 9, '#a5754e', 1.6);
+  const panel = pen.poly([-158, 0, -158, -150, 158, -150, 158, 0], lit ? '#33406b' : '#5b6fa6', 1.8);
+  pen.clip(panel, () => {
+    ctx.fillStyle = 'rgba(255,240,180,0.85)';
+    for (let i = 0; i < 26; i++) {
+      const x = -150 + hashf(i, 51) * 300, y = -144 + hashf(i, 52) * 130;
+      const r = 1 + hashf(i, 53) * 1.8;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, 7);
+      ctx.fill();
+    }
+    pen.ellipse(96, -112, 16, 16, '#fff3c4', 1.2);
+    pen.ellipse(102, -116, 13, 13, lit ? '#33406b' : '#5b6fa6', 0, null);
+  });
+  // curtains gathered at each side
+  for (const sx of [-1, 1]) {
+    const x0 = sx * 158;
+    pen.shape([x0, -150, x0 - sx * 58, -150, x0 - sx * 34, -96, x0 - sx * 18, -60, x0 - sx * 30, 0, x0, 0], '#d9575a', 1.6);
+    pen.line([x0 - sx * 18, -150, x0 - sx * 12, -90, x0 - sx * 16, -40], 1.2, rgba('#ffffff', 0.35));
+    pen.line([x0 - sx * 22, -66, x0 - sx * 4, -70], 3, '#ffd45e');
+  }
+  pen.shape([-160, -150, 160, -150, 150, -132, 120, -140, 80, -132, 40, -140, 0, -132, -40, -140, -80, -132, -120, -140, -150, -132], '#d9575a', 1.6);
+  // the arched canopy with a row of bulbs
+  pen.shape([-180, -178, -120, -206, 0, -218, 120, -206, 180, -178, 180, -166, 120, -192, 0, -204, -120, -192, -180, -166], '#f3e3c3', 1.8);
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12, x = -172 + t * 344, y = -170 - Math.sin(t * Math.PI) * 32;
+    pen.ellipse(x, y, 3.6, 3.6, lit ? ['#ffe39a', '#f9b4c4', '#b9dcf4'][i % 3] : '#fffaf0', 1);
+  }
+  // the name on a little board at the top
+  pen.poly([-58, -232, 58, -232, 58, -206, -58, -206], '#fff8e8', 1.8);
+  ctx.fillStyle = INK;
+  ctx.font = 'bold 17px "PingFang SC","Microsoft YaHei",system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('♪ 露天舞台', 0, -219);
+}
 
 const FRUIT: [string, string, string][] = [
   // blossom, summer fruit, autumn fruit
@@ -728,6 +796,23 @@ export function drawProp(pen: Pen, kind: PropKind, v: number, c: PropCtx) {
       big(-10, 0, 12);
       big(10, 2, 9);
       big(-2, -16, 7);
+      return;
+    }
+    case 'stage': return stage(pen, c);
+    case 'stageback': return stageback(pen, c);
+    case 'speaker': {
+      pen.poly([-14, 2, 14, 2, 13, -42, -13, -42], '#4f5562', 1.6);
+      pen.ellipse(0, -28, 8, 8, '#8a8c94', 1.2);
+      pen.ellipse(0, -28, 3, 3, '#4f5562', 0.8);
+      pen.ellipse(0, -11, 5, 5, '#8a8c94', 1.1);
+      return;
+    }
+    case 'stagelight': {
+      const sx = v === 0 ? 1 : -1;
+      pen.line([-12, 4, 0, -10, 12, 4], 1.8, '#6f7480');
+      pen.tube([0, -10, 0, -78], 3.6, '#6f7480');
+      pen.tube([0, -82, sx * 18, -76], 13, '#4f5562', 1.5);
+      pen.ellipse(sx * 24, -74, 5, 7, c.night > 0.4 ? '#fff3c4' : '#d6dbe0', 1.2, undefined, sx * 0.4);
       return;
     }
     case 'fruittree': return fruitTree(pen, c, v);
