@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { NPCS, NPC_MAP, townBond, walkBusy } from '../shared/npcs';
+import { roomOpen } from '../shared/rooms';
 import { getWorld, getRooms, POIS, POI_MAP, HOME_SPAWN, TILE, WW, Ter, poiPoint, walkable, walkableAt, planRoute, roomAt, zoneAt, type Room } from '../shared/world';
 import { findPath, makeGrid, smoothPath } from '../shared/path';
 import { starterLayout, STARTER_ITEMS, validateLayout, canPlace } from '../shared/nest';
@@ -180,4 +181,13 @@ test('residents: familiarity levels and when they can go for a walk', () => {
   }
   // every shop's keeper actually works in it
   for (const r of getRooms()) if (r.keeper) assert.ok(NPC_MAP[r.keeper].schedule.some((s) => POI_MAP[s.poi]?.room === r.id), `${r.keeper} never works in ${r.id}`);
+});
+
+test('shops keep daytime hours; the cafe stays open late', () => {
+  const room = (id: string) => getRooms().find((r) => r.id === id)!;
+  assert.equal(roomOpen(room('bakery'), 10), true);
+  assert.equal(roomOpen(room('bakery'), 22), false);
+  assert.equal(roomOpen(room('cafe'), 22), true);
+  assert.equal(roomOpen(room('cafe'), 23.5), false);
+  assert.equal(roomOpen(room('library'), 5), false);
 });
