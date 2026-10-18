@@ -15,6 +15,7 @@ const { allow, clientIp, fromApp, fromOurApps, LIMITS, originAllowed, securityHe
 await import('./api');
 await import('./neighbors');
 await import('./companion');
+await import('./watch');
 await import('./admin');
 await import('./moving');
 const { onBan, onAccountDeleted } = await import('./auth');

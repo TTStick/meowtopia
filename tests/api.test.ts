@@ -946,3 +946,51 @@ test('turning the website and the web version off: only the apps come in, and no
   assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, site)).status, 200);
   assert.equal((await fetch(BASE + '/')).headers.get('x-robots-tag'), null, 'the homepage is back');
 });
+
+test('the standalone watch app: its home, wardrobe (with trying things on), shop and collection', async () => {
+  const w = new Player('app');
+  await w.join('手表');
+  const cat = (await w.call('POST', '/api/adopt', { name: '表表', seed: 77 })).data.cats[0].id;
+  const watchUA = { 'user-agent': 'CatNestWatch/1.0 watchOS' };
+
+  const home = (await w.call('GET', '/api/watch', undefined, watchUA)).data;
+  assert.equal(home.cat.name, '表表');
+  assert.ok(home.cat.stage && home.cat.coat && home.cat.bond.name && home.cat.look);
+  assert.ok(home.cat.places.total > 20);
+  assert.ok(home.town.time && home.town.weather && home.town.mode === 'open');
+  assert.ok(Array.isArray(home.foods) && home.wish.wish.text);
+
+  // the shop: food, with prices; buying works as in the game
+  const shop = (await w.call('GET', '/api/watch/shop')).data;
+  assert.ok(shop.foods.length >= 3 && shop.foods.every((f: { price: number }) => f.price > 0));
+  // the wardrobe: what it owns, and what the tailor sells
+  const before = (await w.call('GET', '/api/watch/wardrobe')).data;
+  assert.equal(before.owned.length, 0);
+  const hat = before.forSale.find((i: { slot: string }) => i.slot === 'head');
+  assert.ok(hat?.slotName);
+  await w.call('POST', '/api/daily');
+  const fish = (await w.call('GET', '/api/me')).data.user.fish;
+  if (fish >= hat.price) {
+    await w.call('POST', '/api/shop/buy', { item: hat.id });
+    const after = (await w.call('GET', '/api/watch/wardrobe')).data;
+    assert.ok(after.owned.some((i: { id: string }) => i.id === hat.id));
+  }
+  // trying on: the same picture with something else on, and a different picture for it
+  const plain = await fetch(`${BASE}/api/sprite/cat/${cat}/happy?size=64&outfit=`);
+  const tried = await fetch(`${BASE}/api/sprite/cat/${cat}/happy?size=64&outfit=${hat.id}`);
+  assert.equal(plain.status, 200);
+  assert.equal(tried.status, 200);
+  assert.notEqual(plain.headers.get('etag'), tried.headers.get('etag'));
+  assert.equal((await fetch(`${BASE}/api/sprite/cat/${cat}/happy?size=64&outfit=not_a_thing`)).headers.get('etag'), plain.headers.get('etag'), 'unknown things are ignored');
+
+  const book = (await w.call('GET', '/api/watch/collection')).data;
+  assert.ok(book.total > 20 && Array.isArray(book.found));
+
+  // the watch is one of our apps: it still works when the web version is off
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  await admin.call('POST', '/api/admin/access', { web: false });
+  assert.equal((await w.call('GET', '/api/watch', undefined, watchUA)).status, 200);
+  assert.equal((await w.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' }, watchUA)).status, 200);
+  await admin.call('POST', '/api/admin/access', { web: true });
+});

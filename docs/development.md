@@ -79,6 +79,7 @@ server/   Node HTTP + WebSocket；SQLite 存储、REST API、小镇模拟、居�
 - `server/src/townsfolk.ts`：猫和居民的熟悉度（每天有上限）、每天一次的小互动、送信的小委托。
 - `server/src/neighbors.ts`：猫窝小区。每个玩家看到的邻居不一样：按熟悉程度（共养、猫友、纸条、做客、约玩）挑人住进隔壁，存在 kv 里，只有很久不来的人才会搬走；空房子留给最近常来的玩家。也管做客（`visits` 表）和约玩（`playdates` 表），到点的约定由这里的定时器叫两只猫出门赴约。
 - `shared/shows.ts`：露天舞台的晚间演出。哪天有演出、演什么，只由小镇时钟算出来，服务端（指挥居民上台、发票根）和客户端（打灯、飘音符）各算各的，结果一样。
+- `watchos/`：独立的手表 App「猫窝手表版」（SwiftUI，和 `ios/App/CatNestWatch/` 共用 API、钥匙串、配置和猫的动画），接口在 `server/src/watch.ts`：物品名、羁绊、季节天气和今晚的舞台都在服务端算好；`/api/sprite/cat/:id/:frame?outfit=a,b` 让衣柜可以试穿。
 - `client/home.html`：官网（像素图由 `scripts/make-site-art.ts` 生成）；`client/admin.html` + `client/src/admin/`：管理面板，接口在 `server/src/admin.ts`。
 
 ## 账号与安全

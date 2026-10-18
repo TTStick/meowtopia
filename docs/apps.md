@@ -215,3 +215,38 @@ xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Relea
 - **登录方式**：装了 iPhone App 时，手机会自动把登录交给手表，什么都不用输；或者在手表上点「用手机或电脑登录」，把显示的 6 位码填到任意已登录设备的「设置 → 登录手表」；也可以直接在手表上开一个新猫窝，从三只小猫里领养一只。
 
 在模拟器里运行：用 Xcode 选择 `CatNestWatch` scheme 和一台手表模拟器。调试版连接 `https://localhost`；正式版默认连接公共服务器，地址在 `CatNestWatch/Config.swift` 的 `defaultServer`。和 iPhone 一起使用时，手机会把自己的服务器地址一并告诉手表。
+
+
+## 猫窝手表版（独立的 Apple Watch App）
+
+`watchos/` 是另一个原生 SwiftUI 手表 App：**只装在手表上、不需要 iPhone**（watch-only，包名 `com.catnest.watch`，名字「猫窝手表版」，图标是夜空下的猫）。它和上面 iPhone App 附带的手表 App 是两个独立的 App，可以同时装在一块表上，各自登录。
+
+功能像一个缩小的手机 App：
+
+- **猫窝**：和附带版一样，轻点是摸摸，**转动表冠是顺毛**（每顺一下轻轻一震，顺五下它会呼噜）；新款手表上**捏两下手指**就是逗猫（夜里是说晚安）。猫出门时显示它在小镇的哪里、捡到了什么，可以叫它回家；去邻居家做客时也会显示。
+- **菜单**（表冠滚动）：状态（饱腹、精力、心情、干净、陪伴五个圆环，羁绊等级，年纪、毛色、性格、小癖好、去过几个地方）、今天的小心愿、对它说话（语音或手写）、出门 / 回家、梳毛、信箱、日记（可以往前翻）、收藏册、衣柜、商店、小镇（时间天气、今晚的舞台、它这趟出门的经过）、邻居（看门牌，带它去串门）。
+- **衣柜：转表冠一件件试穿**，猫当场戴上给你看；买过的点「戴上 / 摘下」，裁缝铺在卖的可以直接买下。
+- **商店：转表冠选数量**，再点买下。
+- **换小镇**：登录前的「小镇：… · 换一个」或「设置 → 换一个小镇」，默认官方体验服，可以加上自己小镇的网址；每个小镇的登录分开记着。
+- **随身搬家包**：和手机 App 一样，每天在手表上存一份猫的搬家包，换小镇前也会更新一次。到了新小镇的领养页会出现「带某某搬过来」，提交后等那边的管理员同意，猫就到了。小镇暂停或关服时，主页会提示，可以照常带猫离开。
+- **登录**：用已登录的手机 App、Mac 或网页「设置 → 登录手表」配对（手表上显示 6 位码），用找回码登录，或者直接在手表上开一个新猫窝领养小猫。
+
+它和附带版共用 `ios/App/CatNestWatch/` 里的几份基础代码（`API.swift`、`Keychain.swift`、`Config.swift`、`CatView.swift`、`Debug.swift`），其余都在 `watchos/CatNestWatchSolo/`。服务端给它的接口在 `server/src/watch.ts`（`/api/watch`、`/api/watch/wardrobe`、`/api/watch/shop`、`/api/watch/collection`；物品名字、季节天气、舞台都在服务端算好，手表上不用带游戏的资料）。
+
+工程用 XcodeGen 生成：
+
+```bash
+cd watchos && xcodegen generate
+```
+
+```bash
+open watchos/CatNestWatchSolo.xcodeproj
+```
+
+调试版默认连 `https://localhost`；连本机开发服务器（`npm run dev`，http://localhost:8737）可以在模拟器里先写好地址：
+
+```bash
+xcrun simctl spawn booted defaults write com.catnest.watch server http://localhost:8737
+```
+
+调试版的启动参数：`-CatNestDebugCode 找回码`（直接登录）、`-CatNestDebugScreen menu|status|wardrobe|shop|town|neighbors|collection|journal|settings|towns|letters|feed|movein`（直接打开某一页）、`-CatNestDebugAct "buy:straw_hat,wear:straw_hat,feed:treat_fish,brush"`（依次做这些事）。图标由 `scripts/make-watch-icon.ts` 用游戏里的画法生成。

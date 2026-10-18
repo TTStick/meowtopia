@@ -99,6 +99,7 @@
   <h3>Apple Watch</h3>
   <p><b>抬起手腕，它就在那里。</b>轻点是摸摸，转动表冠是顺毛：每顺一下手腕轻轻一震，顺够了会冒出小爱心，还能感觉到它呼噜呼噜。</p>
   <p>可以喂食、逗猫、出门、看信、用语音对它说话。手表可以完全脱离手机使用，甚至直接在手表上领养一只。</p>
+  <p>另有一个<b>独立的「猫窝手表版」</b>：不需要 iPhone，功能像一个缩小的手机 App，还有状态、日记、收藏册、衣柜（转表冠试穿）、商店（转表冠选数量）、小镇、邻居和换小镇。两个手表 App 可以同时装在一块表上。</p>
 </td>
 <td width="58%" valign="middle" align="center">
   <img src="docs/images/client-watch.png" alt="Apple Watch：汤圆坐着，顺毛时它说「咕噜～我把幸福都给你听」" width="90%">
@@ -240,7 +241,8 @@ docker compose up -d --build
 | iPhone | `ios/`（Capacitor 8） | [docs/apps.md · iOS](docs/apps.md#ios-app) |
 | Android | `android/`（Capacitor 8） | [docs/apps.md · Android](docs/apps.md#android-app) |
 | Mac 菜单栏 | `macos/`（Swift + AppKit） | [docs/apps.md · Mac](docs/apps.md#mac-菜单栏-app) |
-| Apple Watch | `ios/App/CatNestWatch/`（SwiftUI） | [docs/apps.md · Apple Watch](docs/apps.md#apple-watch-app) |
+| Apple Watch（iPhone App 附带） | `ios/App/CatNestWatch/`（SwiftUI） | [docs/apps.md · Apple Watch](docs/apps.md#apple-watch-app) |
+| 猫窝手表版（独立的手表 App） | `watchos/`（SwiftUI） | [docs/apps.md · 猫窝手表版](docs/apps.md#猫窝手表版独立的-apple-watch-app) |
 
 ## 技术一览
 

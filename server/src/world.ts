@@ -1013,6 +1013,22 @@ export function playTogether(id: number, a: string, b: string) {
 }
 
 /** Where a cat is, in words. */
+/** Where a cat out in the town is, and how its outing is going (for the watch). */
+export function tripInfo(catId: string) {
+  const e = ents.get(catId);
+  if (!e) return null;
+  const [x, y] = posOf(e, Date.now());
+  const room = roomAt(x, y);
+  return {
+    place: room?.name ?? placeName(x, y),
+    since: e.trip?.started ?? null,
+    finds: e.trip?.finds ?? [],
+    friends: e.trip?.friends ?? [],
+    places: e.trip?.places.length ?? 0,
+    goingHome: !!e.trip?.goingHome,
+  };
+}
+
 export function whereIs(catId: string): string | null {
   const e = ents.get(catId);
   return e ? placeName(e.st.x, e.st.y) : null;

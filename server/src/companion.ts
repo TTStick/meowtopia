@@ -2,7 +2,7 @@
 import { route, HttpError, type Req } from './http';
 import * as db from './db';
 import * as game from './game';
-import { ITEMS } from '../../shared/items';
+import { ITEMS, WEAR_SLOT } from '../../shared/items';
 import { moodWord, ageOf } from '../../shared/stats';
 import { randomGenes } from '../../shared/genes';
 import { clockAt } from '../../shared/time';
@@ -37,10 +37,17 @@ async function sendSprite(r: Req, genes: CatGenes, outfit: string[], age: number
 }
 
 // cats are visible to everyone in the town anyway, so their pictures are public
+// ?outfit=a,b shows it trying something on (the watch's wardrobe)
 route('GET', '/api/sprite/cat/:id/:frame', (r) => {
   const c = game.getCat(r.params.id);
   if (!c) throw new HttpError(404, '找不到这只猫');
-  return sendSprite(r, c.genes, c.outfit, ageOf(c.born));
+  const tryOn = r.query.get('outfit');
+  let outfit = c.outfit;
+  if (tryOn !== null) {
+    const slots = new Set<string>();
+    outfit = tryOn.split(',').filter((id) => WEAR_SLOT[id] && !slots.has(WEAR_SLOT[id]) && slots.add(WEAR_SLOT[id]));
+  }
+  return sendSprite(r, c.genes, outfit, ageOf(c.born));
 }, { auth: false });
 
 // kittens to choose from when adopting on the watch

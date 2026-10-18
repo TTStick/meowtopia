@@ -314,7 +314,8 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 | iPhone / Android App | 不用重新打包：登录页点「小镇：官方体验服 · 换一个」，或者游戏里「设置 → 所在的小镇」，加上 `https://你的域名` 就能去。每个小镇的登录分开保存 |
 | iPhone App（默认连你的小镇） | 项目根目录的 `.env.ios` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:ios` |
 | Mac App | 游戏里「设置 → 所在的小镇」直接切换；默认值在 `macos/project.yml` 里 Release 的 `CATNEST_SERVER`，也可以执行 `defaults write com.catnest.mac serverURL https://你的域名` |
-| Apple Watch | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
+| Apple Watch（iPhone App 附带） | `ios/App/CatNestWatch/Config.swift` 里的 `defaultServer`；和 iPhone 配对使用时会自动跟随手机 |
+| 猫窝手表版（独立） | 不用改：登录页「小镇：… · 换一个」或「设置 → 换一个小镇」加上 `https://你的域名` |
 | Android App（默认连你的小镇） | 项目根目录的 `.env.android` 里写 `VITE_API_BASE=https://你的域名`，再 `npm run build:android` 并重新打包（见 [docs/apps.md](docs/apps.md#打正式包)） |
 
 ### 发布 Android 安装包

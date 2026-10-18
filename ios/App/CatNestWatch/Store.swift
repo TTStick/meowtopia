@@ -117,9 +117,9 @@ final class Store {
         await withTaskGroup(of: (String, UIImage?).self) { g in
             for f in Self.frameNames {
                 g.addTask {
-                    let file = Self.cacheDir.appendingPathComponent("\(c.id)-\(c.look)-\(f).png")
+                    let file = Self.cacheDir.appendingPathComponent("\(c.id)-\(c.look)-\(f)-2.png") // -2: copies saved before the look was in the URL may be stale
                     if let d = try? Data(contentsOf: file), let img = UIImage(data: d) { return (f, img) }
-                    guard let d = try? await API.shared.data("/api/sprite/cat/\(c.id)/\(f)?size=256&outline=1"), let img = UIImage(data: d) else { return (f, nil) }
+                    guard let d = try? await API.shared.data("/api/sprite/cat/\(c.id)/\(f)?size=256&outline=1&v=\(c.look)"), let img = UIImage(data: d) else { return (f, nil) }
                     try? d.write(to: file)
                     return (f, img)
                 }
