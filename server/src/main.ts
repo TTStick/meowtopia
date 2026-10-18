@@ -25,13 +25,14 @@ const { db } = await import('./db');
 const { WebSocketServer } = await import('ws');
 const { llmEnabled } = await import('./llm');
 const { isOpen, townAccess } = await import('./townmode');
-const { siteClosedPage } = await import('./closedpage');
 
 migrateLegacyAccounts();
 onBan((uid) => kickUser(uid));
 onAccountDeleted((uid, cats) => kickUser(uid, cats));
 
 const PORT = Number(process.env.PORT || 8737);
+/** The website's own pages (the homepage and the guide), as opposed to the game, the admin panel and files. */
+const SITE_PAGES = new Set(['/', '/home.html', '/deploy', '/deploy/', '/deploy.html']);
 const DIST = resolve(process.env.CAT_DIST || 'dist');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json',
@@ -74,14 +75,14 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/' && (url.searchParams.has('panel') || url.searchParams.has('scene'))) return into('/play/');
     if (url.pathname === '/play' || url.pathname === '/index.html') return into('/play/', 301);
     if (url.pathname === '/admin') return into('/admin/', 301);
-    if (url.pathname === '/deploy' || url.pathname === '/deploy.html') return into('/deploy/', 301);
-    // the website is off: its pages say so (the game, the admin panel and downloads carry on)
-    if (!townAccess().site && (url.pathname === '/' || url.pathname === '/home.html' || url.pathname === '/deploy/')) {
-      securityHeaders(req, res, true);
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
-      res.end(req.method === 'HEAD' ? undefined : siteClosedPage(townAccess().web));
+    // the website is off: its pages aren't there at all, so search engines drop them too
+    // (the game, the admin panel and downloads carry on)
+    const site = townAccess().site;
+    if (!site && SITE_PAGES.has(url.pathname)) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' }).end(req.method === 'HEAD' ? undefined : 'not found');
       return;
     }
+    if (url.pathname === '/deploy' || url.pathname === '/deploy.html') return into('/deploy/', 301);
     // static files (production build); unknown paths inside the game fall back to its shell
     const game = url.pathname.startsWith('/play/');
     let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : url.pathname === '/admin/' ? staticFile('/admin.html') : url.pathname === '/deploy/' ? staticFile('/deploy.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
@@ -92,6 +93,8 @@ const server = createServer(async (req, res) => {
     const ext = extname(p);
     const body = readFileSync(p);
     securityHeaders(req, res, ext === '.html');
+    // with the website off, nothing here should turn up in search results
+    if (!site && ext === '.html') res.setHeader('X-Robots-Tag', 'noindex');
     res.writeHead(200, {
       'content-type': MIME[ext] ?? 'application/octet-stream',
       'content-length': body.length,

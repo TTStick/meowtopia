@@ -931,16 +931,18 @@ test('turning the website and the web version off: only the apps come in, and no
   assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, { ...site, 'user-agent': 'Mozilla/5.0 (Macintosh) CatNestMac/1.0' })).status, 200);
   await new Player('app').join('新来的 App 玩家');
 
-  // the homepage and the guide say the website is closed; the admin panel still works
-  for (const path of ['/', '/deploy/']) {
-    const page = await fetch(BASE + path);
-    assert.equal(page.status, 200);
-    assert.match(await page.text(), /官网暂时关闭/);
+  // the homepage and the guide aren't there at all (search engines drop them); the admin panel still works
+  for (const path of ['/', '/deploy/', '/deploy', '/home.html']) {
+    const page = await fetch(BASE + path, { redirect: 'manual' });
+    assert.equal(page.status, 404, path);
+    assert.equal(page.headers.get('x-robots-tag'), 'noindex');
+    assert.doesNotMatch(await page.text(), /猫窝/);
   }
+  assert.equal((await fetch(`${BASE}/?panel=letters`, { redirect: 'manual' })).status, 302, 'links into the game still work');
   assert.equal((await admin.call('GET', '/api/admin/overview')).data.access.web, false);
 
   // and back on
   await admin.call('POST', '/api/admin/access', { site: true, web: true });
   assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, site)).status, 200);
-  assert.doesNotMatch(await (await fetch(BASE + '/')).text(), /官网暂时关闭/);
+  assert.equal((await fetch(BASE + '/')).headers.get('x-robots-tag'), null, 'the homepage is back');
 });

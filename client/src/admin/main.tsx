@@ -188,7 +188,7 @@ function AccessCard({ current, onSaved }: { current: Overview['access']; onSaved
   const flip = async (key: 'site' | 'web', on: boolean) => {
     const ask =
       key === 'site'
-        ? on ? '重新打开官网？' : '关闭官网？首页和开服教程会换成一句「官网暂时关闭了」；游戏、管理面板和安装包下载不受影响。'
+        ? on ? '重新打开官网？' : '关闭官网？首页和开服教程会直接打不开（404），搜索引擎也会慢慢把它们去掉；游戏、管理面板和安装包下载不受影响。'
         : on ? '重新打开网页版？浏览器里又能注册、登录和玩了。' : '关闭网页版？之后只有 App（iPhone、安卓、Mac、手表）能登录和玩；已经在网页上登录的玩家，只能生成找回码（到 App 里登录）或者打包猫猫。';
     if (!confirm(ask)) return;
     setBusy(true);
