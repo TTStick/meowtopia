@@ -107,9 +107,9 @@ class Game {
       void this.loadUnread();
     });
     try {
-      const st = await api<{ llm: boolean; worldTz: number }>('GET', '/api/status');
+      const st = await api<{ llm: boolean; worldTz: number; trial?: boolean }>('GET', '/api/status');
       setWorldTz(st.worldTz);
-      ui.set({ llm: !!st.llm });
+      ui.set({ llm: !!st.llm, trial: !!st.trial });
     } catch {
       /* the boot loop below retries */
     }

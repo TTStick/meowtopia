@@ -22,9 +22,14 @@
         <a href="#play">玩法</a>
         <a href="#download">下载</a>
         <a href="#source">开源</a>
+        <a href="/deploy/">开服</a>
       </nav>
       <a class="pbtn small" href="/play/"><img src="/site/icon-play.png" alt="" />开始玩</a>
     </header>
+
+    <div class="trial-bar" data-trial hidden>
+      <p><b>这里是猫窝的体验服</b><span>欢迎先来玩玩看，但它不保证会一直开着。</span><span>想长久地养，<a href="/deploy/">自己开一个小镇</a>，再把猫猫搬过去。</span></p>
+    </div>
 
     <section class="hero" id="top">
       <img class="moon" src="/site/moon.png" width="24" height="24" alt="" />
@@ -205,7 +210,7 @@
           <article class="pbox">
             <img class="icon" src="/site/icon-phone.png" alt="" />
             <h3 class="px" data-px="14">Android</h3>
-            <p>直接下载安装，连接我们的服务器。<span class="meta" data-apk-meta>Android 7.0 以上</span></p>
+            <p>直接下载安装，连接官方体验服。<span class="meta" data-apk-meta>Android 7.0 以上</span></p>
             <a class="pbtn" href="/download/meowtopia.apk" download="猫窝.apk" data-apk-link><img src="/site/icon-down.png" alt="" />下载 APK</a>
             <p class="fine">安装时如果提示“未知来源”，在系统设置里允许浏览器安装应用就好。通知不需要谷歌服务。</p>
             <p class="fine hash" data-apk-hash hidden></p>
@@ -236,7 +241,8 @@
             <h2 class="px">源代码开放</h2>
             <p>猫窝的全部代码都在 GitHub 上：游戏、服务器，以及 iPhone、Android、Mac、Apple Watch 五个客户端。</p>
             <p>使用 <b>PolyForm Noncommercial 1.0.0</b> 协议：可以自由阅读、学习、修改，也可以自己架一台服务器和朋友一起玩；<b>不允许任何商业用途</b>。</p>
-            <p>想自己架服务器？一台 1 核 2G 的 Linux 加 Docker 就够了，跟着部署手册几分钟就能上线。</p>
+            <p>想自己开一个小镇？一台 1 核 2G 的 Linux 服务器加一个域名就够了。跟着<a href="/deploy/">开服教程</a>一步步做，或者让 AI 编程工具帮你部署，再把猫猫搬过去。</p>
+            <a class="pbtn small" href="/deploy/"><img src="/site/icon-code.png" alt="" />开服教程</a>
           </div>
           <a class="repo pbox" href="https://github.com/TTStick/meowtopia" rel="noopener">
             <img src="/site/cat-sit.png" class="repo-cat" alt="" />
@@ -252,7 +258,7 @@
       <div class="grass" aria-hidden="true"><span class="sleeper"></span></div>
       <div class="wrap">
         <p>猫是代码画的，喜欢是真的。</p>
-        <p class="links"><a href="/play/">开始玩</a> · <a href="https://github.com/TTStick/meowtopia" rel="noopener">源代码</a> · <a href="https://github.com/TTStick/meowtopia/blob/main/LICENSE" rel="noopener">使用协议（禁止商用）</a></p>
+        <p class="links"><a href="/play/">开始玩</a> · <a href="/deploy/">开服教程</a> · <a href="https://github.com/TTStick/meowtopia" rel="noopener">源代码</a> · <a href="https://github.com/TTStick/meowtopia/blob/main/LICENSE" rel="noopener">使用协议（禁止商用）</a></p>
         <p class="copy">© <span data-year>2026</span> 猫窝</p>
       </div>
     </footer>

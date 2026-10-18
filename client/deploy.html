@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#231d3f" />
+    <meta name="description" content="自己开一个猫窝小镇：一台小服务器、一个域名，跟着做或者让 AI 工具帮你部署，再把猫猫搬过去。" />
+    <meta property="og:title" content="开服教程 · 自己开一个猫窝小镇" />
+    <meta property="og:description" content="一台小服务器、一个域名，大约二十分钟。跟着做，或者让 AI 帮你部署。" />
+    <meta property="og:type" content="article" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <title>开服教程 · 自己开一个猫窝小镇</title>
+  </head>
+  <body>
+    <a class="skip" href="#main">跳到正文</a>
+
+    <header class="nav">
+      <a class="brand" href="/" aria-label="猫窝 首页"><img src="/site/logo.png" width="52" height="35" alt="" /><span>猫窝</span></a>
+      <nav aria-label="页面导航">
+        <a href="#prepare">准备</a>
+        <a href="#steps">跟着做</a>
+        <a href="#ai">用 AI</a>
+        <a href="#move">搬家</a>
+      </nav>
+      <a class="pbtn small" href="/play/"><img src="/site/icon-play.png" alt="" />开始玩</a>
+    </header>
+
+    <section class="hero guide-hero" id="top">
+      <img class="moon" src="/site/moon.png" width="24" height="24" alt="" />
+      <div class="hero-in">
+        <h1 class="px light" data-px="18">自己开一个猫窝小镇</h1>
+        <p class="tag"><span>一台小服务器、一个域名，大约二十分钟。</span><br /><span>开好以后，把猫猫搬过去，</span><span>就能一直养下去。</span></p>
+      </div>
+      <div class="street" aria-hidden="true">
+        <span class="walker w1"></span>
+        <span class="sitter"></span>
+      </div>
+    </section>
+
+    <main id="main" class="guide">
+      <section class="wrap narrow">
+        <nav class="toc pbox" aria-label="目录">
+          <b>这一页讲什么</b>
+          <ol>
+            <li><a href="#prepare">开服之前，准备三样东西</a></li>
+            <li><a href="#steps">方法一：跟着做（复制、粘贴、回车）</a></li>
+            <li><a href="#ai">方法二：让 AI 帮你部署</a></li>
+            <li><a href="#move">把猫猫搬到你的小镇</a></li>
+            <li><a href="#phone">手机上怎么玩</a></li>
+            <li><a href="#faq">常见问题</a></li>
+          </ol>
+        </nav>
+        <p class="aside"><img src="/site/icon-star.png" alt="" /><span>猫窝的官网是<b>体验服</b>，不保证会一直开着。自己开一个小镇，数据就在你自己手里：你是这里的管理员，可以和朋友、家人一起住。</span></p>
+      </section>
+
+      <section class="wrap narrow" id="prepare">
+        <h2 class="px">开服之前，准备三样东西</h2>
+        <div class="need">
+          <article class="pbox">
+            <h3>① 一台服务器</h3>
+            <p>Linux 系统（推荐 Debian 12/13 或 Ubuntu 22.04/24.04），<b>1 核 2G</b> 起步，一个月几十块钱。买的时候记下它的<b>公网 IP</b> 和 <b>root 密码</b>。</p>
+            <p class="fine">选境外或香港机房最省事。国内机房的服务器，域名要先做 ICP 备案才能开网站。</p>
+          </article>
+          <article class="pbox">
+            <h3>② 一个域名</h3>
+            <p>比如 <code>cat.example.com</code>（子域名就行）。在域名服务商的「DNS 解析」里加一条 <b>A 记录</b>：主机记录填 <code>cat</code>，记录值填服务器 IP。</p>
+            <p class="fine">网站的 HTTPS 证书会自动申请，所以一定要有域名。</p>
+          </article>
+          <article class="pbox">
+            <h3>③ 一台电脑</h3>
+            <p>Mac 或 Windows 10/11 都行。用自带的「终端」（Mac）或「PowerShell」（Windows）登录服务器。</p>
+            <p class="fine">用 AI 帮忙的话，也是在这台电脑上装 AI 工具。</p>
+          </article>
+        </div>
+        <p class="aside"><img src="/site/icon-paw.png" alt="" /><span>可选：一个 Anthropic API Key，猫猫说的话会更有灵气。不填也能完整地玩，之后在管理面板里随时能加。</span></p>
+      </section>
+
+      <section class="band" id="steps">
+        <div class="wrap narrow">
+          <h2 class="px">方法一：跟着做</h2>
+          <p class="sub">每一步复制一行命令，粘贴到终端里，回车。黑色框右上角有「复制」按钮。</p>
+          <ol class="big-steps">
+            <li>
+              <h3>登录服务器</h3>
+              <p>在电脑上打开终端（Mac：在启动台搜「终端」；Windows：在开始菜单搜「PowerShell」），输入下面这行，把 IP 换成你的服务器：</p>
+              <pre class="cmd"><code>ssh root@你的服务器IP</code></pre>
+              <p class="fine">第一次连接会问 <code>yes/no</code>，输入 <code>yes</code> 回车；然后输入 root 密码（输入时屏幕上什么都不显示，是正常的）。看到 <code>root@…:~#</code> 就登进去了，下面的命令都在这里输入。</p>
+            </li>
+            <li>
+              <h3>安装 Docker 和 git</h3>
+              <pre class="cmd"><code>apt-get update && apt-get install -y git curl && curl -fsSL https://get.docker.com | sh</code></pre>
+              <p class="fine">国内服务器把最后一段换成走阿里云镜像的版本：</p>
+              <pre class="cmd"><code>apt-get update && apt-get install -y git curl && curl -fsSL https://get.docker.com | sh -s -- --mirror Aliyun</code></pre>
+              <p>装好后确认一下，能看到 <code>Docker Compose version v2.…</code> 就对了：</p>
+              <pre class="cmd"><code>docker compose version</code></pre>
+              <details class="fine">
+                <summary>安装脚本报错？（比如系统太新）</summary>
+                <p>Debian 13、Ubuntu 24.04 以上可以直接用系统自带的软件包：</p>
+                <pre class="cmd"><code>apt-get install -y git docker.io docker-cli docker-compose</code></pre>
+              </details>
+            </li>
+            <li>
+              <h3>下载猫窝</h3>
+              <pre class="cmd"><code>git clone https://github.com/TTStick/meowtopia.git /opt/catnest && cd /opt/catnest</code></pre>
+              <details class="fine">
+                <summary>服务器连不上 GitHub？</summary>
+                <p>在电脑浏览器里打开 <a href="https://github.com/TTStick/meowtopia" rel="noopener">GitHub 上的猫窝</a>，点绿色的 Code → Download ZIP。然后在<b>电脑的终端</b>里（不是服务器里）进入下载目录，把它传上去：</p>
+                <pre class="cmd"><code>scp meowtopia-main.zip root@你的服务器IP:/opt/</code></pre>
+                <p>回到服务器的终端解压：</p>
+                <pre class="cmd"><code>cd /opt && apt-get install -y unzip && unzip -q meowtopia-main.zip && mv meowtopia-main catnest && cd catnest</code></pre>
+              </details>
+            </li>
+            <li>
+              <h3>一键部署</h3>
+              <p>把 <code>cat.example.com</code> 换成你的域名：</p>
+              <pre class="cmd"><code>./deploy/setup.sh cat.example.com</code></pre>
+              <p>脚本会生成配置（包括一个随机的管理口令）、构建游戏并启动。第一次要等几分钟，看到「好了！」就成功了。</p>
+              <details class="fine">
+                <summary>国内服务器下载很慢？</summary>
+                <p>换成国内的 npm 源再运行：</p>
+                <pre class="cmd"><code>NPM_REGISTRY=https://registry.npmmirror.com ./deploy/setup.sh cat.example.com</code></pre>
+                <p>拉取 Docker 基础镜像也慢的话，可以在云厂商的控制台找「镜像加速」地址，按 <a href="https://github.com/TTStick/meowtopia/blob/main/DEPLOY.md#6-国内服务器下载慢--内存小" rel="noopener">部署手册第 6 节</a> 配置。</p>
+              </details>
+              <details class="fine">
+                <summary>服务器只有 1G 内存？</summary>
+                <p>构建时内存可能不够，先加 2G 交换空间，再运行上面的部署命令：</p>
+                <pre class="cmd"><code>fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab</code></pre>
+              </details>
+            </li>
+            <li>
+              <h3>打开你的小镇</h3>
+              <ul class="hearts">
+                <li><code>https://你的域名</code>：官网首页（和这一页同一个样子）</li>
+                <li><code>https://你的域名/play/</code>：游戏</li>
+                <li><code>https://你的域名/admin/</code>：管理面板。口令用这行命令查：</li>
+              </ul>
+              <pre class="cmd"><code>grep CAT_ADMIN_TOKEN /opt/catnest/.env</code></pre>
+              <p class="fine">刚部署完打不开？等一两分钟让证书申请好。还不行的话，检查域名解析是否已经指向服务器，以及云服务器的「安全组 / 防火墙」是否放行了 80 和 443 端口。</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="wrap narrow" id="ai">
+        <h2 class="px">方法二：让 AI 帮你部署</h2>
+        <p class="sub">不熟悉命令行也没关系。现在有能在电脑上「动手」的 AI 编程工具，比如 Anthropic 的 <b>Claude Code</b>：你用中文告诉它要做什么，它会自己读部署手册、登录服务器、一步步执行命令，每一步都会先问你同不同意。</p>
+        <ol class="big-steps">
+          <li>
+            <h3>装好 AI 工具</h3>
+            <p>以 Claude Code 为例。Mac 在「终端」里运行：</p>
+            <pre class="cmd"><code>curl -fsSL https://claude.ai/install.sh | bash</code></pre>
+            <p>Windows 在「PowerShell」里运行：</p>
+            <pre class="cmd"><code>irm https://claude.ai/install.ps1 | iex</code></pre>
+            <p class="fine">不想碰命令行，也可以装 <a href="https://claude.com/download" rel="noopener">Claude 桌面版</a>，用里面的 Code。Claude Code 需要 Claude 的付费订阅（Pro 及以上）或 API 账号，并且要在 Anthropic 支持的地区使用；详细说明见<a href="https://code.claude.com/docs/en/setup" rel="noopener">官方文档</a>。其他能在终端里执行命令的 AI 编程工具，也可以用同样的方法。</p>
+          </li>
+          <li>
+            <h3>让电脑用「钥匙」登录服务器</h3>
+            <p>这样 AI 不需要知道你的服务器密码。在<b>电脑的终端</b>里生成一把钥匙（一路回车）：</p>
+            <pre class="cmd"><code>ssh-keygen -t ed25519</code></pre>
+            <p>把钥匙放到服务器上（只做一次，会让你输一次服务器密码）。Mac：</p>
+            <pre class="cmd"><code>ssh-copy-id root@你的服务器IP</code></pre>
+            <p>Windows（PowerShell）：</p>
+            <pre class="cmd"><code>type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@你的服务器IP "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"</code></pre>
+            <p class="fine">之后再输入 <code>ssh root@你的服务器IP</code>，不用密码就能直接登录了。</p>
+          </li>
+          <li>
+            <h3>把要求告诉它</h3>
+            <p>在电脑上新建一个空文件夹，在里面启动 AI 工具（Claude Code：在终端里进入这个文件夹，输入 <code>claude</code>）。把下面这段话复制给它，改掉尖括号里的内容：</p>
+            <pre class="cmd prompt"><code>请帮我把开源游戏「猫窝」部署到我自己的服务器上。
+
+- 源代码：https://github.com/TTStick/meowtopia ，部署手册是仓库里的 DEPLOY.md。请先读它，按里面的方法用 Docker 部署（deploy/setup.sh）。
+- 服务器：root@&lt;服务器IP&gt;，我已经能用 SSH 密钥登录。机房在 &lt;国内 / 香港 / 海外&gt;。
+- 域名：&lt;cat.example.com&gt;，A 记录已经指向这台服务器。
+- 每执行一条命令前，先用一句话告诉我它要做什么。
+- 不要改 SSH、防火墙这类系统安全设置，需要的话先问我；不要在聊天里显示管理口令（CAT_ADMIN_TOKEN）。
+- 部署好以后，确认 https://&lt;域名&gt;/healthz 返回 ok，再告诉我游戏和管理面板的地址，以及查管理口令的命令。</code></pre>
+          </li>
+          <li>
+            <h3>看着它做，点头就好</h3>
+            <p>它要执行命令时会先征求你的同意。看不懂的地方，直接问它「这一步是做什么的」。</p>
+          </li>
+        </ol>
+        <div class="pbox tipbox">
+          <p><b>两个小提醒</b></p>
+          <ul class="hearts">
+            <li>别把服务器密码、API Key 发进聊天框；用上面的钥匙登录更安全。</li>
+            <li>以后要更新版本、备份数据、看日志、排查打不开的问题，也可以直接交给它，比如：「帮我把服务器上的猫窝更新到最新版，更新前先备份数据」。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="band" id="move">
+        <div class="wrap narrow">
+          <h2 class="px">把猫猫搬到你的小镇</h2>
+          <p class="sub">在体验服里养过猫？带上它一起走。</p>
+          <ol class="big-steps">
+            <li>
+              <h3>在原来的小镇打包</h3>
+              <p>打开游戏「设置 → 账号与安全 → 搬家去别的小镇」，点「打包」，保存「猫窝搬家包」这个文件。</p>
+            </li>
+            <li>
+              <h3>在你的小镇申请搬进来</h3>
+              <p>打开 <code>https://你的域名/play/</code>，点「开始养猫」，在领养页最下面选「在别的猫窝小镇养过猫？搬家过来」，选这个文件，申请搬进来。</p>
+            </li>
+            <li>
+              <h3>自己批准自己</h3>
+              <p>你就是这个小镇的管理员：打开 <code>/admin/</code> →「搬家」，核对来源小镇的指纹（打包页面上也写着），点「同意搬来」。回到游戏，猫猫已经到家了。</p>
+            </li>
+          </ol>
+          <p class="aside"><img src="/site/icon-heart.png" alt="" /><span>会一起带走：猫猫本身（样子、性格、年龄、羁绊）、猫窝布置、背包和衣服、收藏、小鱼干、去过的地方和最近 200 篇日记。朋友、邻居和纸条会留在原来的小镇。</span></p>
+        </div>
+      </section>
+
+      <section class="wrap narrow" id="phone">
+        <h2 class="px">手机上怎么玩</h2>
+        <ul class="hearts">
+          <li><b>最简单：</b>手机浏览器打开 <code>https://你的域名/play/</code>，点「添加到主屏幕」，就像一个 App，也能收到猫猫的小纸条。</li>
+          <li>官网下载的 Android 安装包，连接的是官方体验服。想让 App 连你自己的小镇，要用源代码自己打包，见部署手册的<a href="https://github.com/TTStick/meowtopia/blob/main/DEPLOY.md#11-让各个-app-连到你的服务器" rel="noopener">「让各个 App 连到你的服务器」</a>。</li>
+        </ul>
+      </section>
+
+      <section class="wrap narrow" id="faq">
+        <h2 class="px">常见问题</h2>
+        <div class="faq">
+          <details class="pbox">
+            <summary>要花多少钱？</summary>
+            <p>服务器一个月几十元（或几美元），域名一年几十元。AI 生成猫语是可选的，按用量付费，管理面板里可以设每天的上限；不开也能完整地玩。</p>
+          </details>
+          <details class="pbox">
+            <summary>一定要有域名吗？</summary>
+            <p>要。HTTPS 证书、通行密钥（面容 / 指纹登录）、通知都需要一个域名；只用 IP 的话浏览器会提示不安全，很多功能用不了。</p>
+          </details>
+          <details class="pbox">
+            <summary>国内服务器要注意什么？</summary>
+            <p>域名要先完成 ICP 备案才能使用 80 / 443 端口。下载慢时换国内的 npm 源（见上面「一键部署」），GitHub 连不上就用 ZIP 上传。</p>
+          </details>
+          <details class="pbox">
+            <summary>怎么更新到新版本？</summary>
+            <p>数据都在 Docker 卷里，更新不会丢：</p>
+            <pre class="cmd"><code>cd /opt/catnest && git pull && ./deploy/setup.sh</code></pre>
+            <p class="fine">用 ZIP 装的，下载新的 ZIP 解压覆盖到 <code>/opt/catnest</code>，再运行 <code>./deploy/setup.sh</code>。</p>
+          </details>
+          <details class="pbox">
+            <summary>数据怎么备份？</summary>
+            <p>服务器每天会自动备份数据库，保留最近 7 天。想拷一份出来：</p>
+            <pre class="cmd"><code>cd /opt/catnest && docker compose cp app:/app/data/backups ./catnest-backups</code></pre>
+          </details>
+          <details class="pbox">
+            <summary>打不开、报错了怎么办？</summary>
+            <p>先看看游戏的日志：</p>
+            <pre class="cmd"><code>cd /opt/catnest && docker compose logs --tail 100 app</code></pre>
+            <p>也可以把报错复制给 AI 工具，让它帮你看。完整的说明在 GitHub 上的<a href="https://github.com/TTStick/meowtopia/blob/main/DEPLOY.md" rel="noopener">部署手册 DEPLOY.md</a>。</p>
+          </details>
+          <details class="pbox">
+            <summary>可以拿来赚钱吗？</summary>
+            <p>不可以。猫窝使用 PolyForm Noncommercial 1.0.0 协议：可以自己玩、和朋友一起玩、学习和修改，禁止任何商业用途。</p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="grass" aria-hidden="true"><span class="sleeper"></span></div>
+      <div class="wrap">
+        <p>猫是代码画的，喜欢是真的。</p>
+        <p class="links"><a href="/">官网首页</a> · <a href="/play/">开始玩</a> · <a href="https://github.com/TTStick/meowtopia" rel="noopener">源代码</a> · <a href="https://github.com/TTStick/meowtopia/blob/main/DEPLOY.md" rel="noopener">部署手册</a></p>
+        <p class="copy">© <span data-year>2026</span> 猫窝</p>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/home/home.ts"></script>
+  </body>
+</html>

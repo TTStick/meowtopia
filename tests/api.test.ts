@@ -15,6 +15,7 @@ const PORT = 18000 + Math.floor(Math.random() * 1000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = 'test-admin-token-123456';
 const dir = mkdtempSync(join(tmpdir(), 'catnest-test-'));
+// the town's clock is set to about noon, so residents are out and about whenever the tests run
 let server: ChildProcess;
 
 /** A player: either a browser with a cookie jar, or the app with a bearer token. */
@@ -59,7 +60,7 @@ function leading(h: Buffer) {
 
 before(async () => {
   server = spawn(process.execPath, ['--import', 'tsx', 'server/src/main.ts'], {
-    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_BACKUPS: 'off' },
+    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_BACKUPS: 'off', CAT_WORLD_TZ: String(12 - new Date().getUTCHours()) },
     stdio: 'ignore',
   });
   for (let i = 0; i < 100; i++) {
@@ -807,4 +808,14 @@ test('moving: pack a cat here; move in from another town only once the admin say
   assert.equal((await c.call('GET', '/api/move/request')).data.request.status, 'withdrawn');
   await admin.call('POST', '/api/admin/moves-trusted/remove', { fingerprint: farFp });
   assert.equal((await admin.call('GET', '/api/admin/moves')).data.trusted.length, 0);
+});
+
+test('a town is not a trial server unless CAT_TRIAL says so', async () => {
+  const st = (await new Player().call('GET', '/api/status')).data;
+  assert.equal(st.trial, false);
+  const p = new Player();
+  await p.join();
+  await p.call('POST', '/api/adopt', { name: '团团', seed: 9 });
+  await p.call('GET', '/api/me');
+  assert.ok(!(await p.call('GET', '/api/events')).data.some((e: { title: string }) => e.title.includes('体验服')), 'no trial letter on a normal town');
 });

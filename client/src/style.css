@@ -1082,3 +1082,39 @@ textarea {
 .move-wait > div:first-child {
   width: 100%;
 }
+
+/* ---------- 体验服 ---------- */
+.trial-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(340px, 100%);
+  margin: 18px auto 0;
+  padding: 10px 14px 11px;
+  border: 2px dashed var(--ink-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  line-height: 1.65;
+  text-align: left;
+}
+.trial-note b {
+  font-size: 14px;
+}
+.trial-note span {
+  color: var(--ink-soft);
+}
+.trial-note a {
+  align-self: flex-start;
+  color: var(--coral);
+  font-weight: 700;
+  text-decoration: none;
+}
+.sheet-b > .trial-note {
+  width: auto;
+  margin: 0 0 12px;
+}
+.move a {
+  color: var(--coral);
+  font-weight: 600;
+}

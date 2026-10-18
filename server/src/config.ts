@@ -31,6 +31,9 @@ export const LLM_USER_DAILY = Number(env.CAT_LLM_USER_DAILY || 120);
 
 export const SESSION_DAYS = Number(env.CAT_SESSION_DAYS || 180);
 
+/** A trial server (体验服): the game and the website ask players to open their own town and move their cat there. */
+export const TRIAL = /^(1|true|yes|on)$/i.test(env.CAT_TRIAL ?? '');
+
 // ---- secrets kept on disk in the data volume ----
 interface Secrets {
   hmac: string; // recovery-code hashing and proof-of-work signatures

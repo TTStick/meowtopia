@@ -13,6 +13,7 @@ function sitePaths(): Plugin {
         if (path === '/' && !intoGame) req.url = '/home.html' + (query ? '?' + query : '');
         else if (path.startsWith('/play/') && !path.slice(6).includes('.')) req.url = '/index.html' + (query ? '?' + query : '');
         else if (path === '/admin/' || path === '/admin') req.url = '/admin.html';
+        else if (path === '/deploy/' || path === '/deploy') req.url = '/deploy.html';
         next();
       });
     },
@@ -41,7 +42,7 @@ export default defineConfig(({ mode }) => {
       outDir: '../dist',
       emptyOutDir: true,
       rollupOptions: {
-        input: { main: page('index'), companion: page('companion'), ...(native ? {} : { home: page('home'), admin: page('admin') }) },
+        input: { main: page('index'), companion: page('companion'), ...(native ? {} : { home: page('home'), deploy: page('deploy'), admin: page('admin') }) },
       },
     },
   };

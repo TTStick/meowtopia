@@ -16,6 +16,7 @@ import { bondsOf } from './townsfolk';
 import { guestsAt } from './neighbors';
 import { NPCS } from '../../shared/npcs';
 import { localClock, WORLD_TZ } from '../../shared/time';
+import { TRIAL } from './config';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function code(n: number) {
@@ -41,6 +42,10 @@ route('GET', '/api/me', (r) => {
       .sort((a, b) => a.ts - b.ts)
       .slice(-8);
     me.away = { since: r.user.last_seen, entries };
+  }
+  if (TRIAL && me.cats.length && !db.kvGet(`trialnote:${r.user.id}`)) {
+    db.kvSet(`trialnote:${r.user.id}`, Date.now());
+    game.notify(r.user.id, 'town', '这里是猫窝的体验服', '谢谢你来猫窝！这台服务器是作者开着给大家体验的，不保证会一直开下去。想和猫猫长长久久，可以自己开一个猫窝小镇（官网有开服教程，也可以让 AI 工具帮你开），再到「设置 → 账号与安全 → 搬家去别的小镇」，把它连同猫窝和日记一起带过去。');
   }
   return me;
 });
@@ -234,7 +239,7 @@ route('POST', '/api/cat/:id/command', async (r) => {
   return interpretCommand(c, text, places, where, r.user.id);
 }, { limit: 'llm' });
 
-route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ }), { auth: false });
+route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ, trial: TRIAL }), { auth: false });
 
 // ---------- nest ----------
 route('GET', '/api/nest/:catId', (r) => {

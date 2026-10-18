@@ -20,7 +20,7 @@ import type { CatRecord, JournalEntry } from '../../../shared/types';
 import * as I from './icons';
 import { Sheet, Tabs, when } from './Sheet';
 import { SecuritySection, ProtectPanel, PrivacyPanel, ReportLink } from './Account';
-import { MoveOutPanel } from './Moving';
+import { MoveOutPanel, TrialNote } from './Moving';
 import { confirmBox } from './Dialog';
 
 const go = (panel: Panel) => ui.set({ panel });
@@ -1141,6 +1141,7 @@ function SettingsPanel() {
   const hours = Array.from({ length: 24 }, (_, i) => i);
   return (
     <Sheet title="设置">
+      <TrialNote short />
       <div class="toggle">
         <span>你的称呼</span>
         <span style={{ display: 'flex', gap: 6 }}>

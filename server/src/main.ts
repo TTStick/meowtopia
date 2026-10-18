@@ -72,9 +72,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/' && (url.searchParams.has('panel') || url.searchParams.has('scene'))) return into('/play/');
     if (url.pathname === '/play' || url.pathname === '/index.html') return into('/play/', 301);
     if (url.pathname === '/admin') return into('/admin/', 301);
+    if (url.pathname === '/deploy' || url.pathname === '/deploy.html') return into('/deploy/', 301);
     // static files (production build); unknown paths inside the game fall back to its shell
     const game = url.pathname.startsWith('/play/');
-    let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : url.pathname === '/admin/' ? staticFile('/admin.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
+    let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : url.pathname === '/admin/' ? staticFile('/admin.html') : url.pathname === '/deploy/' ? staticFile('/deploy.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
     if (!p) {
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end(existsSync(join(DIST, 'index.html')) ? 'not found' : 'client not built — run `npm run build` or use the vite dev server');
       return;

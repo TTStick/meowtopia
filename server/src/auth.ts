@@ -360,6 +360,7 @@ export function deleteAccount(uid: string) {
     db.db.prepare('DELETE FROM playdates WHERE from_user = ? OR to_user = ?').run(uid, uid);
     db.db.prepare('DELETE FROM kv WHERE k = ?').run(`hood:${uid}`);
     db.db.prepare('DELETE FROM kv WHERE k = ?').run(`found:${uid}`);
+    db.db.prepare('DELETE FROM kv WHERE k = ?').run(`trialnote:${uid}`);
     deleteUserSessions(uid);
     db.db.prepare('DELETE FROM users WHERE id = ?').run(uid);
   });

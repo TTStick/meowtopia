@@ -7,6 +7,8 @@
 
 数据（数据库、密钥、每日备份）都在 Docker 卷里，重启、更新、重建容器都不会丢。
 
+> 第一次开服、不熟悉命令行？官网有图文版的 **[开服教程](https://mycat.xioix.xin/deploy/)**，每一步都能直接复制；也可以让 AI 编程工具照着这份手册帮你部署，见 [第 13 节](#13-让-ai-帮你部署和维护)。
+
 ---
 
 ## 0. 准备
@@ -22,18 +24,24 @@
 
 ---
 
-## 1. 上传并解压
+## 1. 下载源代码
 
-在你自己的电脑上，把压缩包传到服务器（以 `/opt` 为例）：
+登录服务器，把代码放到 `/opt/catnest`：
 
 ```bash
-scp catnest-2026-10-15k.tar.gz root@你的服务器IP:/opt/
+apt-get update && apt-get install -y git && git clone https://github.com/TTStick/meowtopia.git /opt/catnest && cd /opt/catnest
 ```
 
-登录服务器后解压：
+服务器连不上 GitHub 的话，在自己电脑上从 GitHub 页面下载 ZIP（Code → Download ZIP），传到服务器：
 
 ```bash
-cd /opt && tar xzf catnest-2026-10-15k.tar.gz && cd catnest
+scp meowtopia-main.zip root@你的服务器IP:/opt/
+```
+
+再登录服务器解压：
+
+```bash
+cd /opt && apt-get install -y unzip && unzip -q meowtopia-main.zip && mv meowtopia-main catnest && cd catnest
 ```
 
 ## 2. 安装 Docker
@@ -248,11 +256,13 @@ docker compose up -d
 
 ## 9. 更新到新版本
 
-把新的压缩包传到服务器，解压**覆盖**原目录（`.env` 和数据不在压缩包里，不会被覆盖），然后重新运行脚本：
+`.env` 和数据都不在代码里，更新不会覆盖它们。用 git 下载的：
 
 ```bash
-cd /opt && tar xzf catnest-新版本.tar.gz && cd catnest && ./deploy/setup.sh
+cd /opt/catnest && git pull && ./deploy/setup.sh
 ```
+
+用 ZIP 装的：下载新的 ZIP，解压后覆盖到 `/opt/catnest`，再运行 `./deploy/setup.sh`。
 
 ## 10. 常见问题
 
@@ -305,3 +315,26 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 ### 服务器加固（可选）
 
 `deploy/harden.sh` 是给 Debian 服务器准备的加固脚本：补上安全更新源（有些服务商的系统镜像没有带）并开启自动安全更新、保存系统日志、加上防火墙、把 SSH 换到高端口等。分两步运行，新端口没确认前会自动撤销，不会把自己锁在门外。做了什么、怎么用都写在脚本开头，按自己的习惯取舍。
+
+## 13. 让 AI 帮你部署和维护
+
+能在电脑上执行命令的 AI 编程工具（比如 [Claude Code](https://code.claude.com/docs/en/setup)）可以读这份手册，替你登录服务器、一步步完成部署，每条命令执行前都会征求你的同意。
+
+1. **先配好 SSH 密钥登录**，这样不用把服务器密码交给 AI：在自己电脑上运行 `ssh-keygen -t ed25519`（一路回车），再用 `ssh-copy-id root@你的服务器IP` 把公钥放到服务器上（Windows 的做法见[开服教程](https://mycat.xioix.xin/deploy/#ai)）。
+2. **在一个空文件夹里启动 AI 工具**，把下面这段话发给它，改掉尖括号里的内容：
+
+```text
+请帮我把开源游戏「猫窝」部署到我自己的服务器上。
+
+- 源代码：https://github.com/TTStick/meowtopia ，部署手册是仓库里的 DEPLOY.md。请先读它，按里面的方法用 Docker 部署（deploy/setup.sh）。
+- 服务器：root@<服务器IP>，我已经能用 SSH 密钥登录。机房在 <国内 / 香港 / 海外>。
+- 域名：<cat.example.com>，A 记录已经指向这台服务器。
+- 每执行一条命令前，先用一句话告诉我它要做什么。
+- 不要改 SSH、防火墙这类系统安全设置，需要的话先问我；不要在聊天里显示管理口令（CAT_ADMIN_TOKEN）。
+- 部署好以后，确认 https://<域名>/healthz 返回 ok，再告诉我游戏和管理面板的地址，以及查管理口令的命令。
+```
+
+3. **看着它做**：看不懂的命令可以让它先解释。以后更新版本、备份、看日志、排查问题，也可以直接交给它，比如「帮我把服务器上的猫窝更新到最新版，更新前先备份数据」。
+
+> 不要把服务器密码、API Key、`.env` 的内容贴进聊天框。
+

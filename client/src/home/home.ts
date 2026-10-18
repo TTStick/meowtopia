@@ -1,4 +1,5 @@
-// The website (home.html): pixel headings, the Android download details, small touches.
+// The website (home.html, deploy.html): pixel headings, the Android download details,
+// the trial-server banner, copy buttons on commands, small touches.
 import './home.css';
 
 const INK = [0x4a, 0x3a, 0x34];
@@ -104,7 +105,48 @@ async function androidDownload() {
   }
 }
 
+/** On a trial server (体验服) the banner at the top says so. */
+async function trialBanner() {
+  const bar = document.querySelector<HTMLElement>('[data-trial]');
+  if (!bar) return;
+  try {
+    const r = await fetch('/api/status', { cache: 'no-cache' });
+    if (r.ok && (await r.json()).trial) bar.hidden = false;
+  } catch {
+    /* no banner */
+  }
+}
+
+/** Every command box gets a 复制 button. */
+function copyButtons() {
+  document.querySelectorAll<HTMLElement>('pre.cmd').forEach((pre) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'copy';
+    b.textContent = '复制';
+    b.addEventListener('click', async () => {
+      const text = pre.querySelector('code')?.textContent ?? '';
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // older browsers: select the text so a long-press / Ctrl+C copies it
+        const range = document.createRange();
+        range.selectNodeContents(pre.querySelector('code') ?? pre);
+        getSelection()?.removeAllRanges();
+        getSelection()?.addRange(range);
+        return;
+      }
+      b.textContent = '已复制';
+      b.classList.add('done');
+      setTimeout(() => ((b.textContent = '复制'), b.classList.remove('done')), 1600);
+    });
+    pre.append(b);
+  });
+}
+
 pixelHeadings();
+copyButtons();
+void trialBanner();
 document.fonts?.ready.then(pixelHeadings).catch(() => {});
 let resize = 0;
 addEventListener('resize', () => {

@@ -15,7 +15,8 @@
 
 <p align="center">
   <a href="https://mycat.xioix.xin"><b>🏠 官网</b></a> ·
-  <a href="https://mycat.xioix.xin/play/"><b>▶ 网页版，马上玩</b></a> ·
+  <a href="https://mycat.xioix.xin/play/"><b>▶ 体验服，马上玩</b></a> ·
+  <a href="https://mycat.xioix.xin/deploy/"><b>🛠 开服教程</b></a> ·
   <a href="https://mycat.xioix.xin/download/meowtopia.apk"><b>⬇ Android 安装包</b></a> ·
   <a href="docs/apps.md#ios-app"><b>iPhone：用 Xcode 安装</b></a>
 </p>
@@ -33,6 +34,8 @@
 <br>
 
 这是一款**不催你**的养猫游戏。
+
+> **官网是体验服。** [mycat.xioix.xin](https://mycat.xioix.xin) 是作者开着给大家体验的，不保证会一直开着。想长久地养，请自己开一个小镇（[开服教程](https://mycat.xioix.xin/deploy/)：跟着做，或者让 AI 工具帮你部署），再在游戏「设置 → 账号与安全 → 搬家去别的小镇」把猫猫带过去。
 
 你的猫有自己的性格和生活：白天趴在窗台上看云，傍晚在屋里跑酷，你不在的时候自己出门探险、交朋友、捡回小宝贝，天黑之前一定回家。你什么时候打开，它都在那里。
 
@@ -224,7 +227,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-几十秒后打开 `https://你的域名`：首页是游戏官网，游戏本身在 `https://你的域名/play/`。一键部署脚本、国内服务器加速、备份恢复、发布 Android 安装包、更新和常见问题，都在 **[部署手册 DEPLOY.md](DEPLOY.md)** 里。服务器还自带一个给管理员用的面板，用法也写在部署手册里。
+几十秒后打开 `https://你的域名`：首页是游戏官网，游戏本身在 `https://你的域名/play/`。第一次开服、不熟悉命令行的话，看图文版的 **[开服教程](https://mycat.xioix.xin/deploy/)**：一步步复制粘贴，或者把一段话交给 Claude Code 这类 AI 编程工具，让它帮你部署。一键部署脚本、国内服务器加速、备份恢复、发布 Android 安装包、更新和常见问题，都在 **[部署手册 DEPLOY.md](DEPLOY.md)** 里。服务器还自带一个给管理员用的面板，用法也写在部署手册里。
 
 ## 各个客户端
 

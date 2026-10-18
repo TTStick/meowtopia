@@ -7,7 +7,7 @@ import { audio } from '../game/audio';
 import { hash3 } from '../../../shared/rng';
 import { prepareGuest } from '../game/pow';
 import { RecoverForm } from './Account';
-import { MoveIn } from './Moving';
+import { MoveIn, TrialNote } from './Moving';
 import { moveStatus } from '../game/account';
 
 export function Welcome() {
@@ -58,6 +58,7 @@ export function Welcome() {
         </div>
       )}
       {mode === 'code' && <RecoverForm onBack={() => setMode('start')} />}
+      {mode === 'start' && <TrialNote />}
     </div>
   );
 }

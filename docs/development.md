@@ -44,6 +44,7 @@ npm run build && npm run build:server && npm start
 | `CAT_LLM_MODEL` | 默认 `claude-opus-5-5`；想省钱可换 `claude-haiku-5-5` |
 | `CAT_LLM_RPM` / `CAT_LLM_DAILY` / `CAT_LLM_USER_DAILY` | 全服限速与每人每日额度 |
 | `CAT_VAPID_SUBJECT` | Web Push 联系方式 |
+| `CAT_TRIAL` | 设为 `1` 表示这是体验服：欢迎页、设置、官网顶部会提示玩家自己开服、把猫搬过去，老玩家也会收到一封说明信 |
 
 模型相关的配置也可以在管理面板（`/admin/` →「模型」）里在线修改，保存在数据库的 `kv` 表里，优先于环境变量。`claude-` 开头的模型使用结构化输出（`output_config.format`），Claude 5 系列还会带上 `effort`，支持的型号带上服务端拒答兜底（`fallbacks`）；其他兼容 Anthropic API 的模型（比如 MiniMax）不发送这些参数，改在提示词里说明 JSON 格式，回答会被宽容地解析并按 schema 校验，不合格时退回内置猫语（见 `server/src/llm.ts`）。
 

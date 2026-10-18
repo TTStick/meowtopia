@@ -6,6 +6,7 @@ import { useStore } from '../game/store';
 import { game } from '../game/game';
 import * as acc from '../game/account';
 import { Sheet, when } from './Sheet';
+import { API_BASE, isNative } from '../game/platform';
 import { LiveCat } from './LiveCat';
 import { confirmBox } from './Dialog';
 import { coatName } from '../../../shared/genes';
@@ -20,6 +21,27 @@ const hostOf = (origin: string) => {
   }
 };
 
+/** The how-to for opening your own town, on the website of the server we're on. */
+export const GUIDE_URL = `${API_BASE}/deploy/`;
+
+/** On a trial server (体验服): a gentle note, with the way to a town of your own. */
+export function TrialNote(p: { short?: boolean }) {
+  const trial = useStore(ui, (s) => s.trial);
+  if (!trial) return null;
+  return (
+    <div class="trial-note">
+      <b>这里是猫窝的体验服</b>
+      <span>
+        {p.short ? '不保证会一直开着。' : '欢迎先来玩玩看。它不保证会一直开着，'}
+        想和猫猫长长久久，可以自己开一个小镇，再把猫猫搬过去。
+      </span>
+      <a href={GUIDE_URL} target={isNative ? undefined : '_blank'} rel="noopener">
+        开服教程 →
+      </a>
+    </div>
+  );
+}
+
 // ---------------- moving out ----------------
 export function MoveOutPanel() {
   const me = useStore(ui, (s) => s.me)!;
@@ -28,6 +50,7 @@ export function MoveOutPanel() {
   useEffect(() => {
     acc.moveStatus().then(setSt, () => {});
   }, []);
+  const trial = useStore(ui, (s) => s.trial);
   const own = me.cats.find((c) => c.ownerId === me.user.id && !c.coOwnerId);
   const left = me.cats.filter((c) => c.coOwnerId).map((c) => c.name);
   const name = own?.name ?? '猫猫';
@@ -47,7 +70,13 @@ export function MoveOutPanel() {
   return (
     <Sheet title="搬家去别的小镇" onClose={() => ui.set({ panel: 'settings' })}>
       <div class="move">
-        <p style={{ marginTop: 0 }}>猫窝是开源的，谁都可以搭一个自己的小镇。想带{name}去别的小镇住，可以把它打包成一个「搬家包」带过去。</p>
+        <p style={{ marginTop: 0 }}>
+          {trial && '这里是体验服，不保证会一直开着。'}猫窝是开源的，谁都可以搭一个自己的小镇（
+          <a href={GUIDE_URL} target={isNative ? undefined : '_blank'} rel="noopener">
+            开服教程
+          </a>
+          ）。想带{name}去别的小镇住，可以把它打包成一个「搬家包」带过去。
+        </p>
         <ol class="steps">
           <li>
             <b>在这里打包</b>：保存一个「猫窝搬家包」文件。
