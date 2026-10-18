@@ -4,8 +4,8 @@ import WidgetKit
 // The widgets' faces. Used by the widget extension, and by the app's debug screen
 // so they can be looked at without adding them to a watch face.
 
-/// The cat's picture, once the app has saved one. Tinted watch faces get it in grey
-/// (watchOS 11 and later); before that they'd flatten it to a blob, so it's left out there.
+/// The cat's picture, once the app has saved one. It keeps its colours on tinted watch faces
+/// too (watchOS 11 and later); before that they'd flatten it to a blob, so it's left out there.
 private func catPicture(_ s: WidgetSnapshot, _ mode: WidgetRenderingMode) -> UIImage? {
     if #unavailable(watchOS 11.0), mode == .accented { return nil }
     let frame = s.sleepy && !s.out ? "sleep" : s.happy > 80 ? "happy" : "sit"
@@ -16,7 +16,7 @@ private struct CatPicture: View {
     let image: UIImage
     var body: some View {
         if #available(watchOS 11.0, *) {
-            Image(uiImage: image).resizable().widgetAccentedRenderingMode(.desaturated).scaledToFit()
+            Image(uiImage: image).resizable().widgetAccentedRenderingMode(.fullColor).scaledToFit()
         } else {
             Image(uiImage: image).resizable().scaledToFit()
         }
