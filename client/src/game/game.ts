@@ -1,4 +1,5 @@
 import { Viewport } from '../engine/view';
+import { refreshKeepsake } from './keepsake';
 import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
@@ -60,7 +61,8 @@ class Game {
     // app chrome: splash until we know where to go, system bars matching the top of the scene
     const chrome = () => {
       const s = ui.state;
-      if (s.phase !== 'loading') hideSplash();
+      // (also when the town doesn't answer: the player needs to see the way to another one)
+      if (s.phase !== 'loading' || s.unreachable) hideSplash();
       if (!isNative) return;
       if (s.phase !== 'game') return matchSystemBars([246, 238, 223]); // the cream onboarding pages
       try {
@@ -105,6 +107,7 @@ class Game {
       this.ws.refresh();
       void this.refreshMe().catch(() => {});
       void this.loadUnread();
+      void refreshKeepsake();
     });
     try {
       const st = await api<{ llm: boolean; worldTz: number; trial?: boolean }>('GET', '/api/status');
@@ -132,6 +135,7 @@ class Game {
     for (let attempt = 0; ; attempt++) {
       try {
         const me = await api<MeResponse>('GET', '/api/me');
+        ui.set({ unreachable: false });
         this.setMe(me);
         await this.enterGame();
         return;
@@ -149,8 +153,10 @@ class Game {
           toast(e.message, '🔒', 8000);
           return;
         }
-        // server unreachable or a hiccup: keep the player's place and retry quietly
+        // server unreachable or a hiccup: keep the player's place and retry quietly;
+        // after a while, offer another town (and the cat's moving package, if this device has one)
         if (attempt === 1) toast('正在连接猫窝…', '🐾', 2500);
+        if (attempt === 2) ui.set({ unreachable: true });
         await new Promise((r) => setTimeout(r, Math.min(8000, 1500 * (attempt + 1))));
       }
     }
@@ -219,6 +225,7 @@ class Game {
     await this.openNest();
     this.loadUnread();
     this.loadWish();
+    void refreshKeepsake();
     void this.loadHood();
     setInterval(() => void this.loadHood(), 5 * 60_000);
     if (!me.user.secured) scheduleProtectNudge();

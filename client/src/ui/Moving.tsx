@@ -7,6 +7,7 @@ import { game } from '../game/game';
 import * as acc from '../game/account';
 import { Sheet, when } from './Sheet';
 import { API_BASE, isNative } from '../game/platform';
+import { keepsakeHere, keepsakesFromElsewhere, saveKeepsakeFile } from '../game/keepsake';
 import { LiveCat } from './LiveCat';
 import { confirmBox } from './Dialog';
 import { coatName } from '../../../shared/genes';
@@ -51,6 +52,7 @@ export function MoveOutPanel() {
     acc.moveStatus().then(setSt, () => {});
   }, []);
   const trial = useStore(ui, (s) => s.trial);
+  const kept = keepsakeHere();
   const own = me.cats.find((c) => c.ownerId === me.user.id && !c.coOwnerId);
   const left = me.cats.filter((c) => c.coOwnerId).map((c) => c.name);
   const name = own?.name ?? '猫猫';
@@ -113,6 +115,17 @@ export function MoveOutPanel() {
           <p class="muted">你还没有自己的猫猫可以带走（一起养的猫会留在这里）。</p>
         )}
         {st?.out && <p class="muted" style={{ fontSize: 13, textAlign: 'center' }}>上次打包：{when(st.out.at)}</p>}
+        {kept && (
+          <div class="keep-note">
+            <b>这台设备上随身带着{kept.cat.name}</b>
+            <span>
+              App 每天会自动存一份{kept.cat.name}的搬家包（最近一次：{when(kept.at)}）。就算这个小镇哪天关了，在「换一个小镇」后的领养页，也能直接用它把{kept.cat.name}搬过去。
+            </span>
+            <button class="btn small" onClick={() => saveKeepsakeFile(kept).catch((e) => toast((e as Error).message))}>
+              存成文件
+            </button>
+          </div>
+        )}
       </div>
     </Sheet>
   );
@@ -182,6 +195,7 @@ export function MoveIn(p: { onBack: () => void }) {
     });
   const req = st?.request;
   const pending = req?.status === 'pending';
+  const kept = keepsakesFromElsewhere();
 
   return (
     <div class="onboard">
@@ -195,9 +209,9 @@ export function MoveIn(p: { onBack: () => void }) {
           <p class="muted">
             从 {hostOf(req.origin)} 搬来 · {when(req.created)}交的
             <br />
-            这个小镇的管理员看过、同意以后，{req.summary.cat.name}就会出现在这里。不用一直开着页面，过一会儿再回来看看就好。
+            这个小镇的管理员看过、同意以后，{req.summary.cat.name}就会出现在这里。不用一直开着{isNative ? ' App' : '页面'}，过一会儿再回来看看就好。
           </p>
-          <p class="muted" style={{ fontSize: 13 }}>这个账号还没上锁，等待的时候别清除浏览器数据；搬好以后，记得在设置里给猫窝上个锁。</p>
+          <p class="muted" style={{ fontSize: 13 }}>这个账号还没上锁，等待的时候{isNative ? '别卸载 App' : '别清除浏览器数据'}；搬好以后，记得在设置里给猫窝上个锁。</p>
           <button
             class="btn ghost small"
             disabled={busy}
@@ -226,7 +240,7 @@ export function MoveIn(p: { onBack: () => void }) {
             申请搬进来
           </button>
           <button class="btn ghost small" disabled={busy} onClick={() => setPicked(null)}>
-            换一个文件
+            换一个
           </button>
         </div>
       ) : (
@@ -237,12 +251,24 @@ export function MoveIn(p: { onBack: () => void }) {
               <p class="muted">{req.reason ? `管理员说：${req.reason}` : '可以问问这个小镇的管理员。'}</p>
             </div>
           )}
+          {kept.map((k) => (
+            <div key={k.server} class="card move-wait">
+              {k.cat.genes && <LiveCat genes={k.cat.genes} height={100} age={ageOf(k.cat.born)} cycle={['sit', 'sit_happy', 'loaf']} />}
+              <b>这台设备上带着{k.cat.name}</b>
+              <p class="muted">
+                来自 {hostOf(k.server)} · {when(k.at)}存的
+              </p>
+              <button class="btn primary small" disabled={busy} onClick={() => run(async () => setPicked({ pkg: k.pkg, pv: peek(k.pkg) }))}>
+                带{k.cat.name}搬过来
+              </button>
+            </div>
+          ))}
           <p class="sub" style={{ margin: 0 }}>
-            在原来的小镇里打开「设置 → 账号与安全 → 搬家去别的小镇」，打包好猫猫，再在这里选那个「猫窝搬家包」文件。
+            {kept.length ? '或者用一个搬家包文件：' : '在原来的小镇里打开「设置 → 账号与安全 → 搬家去别的小镇」，打包好猫猫，再在这里选那个「猫窝搬家包」文件。'}
           </p>
           <input ref={file} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={(e) => (choose((e.target as HTMLInputElement).files?.[0]), ((e.target as HTMLInputElement).value = ''))} />
-          <button class="btn primary" disabled={busy} onClick={() => file.current?.click()}>
-            选择搬家包
+          <button class={kept.length ? 'btn' : 'btn primary'} disabled={busy} onClick={() => file.current?.click()}>
+            选择搬家包文件
           </button>
         </div>
       )}

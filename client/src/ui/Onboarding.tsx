@@ -8,7 +8,9 @@ import { hash3 } from '../../../shared/rng';
 import { prepareGuest } from '../game/pow';
 import { RecoverForm } from './Account';
 import { MoveIn, TrialNote } from './Moving';
+import { TownLine } from './Towns';
 import { moveStatus } from '../game/account';
+import { keepsakesFromElsewhere } from '../game/keepsake';
 
 export function Welcome() {
   const [mode, setMode] = useState<'start' | 'name' | 'code'>('start');
@@ -59,6 +61,7 @@ export function Welcome() {
       )}
       {mode === 'code' && <RecoverForm onBack={() => setMode('start')} />}
       {mode === 'start' && <TrialNote />}
+      {mode !== 'name' && <TownLine />}
     </div>
   );
 }
@@ -70,6 +73,7 @@ export function Adopt() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [moving, setMoving] = useState(false);
+  const carried = keepsakesFromElsewhere()[0];
   useEffect(() => {
     moveStatus().then((s) => s.request?.status === 'pending' && setMoving(true), () => {});
   }, []);
@@ -123,7 +127,7 @@ export function Adopt() {
           带它回家
         </button>
         <button class="btn ghost small" onClick={() => setMoving(true)}>
-          在别的猫窝小镇养过猫？搬家过来
+          {carried ? `这台设备上带着「${carried.cat.name}」，带它搬过来` : '在别的猫窝小镇养过猫？搬家过来'}
         </button>
       </div>
     </div>

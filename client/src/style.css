@@ -1118,3 +1118,117 @@ textarea {
   color: var(--coral);
   font-weight: 600;
 }
+
+/* ---------- towns ---------- */
+.town-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 14px auto 0;
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+.town-line b {
+  color: var(--coral);
+}
+.towns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.town {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: #fff;
+}
+.town.here {
+  border-color: var(--coral);
+  background: #fff6ee;
+}
+.town-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.town-main b {
+  font-size: 15px;
+}
+.town-main .muted {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.town .tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--coral);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 2px;
+}
+.town .tag.soft {
+  background: var(--cream-2);
+  color: var(--ink);
+}
+.town .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #ccc;
+  vertical-align: 1px;
+}
+.town .dot.on {
+  background: #6fa35a;
+}
+.town .dot.off {
+  background: #d9673a;
+}
+.iconbtn.small {
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  font-size: 18px;
+}
+.keep-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 2px dashed var(--ink-soft);
+  border-radius: 14px;
+  font-size: 13px;
+}
+.keep-note span {
+  color: var(--ink-soft);
+}
+.unreachable p {
+  font-size: 13px;
+}
+.towns-foot a {
+  color: var(--coral);
+  font-weight: 600;
+  text-decoration: none;
+}

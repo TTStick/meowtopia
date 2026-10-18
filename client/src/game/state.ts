@@ -69,6 +69,8 @@ export interface UIState {
   playdateTo: { uid: string; name: string; cat: string } | null; // whom the invitation sheet is for
   llm: boolean;
   trial: boolean; // a trial server (体验服): players are asked to open their own town
+  towns: boolean; // the town picker is open
+  unreachable: boolean; // the town hasn't answered for a while
   busy: boolean;
   photo: string | null;
   wish: { text: string; kind: string; target?: string; need: number; progress: number; done: boolean } | null;
@@ -103,6 +105,8 @@ export const ui = new Store<UIState>({
   playdateTo: null,
   llm: false,
   trial: false,
+  towns: false,
+  unreachable: false,
   busy: false,
   photo: null,
   wish: null,

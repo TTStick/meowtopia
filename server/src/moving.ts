@@ -146,7 +146,9 @@ route('POST', '/api/move/export', (r) => {
   };
   const text = JSON.stringify(body);
   const sig = sign(null, Buffer.from(text), createPrivateKey({ key: Buffer.from(moveKey().priv, 'base64'), format: 'der', type: 'pkcs8' })).toString('base64');
-  db.kvSet(`moveout:${u.id}`, { at: body.createdAt, cat: c.name });
+  // the apps keep a fresh copy on the device ({ keep: true }), in case this town ever closes;
+  // only packing by hand shows up as "上次打包"
+  if (!r.body?.keep) db.kvSet(`moveout:${u.id}`, { at: body.createdAt, cat: c.name });
   return { format: 'catnest-move', v: 1, key: moveKey().pub, body: text, sig } satisfies MovePackage;
 }, { limit: 'move' });
 

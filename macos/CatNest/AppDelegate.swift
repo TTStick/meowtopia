@@ -177,11 +177,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
             // signed in (or out) in the game window: the panel and the icon should follow
             js("window.catnestNative?.onShow()")
             sync.poll()
+        case "server":
+            // the player picked another town in the game
+            if let s = m["url"] as? String { switchServer(to: s) }
         case "quit":
             NSApp.terminate(nil)
         default:
             break
         }
+    }
+
+    /// Point the panel and the game window at another town. Each town keeps its own sign-in cookie,
+    /// so coming back later finds the player still signed in there.
+    func switchServer(to s: String) {
+        guard let u = URL(string: s), let host = u.host,
+              u.scheme == "https" || (u.scheme == "http" && (host == "localhost" || host == "127.0.0.1")) else { return }
+        UserDefaults.standard.set(u.absoluteString, forKey: "serverURL")
+        companion.load(URLRequest(url: Server.url("/companion.html")))
+        gameView?.load(URLRequest(url: Server.url("/play/")))
+        sync.poll()
     }
 
     func js(_ code: String) {

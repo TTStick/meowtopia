@@ -60,7 +60,7 @@ function leading(h: Buffer) {
 
 before(async () => {
   server = spawn(process.execPath, ['--import', 'tsx', 'server/src/main.ts'], {
-    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_BACKUPS: 'off', CAT_WORLD_TZ: String(12 - new Date().getUTCHours()) },
+    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_IP_BURST: '5000', CAT_BACKUPS: 'off', CAT_WORLD_TZ: String(12 - new Date().getUTCHours()) },
     stdio: 'ignore',
   });
   for (let i = 0; i < 100; i++) {
@@ -706,6 +706,16 @@ test('moving: pack a cat here; move in from another town only once the admin say
   assert.ok(body.cat.journal.length >= 1 && body.inventory.cat_grass === 1);
   assert.ok(!pkg.body.includes(aCat.id) && !pkg.body.includes('code_hash'), 'no ids or secrets in the package');
   assert.equal((await new Player().call('POST', '/api/move/export')).status, 401);
+  // the apps keep a copy on the device; that doesn't count as packing by hand
+  const before = (await a.call('GET', '/api/move/request')).data.out;
+  const kept = (await a.call('POST', '/api/move/export', { keep: true })).data;
+  assert.ok(kept.sig && JSON.parse(kept.body).cat.name === '豆包');
+  assert.deepEqual((await a.call('GET', '/api/move/request')).data.out, before);
+  // what a town is can be asked from anywhere (other towns' pages check it's there)
+  const pub = await fetch(`${BASE}/api/status`, { headers: { origin: 'https://another-town.example' } });
+  assert.equal(pub.headers.get('access-control-allow-origin'), '*');
+  const priv = await fetch(`${BASE}/api/me`, { headers: { origin: 'https://another-town.example' } });
+  assert.equal(priv.headers.get('access-control-allow-origin'), null, 'only the public bits');
 
   // the same town can't be moved into from itself
   const b = new Player();

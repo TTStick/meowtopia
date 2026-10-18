@@ -3,6 +3,7 @@ import { startAuthentication, startRegistration, browserSupportsWebAuthn } from 
 import { api, setBearer } from './net';
 import { isNative, isMacShell, saveToken, saveFile } from './platform';
 import { ui } from './state';
+import { dropKeepsake } from './keepsake';
 import type { MeResponse } from '../../../shared/types';
 
 export interface AuthState {
@@ -169,12 +170,14 @@ async function forgetSession() {
 
 export async function logout() {
   await api('POST', '/api/auth/logout').catch(() => {});
+  dropKeepsake();
   await forgetSession();
   location.reload();
 }
 
 export async function deleteAccount() {
   await api('POST', '/api/account/delete', { confirm: '删除' });
+  dropKeepsake();
   await forgetSession();
   location.reload();
 }

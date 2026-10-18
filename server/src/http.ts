@@ -38,6 +38,7 @@ interface Route {
 }
 
 const routes: Route[] = [];
+const PUBLIC_INFO = new Set(['/api/status', '/api/move/key']);
 
 export function route(method: string, pattern: string, h: Handler, opts: RouteOpts | boolean = {}) {
   const o: RouteOpts = typeof opts === 'boolean' ? { auth: opts } : opts;
@@ -77,6 +78,8 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
   const method = req.method ?? 'GET';
   const ip = clientIp(req);
   const cors = corsHeaders(req, res);
+  // what a town is (its status and moving key) is public, so other towns' pages may ask
+  if (!cors && method === 'GET' && PUBLIC_INFO.has(url.pathname)) res.setHeader('Access-Control-Allow-Origin', '*');
   if (method === 'OPTIONS') {
     res.writeHead(cors ? 204 : 403).end();
     return true;

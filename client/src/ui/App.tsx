@@ -7,6 +7,7 @@ import { Welcome, Adopt } from './Onboarding';
 import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge, WishPill, GoodnightOverlay, ShowPill } from './Hud';
 import { Panels } from './Panels';
 import { DialogHost } from './Dialog';
+import { TownPicker, Unreachable } from './Towns';
 
 export function App() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -15,6 +16,7 @@ export function App() {
   const build = useStore(ui, (s) => s.build);
   const visiting = useStore(ui, (s) => s.visiting);
   const me = useStore(ui, (s) => s.me);
+  const unreachable = useStore(ui, (s) => s.unreachable);
   useEffect(() => {
     void game.boot(ref.current!);
     // Audio may only start inside a user activation. On touch screens that is the
@@ -34,11 +36,7 @@ export function App() {
   return (
     <>
       <canvas ref={ref} class="game" />
-      {phase === 'loading' && (
-        <div class="onboard">
-          <p class="muted">猫猫正在伸懒腰…</p>
-        </div>
-      )}
+      {phase === 'loading' && <div class="onboard">{unreachable ? <Unreachable /> : <p class="muted">猫猫正在伸懒腰…</p>}</div>}
       {phase === 'welcome' && <Welcome />}
       {phase === 'adopt' && <Adopt />}
       {phase === 'game' && (
@@ -53,6 +51,7 @@ export function App() {
           <Panels />
         </>
       )}
+      <TownPicker />
       <Toasts />
       <DialogHost />
     </>

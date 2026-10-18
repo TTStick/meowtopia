@@ -67,7 +67,7 @@ final class CompanionSync: NSObject, URLSessionDelegate {
 
     private func notifyNew(_ letters: [Home.Letter]) {
         guard let newest = letters.map(\.id).max() else { return }
-        let key = "lastNotifiedLetter"
+        let key = "lastNotifiedLetter@\(Server.base.host ?? "")" // letter numbers belong to one town
         let last = UserDefaults.standard.integer(forKey: key)
         UserDefaults.standard.set(max(last, newest), forKey: key)
         guard last > 0 else { return } // first run: don't replay old letters

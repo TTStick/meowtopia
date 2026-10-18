@@ -21,6 +21,7 @@ import * as I from './icons';
 import { Sheet, Tabs, when } from './Sheet';
 import { SecuritySection, ProtectPanel, PrivacyPanel, ReportLink } from './Account';
 import { MoveOutPanel, TrialNote } from './Moving';
+import { TownRow } from './Towns';
 import { confirmBox } from './Dialog';
 
 const go = (panel: Panel) => ui.set({ panel });
@@ -1197,6 +1198,7 @@ function SettingsPanel() {
           <option value="closed">先关着</option>
         </select>
       </div>
+      <TownRow />
       <SecuritySection />
     </Sheet>
   );

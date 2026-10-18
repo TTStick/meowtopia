@@ -15,8 +15,24 @@ export const platform = Capacitor.getPlatform(); // 'ios' | 'android' | 'web'
 /** The public server the apps connect to unless a build says otherwise. */
 export const OFFICIAL_SERVER = 'https://mycat.xioix.xin';
 
-/** Where the API lives. Empty for the website (same origin); app builds use VITE_API_BASE, or the public server. */
-export const API_BASE = ((import.meta.env.VITE_API_BASE as string | undefined) || (Capacitor.isNativePlatform() ? OFFICIAL_SERVER : '')).replace(/\/$/, '');
+/** The town an app build starts with: VITE_API_BASE, or the public (trial) server. */
+export const DEFAULT_SERVER = ((import.meta.env.VITE_API_BASE as string | undefined) || OFFICIAL_SERVER).replace(/\/$/, '');
+
+/** The apps can be pointed at any 猫窝 town; the player's pick is kept here. */
+const SERVER_KEY = 'catnest.server';
+function pickedServer(): string | null {
+  try {
+    return localStorage.getItem(SERVER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Where the API lives. Empty for the website (same origin); the apps use the town the player picked. */
+export const API_BASE = (isNative ? pickedServer() || DEFAULT_SERVER : (import.meta.env.VITE_API_BASE as string | undefined) || '').replace(/\/$/, '');
+
+/** The town we're in, as an origin (https://cat.example.com). */
+export const SERVER = API_BASE || (typeof location !== 'undefined' ? location.origin : '');
 
 export function wsUrl(): string {
   const base = API_BASE || location.origin;
@@ -39,7 +55,10 @@ interface CatNativePlugin {
   addListener(event: 'open', fn: (e: { panel: string }) => void): Promise<{ remove(): void }>;
 }
 const Native = registerPlugin<CatNativePlugin>('CatNative');
+// The current town's session lives under 'session' (the Android letter checker reads it there);
+// each town's session is also kept under its own key, so switching back doesn't mean signing in again.
 const TOKEN_KEY = 'session';
+const tokenKeyFor = (server: string) => `session@${server}`;
 
 export async function loadToken(): Promise<string | null> {
   if (!isNative) return null;
@@ -52,11 +71,44 @@ export async function loadToken(): Promise<string | null> {
 export async function saveToken(t: string | null) {
   if (!isNative) return;
   try {
-    if (t) await Native.set({ key: TOKEN_KEY, value: t });
+    for (const key of [TOKEN_KEY, tokenKeyFor(SERVER)]) {
+      if (t) await Native.set({ key, value: t });
+      else await Native.remove({ key });
+    }
+  } catch (e) {
+    console.warn('keychain', e);
+  }
+}
+
+/**
+ * Move to another town. The apps swap sessions and start over there; the Mac app
+ * points its windows at the other town; a browser simply goes to that town's site.
+ */
+export async function switchServer(url: string) {
+  if (isMacShell) {
+    toMac({ type: 'server', url });
+    return;
+  }
+  if (!isNative) {
+    location.href = `${url}/play/`;
+    return;
+  }
+  try {
+    const cur = (await Native.get({ key: TOKEN_KEY })).value;
+    if (cur) await Native.set({ key: tokenKeyFor(SERVER), value: cur });
+    const next = (await Native.get({ key: tokenKeyFor(url) })).value;
+    if (next) await Native.set({ key: TOKEN_KEY, value: next });
     else await Native.remove({ key: TOKEN_KEY });
   } catch (e) {
     console.warn('keychain', e);
   }
+  try {
+    if (url === DEFAULT_SERVER) localStorage.removeItem(SERVER_KEY);
+    else localStorage.setItem(SERVER_KEY, url);
+  } catch {
+    /* ignore */
+  }
+  location.reload();
 }
 
 // ---------- Apple Watch ----------
