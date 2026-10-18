@@ -24,7 +24,7 @@
         <a href="#source">开源</a>
         <a href="/deploy/">开服</a>
       </nav>
-      <a class="pbtn small" href="/play/"><img src="/site/icon-play.png" alt="" />开始玩</a>
+      <a class="pbtn small" href="/play/"><img src="/site/icon-play.png" alt="" /><span data-play-label>体验服</span></a>
     </header>
 
     <div class="trial-bar" data-trial hidden>
@@ -36,9 +36,16 @@
       <div class="hero-in">
         <h1><img class="logo" src="/site/logo.png" width="52" height="35" alt="猫窝" /></h1>
         <p class="tag"><span>一只只属于你的小猫，</span><span>一个只属于它的小窝。</span><br /><span>窝外面，</span><span>是一整个热闹又温柔的猫猫小镇。</span></p>
-        <div class="cta">
-          <a class="pbtn big" href="/play/"><img src="/site/icon-play.png" alt="" />网页版，马上玩</a>
-          <a class="pbtn alt" href="#download"><img src="/site/icon-down.png" alt="" />下载 App</a>
+        <!-- the official site is a trial town: point people to opening their own; a self-hosted town shows the play button instead (home.ts) -->
+        <div class="cta" data-cta="trial">
+          <a class="pbtn big" href="/deploy/"><img src="/site/icon-star.png" alt="" />文档</a>
+          <a class="pbtn alt" href="https://github.com/TTStick/meowtopia" rel="noopener"><img src="/site/icon-code.png" alt="" />开源</a>
+          <a class="pbtn alt" href="/play/"><img src="/site/icon-play.png" alt="" />体验服</a>
+        </div>
+        <p class="cta-note" data-cta="trial"><span>想和猫猫长长久久，跟着文档自己开一个小镇。</span><span>体验服只供短暂停留，不保证一直开着。</span></p>
+        <div class="cta" data-cta="town" hidden>
+          <a class="pbtn big" href="/play/"><img src="/site/icon-play.png" alt="" />开始玩</a>
+          <a class="pbtn alt" href="https://github.com/TTStick/meowtopia" rel="noopener"><img src="/site/icon-code.png" alt="" />开源</a>
         </div>
         <p class="platforms"><span>网页</span> · <span>iPhone</span> · <span>Android</span> · <span>Mac 菜单栏</span> · <span>Apple Watch</span></p>
       </div>

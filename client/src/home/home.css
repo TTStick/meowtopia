@@ -148,7 +148,16 @@ h3.px { font-size: 22px; --scale: 2; margin-top: 18px; }
 .logo { width: calc(52px * 5); }
 .tag { margin: 18px auto 26px; max-width: 34em; font-size: 19px; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
 .tag span, .platforms span { display: inline-block; }
-.cta { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; }
+.cta { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px; }
+.cta[hidden], .cta-note[hidden] { display: none; }
+.cta-note { margin: 18px auto 0; max-width: 34em; font-size: 15px; line-height: 1.7; color: var(--cream); opacity: 0.92; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.cta-note span { display: inline-block; }
+@media (max-width: 520px) {
+  .cta { gap: 6px; }
+  .cta .pbtn, .cta .pbtn.big { font-size: 16px; padding: 10px 12px 12px; gap: 6px; }
+  .cta .pbtn img { width: 18px; height: 18px; }
+  .cta-note { font-size: 14px; }
+}
 .platforms { display: inline-block; margin: 22px 0 0; padding: 4px 14px; font-size: 14px; letter-spacing: 0.06em; background: rgba(35, 29, 63, 0.62); box-shadow: 0 0 0 2px rgba(35, 29, 63, 0.62); }
 .street { position: absolute; left: 0; right: 0; bottom: calc(10px * var(--hs)); height: calc(56px * var(--s)); pointer-events: none; }
 .walker, .sitter, .sleeper {

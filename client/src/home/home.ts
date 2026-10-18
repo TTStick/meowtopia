@@ -105,16 +105,24 @@ async function androidDownload() {
   }
 }
 
-/** On a trial server (体验服) the banner at the top says so. */
+/**
+ * On a trial server (体验服) the banner at the top says so, and the hero points to
+ * opening your own town. A self-hosted town's homepage invites people to play instead.
+ */
 async function trialBanner() {
-  const bar = document.querySelector<HTMLElement>('[data-trial]');
-  if (!bar) return;
+  let trial: boolean;
   try {
     const r = await fetch('/api/status', { cache: 'no-cache' });
-    if (r.ok && (await r.json()).trial) bar.hidden = false;
+    if (!r.ok) return;
+    trial = !!(await r.json()).trial;
   } catch {
-    /* no banner */
+    return; // keep the page as it is
   }
+  const bar = document.querySelector<HTMLElement>('[data-trial]');
+  if (bar) bar.hidden = !trial;
+  document.querySelectorAll<HTMLElement>('[data-cta]').forEach((el) => (el.hidden = el.dataset.cta !== (trial ? 'trial' : 'town')));
+  const label = document.querySelector('[data-play-label]');
+  if (label) label.textContent = trial ? '体验服' : '开始玩';
 }
 
 /** Every command box gets a 复制 button. */
