@@ -8,7 +8,7 @@ import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge
 import { Panels } from './Panels';
 import { DialogHost } from './Dialog';
 import { TownPicker, Unreachable } from './Towns';
-import { TownShut } from './Moving';
+import { TownShut, WebClosed } from './Moving';
 
 export function App() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -41,6 +41,7 @@ export function App() {
       {phase === 'welcome' && <Welcome />}
       {phase === 'adopt' && <Adopt />}
       {phase === 'shut' && <TownShut />}
+      {phase === 'webclosed' && <WebClosed />}
       {phase === 'game' && (
         <>
           <TopBar />

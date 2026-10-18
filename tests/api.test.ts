@@ -885,3 +885,62 @@ test('pausing and closing a town: the game stops, but players can still sign in 
   assert.equal((await new Player().call('GET', '/api/status')).data.mode, 'open');
   assert.equal((await p.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' })).status, 200);
 });
+
+test('turning the website and the web version off: only the apps come in, and nobody loses their cat', async () => {
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  const site = { origin: BASE }; // what a browser on our own pages sends with every change
+  const web = new Player();
+  await web.join('网页上的人');
+  const wcat = (await web.call('POST', '/api/adopt', { name: '网网', seed: 41 })).data.cats[0].id;
+  const app = new Player('app');
+  await app.join('App 上的人');
+  const acat = (await app.call('POST', '/api/adopt', { name: '布布', seed: 42 })).data.cats[0].id;
+  assert.equal((await web.call('POST', '/api/admin/access', { web: false }, site)).status, 404, 'players cannot');
+
+  await admin.call('POST', '/api/admin/access', { site: false, web: false });
+  const st = (await new Player().call('GET', '/api/status')).data;
+  assert.deepEqual([st.site, st.web], [false, false]);
+
+  // a browser can't sign up or play
+  assert.equal((await new Player().call('POST', '/api/auth/guest', {}, site)).status, 403);
+  const blocked = await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, site);
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.data.web, false);
+  assert.equal((await web.call('GET', `/api/nest/${wcat}`)).status, 403);
+  const wsStatus = await new Promise<number>((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { cookie: web.cookie, origin: BASE } });
+    ws.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0));
+    ws.on('open', () => (ws.close(), resolve(101)));
+    ws.on('error', () => {});
+  });
+  assert.equal(wsStatus, 403);
+
+  // but a browser that's signed in can still reach its cat: a recovery code for the app, or a moving package
+  assert.equal((await web.call('GET', '/api/me')).status, 200);
+  assert.equal((await web.call('POST', '/api/move/export', {}, site)).status, 200);
+  const code = (await web.call('POST', '/api/auth/recovery-code', {}, site)).data.code as string;
+  const phone = new Player('app');
+  const back = await phone.call('POST', '/api/auth/code', { code, client: 'app' });
+  assert.equal(back.status, 200, JSON.stringify(back.data));
+  phone.token = back.data.token;
+  assert.equal((await phone.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' })).status, 200, 'the same cat, now in the app');
+
+  // the apps carry on: phones (bearer), the Mac app (its user agent), new players in an app
+  assert.equal((await app.call('POST', `/api/cat/${acat}/act`, { kind: 'pet' })).status, 200);
+  assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, { ...site, 'user-agent': 'Mozilla/5.0 (Macintosh) CatNestMac/1.0' })).status, 200);
+  await new Player('app').join('新来的 App 玩家');
+
+  // the homepage and the guide say the website is closed; the admin panel still works
+  for (const path of ['/', '/deploy/']) {
+    const page = await fetch(BASE + path);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /官网暂时关闭/);
+  }
+  assert.equal((await admin.call('GET', '/api/admin/overview')).data.access.web, false);
+
+  // and back on
+  await admin.call('POST', '/api/admin/access', { site: true, web: true });
+  assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, site)).status, 200);
+  assert.doesNotMatch(await (await fetch(BASE + '/')).text(), /官网暂时关闭/);
+});

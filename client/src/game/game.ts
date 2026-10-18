@@ -112,9 +112,20 @@ class Game {
       void refreshKeepsake();
     });
     try {
-      const st = await api<{ llm: boolean; worldTz: number; trial?: boolean; mode?: 'open' | 'paused' | 'closed'; notice?: string }>('GET', '/api/status');
+      const st = await api<{ llm: boolean; worldTz: number; trial?: boolean; mode?: 'open' | 'paused' | 'closed'; notice?: string; web?: boolean }>('GET', '/api/status');
       setWorldTz(st.worldTz);
       ui.set({ llm: !!st.llm, trial: !!st.trial, townMode: { mode: st.mode ?? 'open', notice: st.notice ?? '' } });
+      // the web version is off (the Mac app is one of ours and carries on): no game here,
+      // but a browser that's signed in can still get a recovery code or pack the cat
+      if (st.web === false && !isNative && !isMacShell) {
+        try {
+          this.setMe(await api<MeResponse>('GET', '/api/me'));
+        } catch {
+          /* not signed in */
+        }
+        ui.set({ phase: 'webclosed' });
+        return;
+      }
     } catch {
       /* the boot loop below retries */
     }

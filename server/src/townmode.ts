@@ -50,3 +50,33 @@ export function allowedWhileShut(method: string, path: string): boolean {
   if (path === '/api/move/request') return method === 'DELETE';
   return false;
 }
+
+// ---------- who can come in: the website and the web version can be turned off ----------
+/**
+ * site: the homepage and the guide. web: the game in a browser. With the web version
+ * off, only the apps (iOS, Android, Mac, Watch) sign in and play; a browser that's
+ * already signed in may still get a recovery code (to sign in from an app) or pack
+ * the cat up, so nobody is left without a way to their cat.
+ */
+export interface Access {
+  site: boolean;
+  web: boolean;
+}
+const ACCESS_KEY = 'town:access';
+let access: Access | null = null;
+
+export function townAccess(): Access {
+  return (access ??= { site: true, web: true, ...kvGet<Partial<Access>>(ACCESS_KEY) });
+}
+
+export function setTownAccess(next: Partial<Access>): Access {
+  access = { ...townAccess(), ...next };
+  kvSet(ACCESS_KEY, access);
+  return access;
+}
+
+/** What a browser that's already signed in may still do while the web version is off. */
+export function allowedOnClosedWeb(method: string, path: string): boolean {
+  if (method === 'GET') return path === '/api/me' || path === '/api/account/export' || path === '/api/move/request';
+  return ['/api/auth/recovery-code', '/api/move/export', '/api/auth/logout', '/api/account/delete'].includes(path);
+}

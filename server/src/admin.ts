@@ -12,7 +12,7 @@ import { ADMIN_TOKEN, DATA_DIR, HMAC_KEY } from './config';
 import { isHttps } from './security';
 import * as db from './db';
 import * as game from './game';
-import { townMode, setTownMode, DEFAULT_NOTICE, type TownMode } from './townmode';
+import { townMode, setTownMode, DEFAULT_NOTICE, townAccess, setTownAccess, type TownMode } from './townmode';
 import { ITEMS } from '../../shared/items';
 import { POIS } from '../../shared/world';
 import { ageOf, bondLevel, moodWord } from '../../shared/stats';
@@ -158,6 +158,7 @@ route('GET', '/api/admin/overview', (r) => {
     reports: count("SELECT COUNT(*) n FROM reports WHERE status = 'open'"),
     moves: count("SELECT COUNT(*) n FROM move_requests WHERE status = 'pending'"),
     town: townMode(),
+    access: townAccess(),
     days,
     server: { startedAt: STARTED, uptime: Math.round((now - STARTED) / 1000), rss: process.memoryUsage().rss, dbBytes, node: process.version, worldTz: WORLD_TZ },
     llm: { active: llmEnabled(), model: llmSettings().model, calls: u.calls, failed: u.failed, cost: u.cost, currency: u.currency },
@@ -188,6 +189,15 @@ route('POST', '/api/admin/mode', (r) => {
     }
   }
   return { ...s, letters };
+}, { auth: false });
+
+// the website and the web version, each on or off
+route('POST', '/api/admin/access', (r) => {
+  requireAdmin(r);
+  const next: { site?: boolean; web?: boolean } = {};
+  if (typeof r.body?.site === 'boolean') next.site = r.body.site;
+  if (typeof r.body?.web === 'boolean') next.web = r.body.web;
+  return setTownAccess(next);
 }, { auth: false });
 
 // ---------- the town, live ----------

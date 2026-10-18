@@ -1241,3 +1241,14 @@ textarea {
   font-weight: 600;
   text-decoration: none;
 }
+a.btn {
+  color: var(--ink);
+  text-decoration: none;
+}
+.web-closed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(360px, 100%);
+  text-align: center;
+}

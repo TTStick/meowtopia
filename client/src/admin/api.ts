@@ -32,6 +32,7 @@ export interface Overview {
   reports: number;
   moves: number;
   town: { mode: 'open' | 'paused' | 'closed'; notice: string; since: number };
+  access: { site: boolean; web: boolean };
   days: { day: string; newUsers: number; active: number | null; peak: number | null }[];
   server: { startedAt: number; uptime: number; rss: number; dbBytes: number; node: string; worldTz: number };
   llm: { active: boolean; model: string; calls: number; failed: number; cost: number | null; currency: string };

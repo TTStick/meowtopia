@@ -112,6 +112,15 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
   );
   return (
     <>
+      {(!o.access.site || !o.access.web) && (
+        <div class="card notice row between">
+          <span>
+            🔒 {!o.access.site && '官网关着'}{!o.access.site && !o.access.web && '，'}
+            {!o.access.web && '网页版关着：只有 App 能登录（已经登录的网页只能生成找回码、打包猫猫）'}
+          </span>
+          <button class="btn small" onClick={() => document.getElementById('town-mode')?.scrollIntoView({ behavior: 'smooth' })}>去看看</button>
+        </div>
+      )}
       {o.town.mode !== 'open' && (
         <div class="card notice shut row between">
           <span>{o.town.mode === 'paused' ? '⏸ 小镇暂停开放中' : '🌙 小镇已经关服'}：游戏停着，玩家只能登录、把猫猫打包带走。</span>
@@ -166,9 +175,45 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
       </section>
       <section id="town-mode">
         <h2>小镇状态</h2>
+        <AccessCard current={o.access} onSaved={() => void load()} />
         <TownModeCard current={o.town} onSaved={() => void load()} />
       </section>
     </>
+  );
+}
+
+// ---------------- the website and the web version ----------------
+function AccessCard({ current, onSaved }: { current: Overview['access']; onSaved: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const flip = async (key: 'site' | 'web', on: boolean) => {
+    const ask =
+      key === 'site'
+        ? on ? '重新打开官网？' : '关闭官网？首页和开服教程会换成一句「官网暂时关闭了」；游戏、管理面板和安装包下载不受影响。'
+        : on ? '重新打开网页版？浏览器里又能注册、登录和玩了。' : '关闭网页版？之后只有 App（iPhone、安卓、Mac、手表）能登录和玩；已经在网页上登录的玩家，只能生成找回码（到 App 里登录）或者打包猫猫。';
+    if (!confirm(ask)) return;
+    setBusy(true);
+    try {
+      await adminApi('POST', '/access', { [key]: on });
+      onSaved();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="card town-mode" style={{ marginBottom: 16 }}>
+      <label class="check mode-pick">
+        <input type="checkbox" checked={current.site} disabled={busy} onChange={(e) => flip('site', (e.target as HTMLInputElement).checked)} />
+        <b>官网</b>
+        <span class="muted small">首页和开服教程</span>
+      </label>
+      <label class="check mode-pick">
+        <input type="checkbox" checked={current.web} disabled={busy} onChange={(e) => flip('web', (e.target as HTMLInputElement).checked)} />
+        <b>网页版</b>
+        <span class="muted small">在浏览器里玩；关掉后只有 App 能登录</span>
+      </label>
+    </div>
   );
 }
 

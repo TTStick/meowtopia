@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { updateUser, type UserRow } from './db';
-import { allow, clientIp, corsHeaders, fromApp, LIMITS, originAllowed, securityHeaders } from './security';
+import { allow, clientIp, corsHeaders, fromApp, fromOurApps, LIMITS, originAllowed, securityHeaders } from './security';
 import { sessionFromRequest, touchSession, type SessionRow } from './sessions';
-import { townMode, allowedWhileShut } from './townmode';
+import { townMode, allowedWhileShut, townAccess, allowedOnClosedWeb } from './townmode';
 
 import { HttpError } from './errors';
 export { HttpError };
@@ -108,6 +108,14 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     // the app authenticates with its bearer token only; cookies never count cross-origin
     let found = sessionFromRequest(req);
     if (found && found.via === 'cookie' && fromApp(req)) found = null;
+    // the web version is off: only the apps come in (a signed-in browser may still take its cat along)
+    if (!townAccess().web && !url.pathname.startsWith('/api/admin/') && !PUBLIC_INFO.has(url.pathname)) {
+      const app = fromOurApps(req) || found?.via === 'bearer' || (!found && !req.headers.origin);
+      if (!app && !(found && allowedOnClosedWeb(method, url.pathname))) {
+        send(res, 403, { error: '网页版暂时关闭了，请用猫窝 App 登录', web: false });
+        return true;
+      }
+    }
     if (auth && !found) throw new HttpError(401, '请先登录');
     if (auth && found && found.user.banned && !r.o.allowBanned) throw new HttpError(403, `账号已被暂停${found.user.ban_reason ? `：${found.user.ban_reason}` : ''}`);
     if (found) {

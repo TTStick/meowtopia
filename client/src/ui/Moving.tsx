@@ -351,3 +351,84 @@ export function ShutNote() {
     </div>
   );
 }
+
+// ---------- the web version is off ----------
+interface Download {
+  file: string;
+  version: string;
+}
+
+/** A browser while only the apps may come in: the way to an app, and to the cat. */
+export function WebClosed() {
+  const me = useStore(ui, (s) => s.me);
+  const own = me?.cats.find((c) => c.ownerId === me.user.id && !c.coOwnerId);
+  const [code, setCode] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [apps, setApps] = useState<{ android?: Download; mac?: Download }>({});
+  useEffect(() => {
+    for (const k of ['android', 'mac'] as const)
+      fetch(`/download/${k}.json`, { cache: 'no-cache' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: Download | null) => d && setApps((a) => ({ ...a, [k]: d })))
+        .catch(() => {});
+  }, []);
+  const run = async (f: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await f();
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="onboard">
+      <div class="web-closed">
+        {own && <LiveCat genes={own.genes} outfit={own.outfit} age={ageOf(own.born)} height={140} cycle={['sit', 'loaf', 'groom']} />}
+        <h1 style={{ fontSize: '26px', letterSpacing: '1px' }}>网页版暂时关闭了</h1>
+        <p class="sub" style={{ maxWidth: 360 }}>
+          猫窝现在只能在 App 里玩。
+          {own ? `${own.name}还在这里，没有走丢。` : '已经在 App 里养猫的，打开 App 就能照常玩。'}
+        </p>
+        {own && (
+          <div class="card move-wait">
+            <b>到 App 里接着养{own.name}</b>
+            {code ? (
+              <>
+                <p class="muted">在猫窝 App 里点「找回我的猫窝」，输入这串找回码：</p>
+                <div class="code">{code}</div>
+                <p class="muted" style={{ fontSize: 13 }}>它只显示这一次，请抄下来或截个图。</p>
+              </>
+            ) : (
+              <>
+                <p class="muted">生成一串找回码，在 App 里用它登录同一个账号。{me!.user.secured && '（之前的找回码会失效）'}</p>
+                <button class="btn primary" disabled={busy} onClick={() => run(async () => setCode(await acc.newRecoveryCode()))}>
+                  生成找回码
+                </button>
+              </>
+            )}
+            <p class="muted" style={{ fontSize: 13 }}>也可以把{own.name}打包，搬到你自己或别人开的小镇。</p>
+            <button class="btn small" disabled={busy} onClick={() => run(async () => (await acc.packForMove(own.name), toast(`${own.name}的搬家包打好啦`, '📦')))}>
+              打包{own.name}
+            </button>
+          </div>
+        )}
+        {(apps.android || apps.mac) && (
+          <div class="actions" style={{ marginTop: 16 }}>
+            {apps.android && (
+              <a class="btn" href={`/download/${encodeURIComponent(apps.android.file)}`} download="猫窝.apk">
+                下载 Android App（{apps.android.version}）
+              </a>
+            )}
+            {apps.mac && (
+              <a class="btn" href={`/download/${encodeURIComponent(apps.mac.file)}`}>
+                下载 Mac 版（{apps.mac.version}）
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -85,6 +85,11 @@ export function fromApp(req: IncomingMessage): boolean {
   return origin !== `https://${host}` && origin !== `http://${host}`;
 }
 
+/** Any of our apps: the phone apps (by origin), the Mac app and the watch (by their user agent). */
+export function fromOurApps(req: IncomingMessage): boolean {
+  return fromApp(req) || /CatNestMac|CatNestWatch/.test(String(req.headers['user-agent'] ?? ''));
+}
+
 /** CORS for the native app: no credentials, only our own headers. */
 export function corsHeaders(req: IncomingMessage, res: ServerResponse): boolean {
   const origin = req.headers.origin as string | undefined;

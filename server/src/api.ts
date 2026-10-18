@@ -17,7 +17,7 @@ import { guestsAt } from './neighbors';
 import { NPCS } from '../../shared/npcs';
 import { localClock, WORLD_TZ } from '../../shared/time';
 import { TRIAL } from './config';
-import { townMode } from './townmode';
+import { townMode, townAccess } from './townmode';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function code(n: number) {
@@ -240,7 +240,7 @@ route('POST', '/api/cat/:id/command', async (r) => {
   return interpretCommand(c, text, places, where, r.user.id);
 }, { limit: 'llm' });
 
-route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ, trial: TRIAL, mode: townMode().mode, notice: townMode().notice }), { auth: false });
+route('GET', '/api/status', () => ({ llm: llmEnabled(), worldTz: WORLD_TZ, trial: TRIAL, mode: townMode().mode, notice: townMode().notice, site: townAccess().site, web: townAccess().web }), { auth: false });
 
 // ---------- nest ----------
 route('GET', '/api/nest/:catId', (r) => {

@@ -42,7 +42,7 @@ export interface VisitInfo {
 }
 
 export interface UIState {
-  phase: 'loading' | 'welcome' | 'adopt' | 'game' | 'shut'; // shut: the town is paused or closed
+  phase: 'loading' | 'welcome' | 'adopt' | 'game' | 'shut' | 'webclosed'; // shut: the town is paused or closed; webclosed: only the apps may come in
   townMode: { mode: 'open' | 'paused' | 'closed'; notice: string };
   me: MeResponse | null;
   scene: 'nest' | 'world';

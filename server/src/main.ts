@@ -11,7 +11,7 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const { DATA_DIR, PROD } = await import('./config');
 const { handleApi } = await import('./http');
 const { migrateLegacyAccounts, sessionFromRequest, sessionFromToken } = await import('./sessions');
-const { allow, clientIp, fromApp, LIMITS, originAllowed, securityHeaders } = await import('./security');
+const { allow, clientIp, fromApp, fromOurApps, LIMITS, originAllowed, securityHeaders } = await import('./security');
 await import('./api');
 await import('./neighbors');
 await import('./companion');
@@ -24,7 +24,8 @@ const { flushCats } = await import('./game');
 const { db } = await import('./db');
 const { WebSocketServer } = await import('ws');
 const { llmEnabled } = await import('./llm');
-const { isOpen } = await import('./townmode');
+const { isOpen, townAccess } = await import('./townmode');
+const { siteClosedPage } = await import('./closedpage');
 
 migrateLegacyAccounts();
 onBan((uid) => kickUser(uid));
@@ -74,6 +75,13 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/play' || url.pathname === '/index.html') return into('/play/', 301);
     if (url.pathname === '/admin') return into('/admin/', 301);
     if (url.pathname === '/deploy' || url.pathname === '/deploy.html') return into('/deploy/', 301);
+    // the website is off: its pages say so (the game, the admin panel and downloads carry on)
+    if (!townAccess().site && (url.pathname === '/' || url.pathname === '/home.html' || url.pathname === '/deploy/')) {
+      securityHeaders(req, res, true);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+      res.end(req.method === 'HEAD' ? undefined : siteClosedPage(townAccess().web));
+      return;
+    }
     // static files (production build); unknown paths inside the game fall back to its shell
     const game = url.pathname.startsWith('/play/');
     let p = url.pathname === '/' ? staticFile('/home.html') ?? staticFile('/index.html') : url.pathname === '/admin/' ? staticFile('/admin.html') : url.pathname === '/deploy/' ? staticFile('/deploy.html') : game && !extname(url.pathname) ? staticFile('/index.html') : staticFile(url.pathname);
@@ -122,6 +130,8 @@ server.on('upgrade', (req, socket, head) => {
   if (wss.clients.size >= MAX_CONNECTIONS || !isOpen()) return reject(503);
   const origin = req.headers.origin as string | undefined;
   const sameSite = originAllowed(req, origin) && !fromApp(req);
+  // the web version is off: a browser's page can't join the town (the apps sign in by message)
+  if (!townAccess().web && sameSite && !fromOurApps(req)) return reject(403);
   const found = sameSite ? sessionFromRequest(req) : null;
   wss.handleUpgrade(req, socket, head, (ws) => {
     perIp.set(ip, (perIp.get(ip) ?? 0) + 1);
