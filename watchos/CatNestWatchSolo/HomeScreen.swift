@@ -136,6 +136,7 @@ struct DebugDestination: View {
         case "wardrobe": WardrobeScreen()
         case "shop": ShopScreen()
         case "town": TownScreen()
+        case "map": TownMapScreen()
         case "neighbors": NeighborsScreen()
         case "collection": CollectionScreen()
         case "journal": JournalScreen()
@@ -165,10 +166,14 @@ struct OutingCard: View {
                     .lineLimit(1)
                     .foregroundStyle(nest.night ? Color.white.opacity(0.7) : ink.opacity(0.7))
             }
-            Button(trip?.goingHome == true ? "在回家的路上" : "叫它回家") { Task { await nest.outing(false) } }
-                .buttonStyle(.borderedProminent)
-                .tint(coral)
-                .disabled(trip?.goingHome == true || nest.shut)
+            HStack(spacing: 6) {
+                NavigationLink { TownMapScreen() } label: { Label("去看看", systemImage: "map") }
+                    .tint(coral)
+                Button(trip?.goingHome == true ? "回家中" : "叫回家") { Task { await nest.outing(false) } }
+                    .disabled(trip?.goingHome == true || nest.shut)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
         }
     }
 }

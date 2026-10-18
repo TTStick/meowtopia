@@ -224,6 +224,7 @@ xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Relea
 功能像一个缩小的手机 App：
 
 - **猫窝**：和附带版一样，轻点是摸摸，**转动表冠是顺毛**（每顺一下轻轻一震，顺五下它会呼噜）；新款手表上**捏两下手指**就是逗猫（夜里是说晚安）。猫出门时显示它在小镇的哪里、捡到了什么，可以叫它回家；去邻居家做客时也会显示。
+- **在小镇里玩**：一张像素小地图，猫在上面走来走去，附近的猫和居民也在；镜头跟着猫，**转表冠缩放**，拖动看看别处。点地图上的一处，它就走过去；点一位居民可以打招呼、做那位居民的小事（尝口面包、听个故事……）、一起逛逛；点别的猫就去找它玩；谁在说话，头上就冒出气泡，收到礼物会轻轻一震。「去哪里」按远近列出小镇的地方和七家店（走进店里会自动放大）。没出门时一点「出门」就出发。
 - **菜单**（表冠滚动）：状态（饱腹、精力、心情、干净、陪伴五个圆环，羁绊等级，年纪、毛色、性格、小癖好、去过几个地方）、今天的小心愿、对它说话（语音或手写）、出门 / 回家、梳毛、信箱、日记（可以往前翻）、收藏册、衣柜、商店、小镇（时间天气、今晚的舞台、它这趟出门的经过）、邻居（看门牌，带它去串门）。
 - **衣柜：转表冠一件件试穿**，猫当场戴上给你看；买过的点「戴上 / 摘下」，裁缝铺在卖的可以直接买下。
 - **商店：转表冠选数量**，再点买下。
@@ -232,6 +233,8 @@ xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Relea
 - **登录**：用已登录的手机 App、Mac 或网页「设置 → 登录手表」配对（手表上显示 6 位码），用找回码登录，或者直接在手表上开一个新猫窝领养小猫。
 
 它和附带版共用 `ios/App/CatNestWatch/` 里的几份基础代码（`API.swift`、`Keychain.swift`、`Config.swift`、`CatView.swift`、`Debug.swift`），其余都在 `watchos/CatNestWatchSolo/`。服务端给它的接口在 `server/src/watch.ts`（`/api/watch`、`/api/watch/wardrobe`、`/api/watch/shop`、`/api/watch/collection`；物品名字、季节天气、舞台都在服务端算好，手表上不用带游戏的资料）。
+
+在小镇里玩：watchOS 不让普通 App 用 WebSocket，所以手表通过 `/api/watch/town` 每 1.5 秒问一次「附近有谁、刚才谁说了什么」，动作（出门、回家、走到某处、找居民或别的猫）也走这个接口。服务端为它在小镇里放一个没有连接的「替身客户端」（`server/src/world.ts` 的 `watchLink`），和手机上的连接一样参与小镇：收得到附近的气泡和事件，存着等手表来取；手表一段时间不来问，替身就自己离开。地图（`/api/watch/map`，地形每格一个字符、建筑、树、地点、店里的房间）只下载一次，在手表上画成像素画；居民的图是 `/api/sprite/npc/:id/:frame`。
 
 工程用 XcodeGen 生成：
 
@@ -249,4 +252,4 @@ open watchos/CatNestWatchSolo.xcodeproj
 xcrun simctl spawn booted defaults write com.catnest.watch server http://localhost:8737
 ```
 
-调试版的启动参数：`-CatNestDebugCode 找回码`（直接登录）、`-CatNestDebugScreen menu|status|wardrobe|shop|town|neighbors|collection|journal|settings|towns|letters|feed|movein`（直接打开某一页）、`-CatNestDebugAct "buy:straw_hat,wear:straw_hat,feed:treat_fish,brush"`（依次做这些事）。图标由 `scripts/make-watch-icon.ts` 用游戏里的画法生成。
+调试版的启动参数：`-CatNestDebugCode 找回码`（直接登录）、`-server http://localhost:8737`（这一次连哪个小镇）、`-CatNestDebugScreen map|menu|status|wardrobe|shop|town|neighbors|collection|journal|settings|towns|letters|feed|movein`（直接打开某一页）、`-CatNestDebugAct "buy:straw_hat,wear:straw_hat,feed:treat_fish,brush"`（依次做这些事）。图标由 `scripts/make-watch-icon.ts` 用游戏里的画法生成。

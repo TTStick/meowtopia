@@ -994,3 +994,34 @@ test('the standalone watch app: its home, wardrobe (with trying things on), shop
   assert.equal((await w.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' }, watchUA)).status, 200);
   await admin.call('POST', '/api/admin/access', { web: true });
 });
+
+test('the watch in the town: the map, going out, who is around, and doing things together', async () => {
+  const w = new Player('app');
+  await w.join('手表逛街');
+  await w.call('POST', '/api/adopt', { name: '逛逛', seed: 88 });
+  const ua = { 'user-agent': 'CatNestWatch/1.0 watchOS' };
+
+  // the map, once: terrain as one character per tile, buildings, places, shop rooms
+  const map = (await w.call('GET', '/api/watch/map', undefined, ua)).data;
+  assert.equal(map.ter.length, map.w * map.h);
+  assert.ok(map.buildings.length > 10 && map.places.length > 20 && map.rooms.length >= 7 && map.trees.length > 100);
+
+  // at home: nobody of ours in the town yet
+  let town = (await w.call('GET', '/api/watch/town', undefined, ua)).data;
+  assert.equal(town.out, false);
+  // going out: the cat appears, with the town's cats and residents around it
+  assert.equal((await w.call('POST', '/api/watch/town', { t: 'enter' }, ua)).status, 200);
+  town = (await w.call('GET', '/api/watch/town', undefined, ua)).data;
+  assert.equal(town.out, true);
+  assert.ok(town.me.place);
+  assert.ok(town.ents.some((e: { mine: boolean }) => e.mine));
+  // walking somewhere
+  const fountain = map.places.find((p: { id: string }) => p.id === 'fountain');
+  assert.equal((await w.call('POST', '/api/watch/town', { t: 'goto', x: fountain.x, y: fountain.y }, ua)).status, 200);
+  town = (await w.call('GET', '/api/watch/town', undefined, ua)).data;
+  assert.equal(town.me.walking, true);
+  // only the town's own moves are accepted
+  assert.equal((await w.call('POST', '/api/watch/town', { t: 'pos', x: 0, y: 0 }, ua)).status, 400);
+  // and home again
+  assert.equal((await w.call('POST', '/api/watch/town', { t: 'leave' }, ua)).status, 200);
+});

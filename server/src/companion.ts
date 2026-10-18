@@ -5,6 +5,7 @@ import * as game from './game';
 import { ITEMS, WEAR_SLOT } from '../../shared/items';
 import { moodWord, ageOf } from '../../shared/stats';
 import { randomGenes } from '../../shared/genes';
+import { NPCS } from '../../shared/npcs';
 import { clockAt } from '../../shared/time';
 import type { CatGenes, CatRecord } from '../../shared/types';
 import { FRAMES, renderSprite, snapSize, spriteKey, type SpriteSpec } from './sprites';
@@ -48,6 +49,13 @@ route('GET', '/api/sprite/cat/:id/:frame', (r) => {
     outfit = tryOn.split(',').filter((id) => WEAR_SLOT[id] && !slots.has(WEAR_SLOT[id]) && slots.add(WEAR_SLOT[id]));
   }
   return sendSprite(r, c.genes, outfit, ageOf(c.born));
+}, { auth: false });
+
+// the residents, for the watch's town
+route('GET', '/api/sprite/npc/:id/:frame', (r) => {
+  const n = NPCS.find((x) => x.id === r.params.id);
+  if (!n) throw new HttpError(404, '找不到这位居民');
+  return sendSprite(r, n.genes, [], 1);
 }, { auth: false });
 
 // kittens to choose from when adopting on the watch

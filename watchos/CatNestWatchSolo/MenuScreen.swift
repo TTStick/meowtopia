@@ -68,8 +68,12 @@ struct MenuScreen: View {
                     }
                 }
                 Section {
+                    NavigationLink { TownMapScreen() } label: {
+                        Row(icon: "map", tint: coral, title: "在小镇里玩", detail: c.out ? "\(c.name)正在外面" : "带\(c.name)出门逛逛")
+                    }
+                    .disabled(c.away != nil)
                     NavigationLink { TownScreen() } label: {
-                        Row(icon: "building.2", tint: .blue, title: "小镇", detail: nest.home.map { "\($0.town.time) · \($0.town.weather)" })
+                        Row(icon: "building.2", tint: .blue, title: "小镇近况", detail: nest.home.map { "\($0.town.time) · \($0.town.weather)" })
                     }
                     NavigationLink { NeighborsScreen() } label: { Row(icon: "house.and.flag", tint: .mint, title: "邻居", detail: nil) }
                 }

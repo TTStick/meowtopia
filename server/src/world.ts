@@ -1628,6 +1628,108 @@ function handle(c: Client, m: ClientMsg) {
   }
 }
 
+// ---------- the standalone watch: a player without a socket, asking over HTTP ----------
+// watchOS lets ordinary apps make plain requests only, so the watch joins the town
+// through a stand-in client: it sits in `clients` like any other (so it is "watching
+// nearby" and gets its speech bubbles and events), keeps what it's sent until the
+// watch next asks, and goes away when the watch stops asking for a while.
+const WATCH_KEEP = new Set(['say', 'emote', 'event']);
+interface WatchLink {
+  c: Client;
+  inbox: ServerMsg[];
+}
+const watchLinks = new Map<string, WatchLink>();
+
+function watchLink(uid: string, nickname: string): WatchLink {
+  const had = watchLinks.get(uid);
+  if (had && clients.has(had.c)) return had;
+  const inbox: ServerMsg[] = [];
+  let open = true;
+  const drop = () => {
+    if (!open) return;
+    open = false;
+    clients.delete(c);
+    watchLinks.delete(uid);
+    for (const id of c.cats) {
+      const e = ents.get(id);
+      if (e && e.controlledBy === uid) {
+        e.controlledBy = undefined;
+        e.st.controlled = false;
+      }
+    }
+  };
+  const ws = {
+    get readyState() {
+      return open ? 1 : 3;
+    },
+    send(s: string) {
+      const m = JSON.parse(s) as ServerMsg;
+      if (!WATCH_KEEP.has(m.t)) return;
+      inbox.push(m);
+      if (inbox.length > 40) inbox.shift();
+    },
+    close: drop,
+    terminate: drop,
+    ping() {},
+  } as unknown as WebSocket;
+  const c: Client = { ws, uid, nickname, cats: new Set(game.catsOf(uid).map((x) => x.id)), lastPos: 0, view: null, v: WORLD_VERSION };
+  clients.add(c);
+  const link = { c, inbox };
+  watchLinks.set(uid, link);
+  return link;
+}
+
+/** What the watch shows of the town: its cat, who's around, and what was said since it last asked. */
+export function watchTown(uid: string, nickname: string, catId: string) {
+  const link = watchLink(uid, nickname);
+  alive.add(link.c.ws); // still here; the stand-in goes once the watch stops asking for a while
+  const now = Date.now();
+  const me = ents.get(catId);
+  const [vx, vy] = me ? posOf(me, now) : HOME_SPAWN;
+  link.c.view = { x: vx, y: vy };
+  const near: Array<Record<string, unknown>> = [];
+  for (const o of ents.values()) {
+    const [x, y] = posOf(o, now);
+    if (Math.abs(x - vx) > 900 || Math.abs(y - vy) > 800) continue;
+    near.push({
+      id: o.st.id,
+      kind: o.npc ? 'npc' : o.cat?.ownerId === 'town' ? 'town' : 'cat',
+      name: o.st.name,
+      x: Math.round(x),
+      y: Math.round(y),
+      dir: o.st.dir,
+      anim: o.st.anim,
+      walking: o.mode === 'walk',
+      mine: o.st.id === catId,
+      owner: o.st.owner ?? null,
+      role: o.npc?.role ?? null,
+      special: o.npc?.special?.label ?? null,
+      withMe: !!(o.companion && o.companion.leader === catId),
+    });
+  }
+  const events = link.inbox.splice(0).map((m) => {
+    const id = 'id' in m ? (m as { id: string }).id : null;
+    return { ...m, who: id ? (ents.get(id)?.st.name ?? null) : null };
+  });
+  const room = me ? roomAt(vx, vy) : null;
+  return {
+    out: !!me,
+    me: me
+      ? { x: Math.round(vx), y: Math.round(vy), anim: me.st.anim, walking: me.mode === 'walk', place: room?.name ?? placeName(vx, vy), room: room?.id ?? null, goingHome: !!me.trip?.goingHome }
+      : null,
+    ents: near.slice(0, 40),
+    events,
+    now,
+  };
+}
+
+/** The watch asks the town to do something, as a socket message would. */
+export function watchSend(uid: string, nickname: string, m: ClientMsg) {
+  const link = watchLink(uid, nickname);
+  alive.add(link.c.ws);
+  handle(link.c, m);
+}
+
 function talkNpc(e: Ent, o: Ent, c: Client, now: number) {
   const n = o.npc!;
   setAct(e, 'sit_happy', 10_000, now);
