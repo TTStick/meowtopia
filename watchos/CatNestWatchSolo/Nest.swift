@@ -47,9 +47,11 @@ final class Nest {
             home = h
             phase = h.cat == nil ? .adopt : .ready
             if let c = h.cat, c.look != loadedLook { await loadFrames(c) }
+            WidgetBridge.write(h, signedIn: true)
             if h.cat != nil { await refreshKeepsake(force: shut) }
         } catch let e as APIError where e.status == 401 {
             setToken(nil)
+            WidgetBridge.write(nil, signedIn: false)
             phase = .signedOut
         } catch {
             if phase == .loading { phase = home == nil ? .signedOut : .ready }
@@ -73,6 +75,7 @@ final class Nest {
         _ = try? await API.shared.send("POST", "/api/auth/logout", [:], as: Empty.self)
         setToken(nil)
         Keepsakes.drop(server: Config.server.absoluteString)
+        WidgetBridge.write(nil, signedIn: false)
         home = nil
         frames = [:]
         loadedLook = ""

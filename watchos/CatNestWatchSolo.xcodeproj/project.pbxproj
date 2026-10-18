@@ -10,36 +10,77 @@
 		04BE96F044AB204774C105EA /* TownMapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB9C0FC12252F6F8CFB2797 /* TownMapScreen.swift */; };
 		1ABA8B920E017199F8DE2063 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09D57EE030BD1F8C786FFAE /* Config.swift */; };
 		217AB3855405FC10B5A7A481 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB40575B969A4C213E2DAF0A /* Theme.swift */; };
+		228D1C4A5139FF2500BABA6F /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CB8387B1DCBB781CD99336 /* WidgetViews.swift */; };
 		23F6B9FF4454B487E4D50909 /* Debug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56EDF8FE77B2FB3AA16B44E1 /* Debug.swift */; };
 		2669E174E4567F2918712A82 /* SignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D5E5B1E14E9CE2C5F58002 /* SignIn.swift */; };
 		2CBE9E95D3DA041B63201AA2 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB94CD6CE767EFE1C026670 /* Model.swift */; };
+		39B9D14705C6F8753630611C /* CatNestWatchSoloWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 645AF928E766AF023A23E78C /* CatNestWatchSoloWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		406961A4D9CBD0367B99CDE8 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 390FB422B7A5BF02D13E899B /* Settings.swift */; };
 		4881EA210C8FC1FE75AFB136 /* CatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97B88BE1CC3556F72F244415 /* CatView.swift */; };
 		4DC5E2987CA7783E2E5F5537 /* WardrobeShop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1015B788D7464DD0FD38ECEF /* WardrobeShop.swift */; };
 		509B32E205470AB1AF3837A8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EEC40D04C804A5B385C955AD /* Assets.xcassets */; };
+		69A4DAB0DA073A1E45F01A3B /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CB8387B1DCBB781CD99336 /* WidgetViews.swift */; };
 		6D997E77407E59B1B2666B70 /* MenuScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34598C3E4E0B3D2F958B77DB /* MenuScreen.swift */; };
+		7D7299C8750BE398CADBDBE9 /* Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C24325C269F62831092F54 /* Widgets.swift */; };
+		835C37131377CFAE668C3C14 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C623DEE72CDFCE66EE13E7 /* WidgetSnapshot.swift */; };
 		86E83116ACAC2C003ED40291 /* SoloApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598D1FD40539F5F7E08468AE /* SoloApp.swift */; };
 		A02CBCA6110874FBB072003A /* Nest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6196E33A85729A2F972F84A /* Nest.swift */; };
 		A8D499AC4133B5CD273E070C /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8625B74337ECE06E3F9E0358 /* Keychain.swift */; };
+		AEF9471A42F2950B759554F5 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 617F4785A7AD9F4C72BD0017 /* WidgetBridge.swift */; };
 		B467BB4908F6AA94D8E6C204 /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = F62CA3286228C7B82F25D002 /* HomeScreen.swift */; };
+		C31E9103F7CD1243AE994963 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67C623DEE72CDFCE66EE13E7 /* WidgetSnapshot.swift */; };
+		D7F634E4D94904BF1890926E /* WidgetPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D75F366D958F4073552BA9FA /* WidgetPreview.swift */; };
 		E5AA28F136926187040AB50A /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1AD68866DF36B1E95E82D5 /* API.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E5C219E4FF5B70F2CAEAE5FC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DAC7E1ABD1B432641E9CFB6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 54732EEF972761CF0AF92467;
+			remoteInfo = CatNestWatchSoloWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E4AE818C24F07E515E8B7E6B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				39B9D14705C6F8753630611C /* CatNestWatchSoloWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		04DC85F5F1451D3E3814FF6A /* CatNestWatchSolo.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatNestWatchSolo.entitlements; sourceTree = "<group>"; };
 		1015B788D7464DD0FD38ECEF /* WardrobeShop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeShop.swift; sourceTree = "<group>"; };
+		3348416A8B038514DCFC030F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		34598C3E4E0B3D2F958B77DB /* MenuScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuScreen.swift; sourceTree = "<group>"; };
 		390FB422B7A5BF02D13E899B /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
-		56EDF8FE77B2FB3AA16B44E1 /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Debug.swift; path = ../ios/App/CatNestWatch/Debug.swift; sourceTree = "<group>"; };
+		42CB8387B1DCBB781CD99336 /* WidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetViews.swift; sourceTree = "<group>"; };
+		56EDF8FE77B2FB3AA16B44E1 /* Debug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Debug.swift; path = ../../ios/App/CatNestWatch/Debug.swift; sourceTree = "<group>"; };
 		598D1FD40539F5F7E08468AE /* SoloApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoloApp.swift; sourceTree = "<group>"; };
+		617F4785A7AD9F4C72BD0017 /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridge.swift; sourceTree = "<group>"; };
+		645AF928E766AF023A23E78C /* CatNestWatchSoloWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CatNestWatchSoloWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		67C623DEE72CDFCE66EE13E7 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshot.swift; sourceTree = "<group>"; };
 		695A65C7BF07259348C3E78E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		74D5E5B1E14E9CE2C5F58002 /* SignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignIn.swift; sourceTree = "<group>"; };
-		8625B74337ECE06E3F9E0358 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Keychain.swift; path = ../ios/App/CatNestWatch/Keychain.swift; sourceTree = "<group>"; };
+		8625B74337ECE06E3F9E0358 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Keychain.swift; path = ../../ios/App/CatNestWatch/Keychain.swift; sourceTree = "<group>"; };
 		8EB9C0FC12252F6F8CFB2797 /* TownMapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TownMapScreen.swift; sourceTree = "<group>"; };
-		97B88BE1CC3556F72F244415 /* CatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CatView.swift; path = ../ios/App/CatNestWatch/CatView.swift; sourceTree = "<group>"; };
+		97B88BE1CC3556F72F244415 /* CatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CatView.swift; path = ../../ios/App/CatNestWatch/CatView.swift; sourceTree = "<group>"; };
 		B6196E33A85729A2F972F84A /* Nest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Nest.swift; sourceTree = "<group>"; };
+		C42174626D7119B41BD845A5 /* CatNestWatchSoloWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatNestWatchSoloWidgets.entitlements; sourceTree = "<group>"; };
 		CBB94CD6CE767EFE1C026670 /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
-		CC1AD68866DF36B1E95E82D5 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = API.swift; path = ../ios/App/CatNestWatch/API.swift; sourceTree = "<group>"; };
-		D09D57EE030BD1F8C786FFAE /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Config.swift; path = ../ios/App/CatNestWatch/Config.swift; sourceTree = "<group>"; };
+		CC1AD68866DF36B1E95E82D5 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = API.swift; path = ../../ios/App/CatNestWatch/API.swift; sourceTree = "<group>"; };
+		D09D57EE030BD1F8C786FFAE /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Config.swift; path = ../../ios/App/CatNestWatch/Config.swift; sourceTree = "<group>"; };
+		D75F366D958F4073552BA9FA /* WidgetPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetPreview.swift; sourceTree = "<group>"; };
+		E0C24325C269F62831092F54 /* Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
 		EB40575B969A4C213E2DAF0A /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EEC40D04C804A5B385C955AD /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F62CA3286228C7B82F25D002 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
@@ -51,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				EEC40D04C804A5B385C955AD /* Assets.xcassets */,
+				04DC85F5F1451D3E3814FF6A /* CatNestWatchSolo.entitlements */,
 				F62CA3286228C7B82F25D002 /* HomeScreen.swift */,
 				695A65C7BF07259348C3E78E /* Info.plist */,
 				34598C3E4E0B3D2F958B77DB /* MenuScreen.swift */,
@@ -62,6 +104,8 @@
 				EB40575B969A4C213E2DAF0A /* Theme.swift */,
 				8EB9C0FC12252F6F8CFB2797 /* TownMapScreen.swift */,
 				1015B788D7464DD0FD38ECEF /* WardrobeShop.swift */,
+				617F4785A7AD9F4C72BD0017 /* WidgetBridge.swift */,
+				D75F366D958F4073552BA9FA /* WidgetPreview.swift */,
 			);
 			path = CatNestWatchSolo;
 			sourceTree = "<group>";
@@ -74,14 +118,17 @@
 				D09D57EE030BD1F8C786FFAE /* Config.swift */,
 				56EDF8FE77B2FB3AA16B44E1 /* Debug.swift */,
 				8625B74337ECE06E3F9E0358 /* Keychain.swift */,
+				67C623DEE72CDFCE66EE13E7 /* WidgetSnapshot.swift */,
+				42CB8387B1DCBB781CD99336 /* WidgetViews.swift */,
 			);
-			name = Shared;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		93B9C03117EDC02D1714AE44 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				FF1C50EB25E719CF7BCAC5F0 /* CatNestWatchSolo.app */,
+				645AF928E766AF023A23E78C /* CatNestWatchSoloWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,9 +137,20 @@
 			isa = PBXGroup;
 			children = (
 				1C01EA7960CA17ED0F9BC3A9 /* CatNestWatchSolo */,
+				E0332CB88F86E952891F098E /* CatNestWatchSoloWidgets */,
 				8C9F8DC7DEFB91C39603513E /* Shared */,
 				93B9C03117EDC02D1714AE44 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		E0332CB88F86E952891F098E /* CatNestWatchSoloWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				C42174626D7119B41BD845A5 /* CatNestWatchSoloWidgets.entitlements */,
+				3348416A8B038514DCFC030F /* Info.plist */,
+				E0C24325C269F62831092F54 /* Widgets.swift */,
+			);
+			path = CatNestWatchSoloWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -104,10 +162,12 @@
 			buildPhases = (
 				0A1EA0AE071042CE9B0BAF6C /* Sources */,
 				3550E3729591D31074B91298 /* Resources */,
+				E4AE818C24F07E515E8B7E6B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A868E149D1B426FDE73FB2DE /* PBXTargetDependency */,
 			);
 			name = CatNestWatchSolo;
 			packageProductDependencies = (
@@ -115,6 +175,23 @@
 			productName = CatNestWatchSolo;
 			productReference = FF1C50EB25E719CF7BCAC5F0 /* CatNestWatchSolo.app */;
 			productType = "com.apple.product-type.application";
+		};
+		54732EEF972761CF0AF92467 /* CatNestWatchSoloWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D719CB4C56035452FF899112 /* Build configuration list for PBXNativeTarget "CatNestWatchSoloWidgets" */;
+			buildPhases = (
+				1D9E7AE106B42808FB8E46AD /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CatNestWatchSoloWidgets;
+			packageProductDependencies = (
+			);
+			productName = CatNestWatchSoloWidgets;
+			productReference = 645AF928E766AF023A23E78C /* CatNestWatchSoloWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -126,6 +203,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					0262023BC074B5C5B3D8EDB6 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					54732EEF972761CF0AF92467 = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
@@ -146,6 +227,7 @@
 			projectRoot = "";
 			targets = (
 				0262023BC074B5C5B3D8EDB6 /* CatNestWatchSolo */,
+				54732EEF972761CF0AF92467 /* CatNestWatchSoloWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -181,16 +263,39 @@
 				217AB3855405FC10B5A7A481 /* Theme.swift in Sources */,
 				04BE96F044AB204774C105EA /* TownMapScreen.swift in Sources */,
 				4DC5E2987CA7783E2E5F5537 /* WardrobeShop.swift in Sources */,
+				AEF9471A42F2950B759554F5 /* WidgetBridge.swift in Sources */,
+				D7F634E4D94904BF1890926E /* WidgetPreview.swift in Sources */,
+				C31E9103F7CD1243AE994963 /* WidgetSnapshot.swift in Sources */,
+				228D1C4A5139FF2500BABA6F /* WidgetViews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1D9E7AE106B42808FB8E46AD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				835C37131377CFAE668C3C14 /* WidgetSnapshot.swift in Sources */,
+				69A4DAB0DA073A1E45F01A3B /* WidgetViews.swift in Sources */,
+				7D7299C8750BE398CADBDBE9 /* Widgets.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A868E149D1B426FDE73FB2DE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 54732EEF972761CF0AF92467 /* CatNestWatchSoloWidgets */;
+			targetProxy = E5C219E4FF5B70F2CAEAE5FC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		00BEFA359B41D417A59F34B4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CatNestWatchSolo/CatNestWatchSolo.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -210,10 +315,32 @@
 			};
 			name = Release;
 		};
+		92FDB2E1A20E6A7F469BE607 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CatNestWatchSoloWidgets/CatNestWatchSoloWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CatNestWatchSoloWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "猫窝";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.catnest.watch.widgets;
+				PRODUCT_NAME = CatNestWatchSoloWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
 		B673EC6BB87E2CFC8A20C1B9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = CatNestWatchSolo/CatNestWatchSolo.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -246,6 +373,27 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		E8D7EDEA4902CA4281749248 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CatNestWatchSoloWidgets/CatNestWatchSoloWidgets.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = CatNestWatchSoloWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "猫窝";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				PRODUCT_BUNDLE_IDENTIFIER = com.catnest.watch.widgets;
+				PRODUCT_NAME = CatNestWatchSoloWidgets;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 4;
 				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
@@ -285,6 +433,15 @@
 			buildConfigurations = (
 				B673EC6BB87E2CFC8A20C1B9 /* Debug */,
 				00BEFA359B41D417A59F34B4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D719CB4C56035452FF899112 /* Build configuration list for PBXNativeTarget "CatNestWatchSoloWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				92FDB2E1A20E6A7F469BE607 /* Debug */,
+				E8D7EDEA4902CA4281749248 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

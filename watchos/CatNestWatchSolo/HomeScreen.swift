@@ -137,6 +137,7 @@ struct DebugDestination: View {
         case "shop": ShopScreen()
         case "town": TownScreen()
         case "map": TownMapScreen()
+        case "widgets": WidgetPreviewScreen()
         case "neighbors": NeighborsScreen()
         case "collection": CollectionScreen()
         case "journal": JournalScreen()

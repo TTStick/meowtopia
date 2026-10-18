@@ -46,6 +46,13 @@ targets:
         group: Shared
       - path: ../ios/App/CatNestWatch/Debug.swift
         group: Shared
+      - path: Shared
+    dependencies:
+      - target: CatNestWatchSoloWidgets
+    entitlements:
+      path: CatNestWatchSolo/CatNestWatchSolo.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.catnest.watch]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.catnest.watch
@@ -64,4 +71,31 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "-"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        SWIFT_EMIT_LOC_STRINGS: YES
+  # complications and Smart Stack widgets (WidgetKit); they read what the app saves in the shared app group
+  CatNestWatchSoloWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: CatNestWatchSoloWidgets
+      - path: Shared
+    entitlements:
+      path: CatNestWatchSoloWidgets/CatNestWatchSoloWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.catnest.watch]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.catnest.watch.widgets
+        PRODUCT_NAME: CatNestWatchSoloWidgets
+        SDKROOT: watchos
+        SUPPORTED_PLATFORMS: "watchos watchsimulator"
+        TARGETED_DEVICE_FAMILY: "4"
+        WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: CatNestWatchSoloWidgets/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: 猫窝
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
         SWIFT_EMIT_LOC_STRINGS: YES

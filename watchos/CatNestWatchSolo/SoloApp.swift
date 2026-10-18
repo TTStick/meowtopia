@@ -1,9 +1,11 @@
 import SwiftUI
+import WatchKit
 
 /// 猫窝手表版: the whole game in small, on a watch of its own (no iPhone needed).
 /// The iPhone app's own companion watch app (ios/App/CatNestWatch) carries on beside it.
 @main
 struct CatNestWatchSoloApp: App {
+    @WKApplicationDelegateAdaptor private var delegate: AppDelegate
     @State private var nest = Nest()
     @Environment(\.scenePhase) private var scenePhase
 

@@ -231,8 +231,14 @@ xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Relea
 - **换小镇**：登录前的「小镇：… · 换一个」或「设置 → 换一个小镇」，默认官方体验服，可以加上自己小镇的网址；每个小镇的登录分开记着。
 - **随身搬家包**：和手机 App 一样，每天在手表上存一份猫的搬家包，换小镇前也会更新一次。到了新小镇的领养页会出现「带某某搬过来」，提交后等那边的管理员同意，猫就到了。小镇暂停或关服时，主页会提示，可以照常带猫离开。
 - **登录**：用已登录的手机 App、Mac 或网页「设置 → 登录手表」配对（手表上显示 6 位码），用找回码登录，或者直接在手表上开一个新猫窝领养小猫。
+- **表盘和智能叠放**：两个小组件，长按表盘 → 编辑 → 复杂功能里找「猫窝」，或在智能叠放（转表冠调出）里添加。
+  - 「猫猫」：圆形（心情圆环里是猫，戴着它现在穿的衣服；出门时是爪印）、矩形（名字、在做什么、新信或今天的心愿）、一行字、表盘四角（猫和心情刻度）。
+  - 「小镇」：圆形（小镇时间，今晚有演出时是音符）、矩形（时间天气、今晚的舞台、猫在哪儿）、一行字。
+  - 有新信、猫出门、演出快开始时，智能叠放会把它们往前排。
 
 它和附带版共用 `ios/App/CatNestWatch/` 里的几份基础代码（`API.swift`、`Keychain.swift`、`Config.swift`、`CatView.swift`、`Debug.swift`），其余都在 `watchos/CatNestWatchSolo/`。服务端给它的接口在 `server/src/watch.ts`（`/api/watch`、`/api/watch/wardrobe`、`/api/watch/shop`、`/api/watch/collection`；物品名字、季节天气、舞台都在服务端算好，手表上不用带游戏的资料）。
+
+小组件的数据：App 每次刷新时把小组件要显示的几件事（`watchos/Shared/WidgetSnapshot.swift`）和猫的三张小图（坐、睡、开心，96 像素，服务端按它现在的穿着画好）存进 App Group `group.com.catnest.watch`，有变化才让表盘重画；App 不在前台时，系统大约每半小时在后台叫它刷新一次（`WidgetBridge.swift`）。登录凭据只在 App 自己那里，小组件不联网。真机上要在开发者账号里给 `com.catnest.watch` 和 `com.catnest.watch.widgets` 都打开这个 App Group。
 
 在小镇里玩：watchOS 不让普通 App 用 WebSocket，所以手表通过 `/api/watch/town` 每 1.5 秒问一次「附近有谁、刚才谁说了什么」，动作（出门、回家、走到某处、找居民或别的猫）也走这个接口。服务端为它在小镇里放一个没有连接的「替身客户端」（`server/src/world.ts` 的 `watchLink`），和手机上的连接一样参与小镇：收得到附近的气泡和事件，存着等手表来取；手表一段时间不来问，替身就自己离开。地图（`/api/watch/map`，地形每格一个字符、建筑、树、地点、店里的房间）只下载一次，在手表上画成像素画；居民的图是 `/api/sprite/npc/:id/:frame`。
 
@@ -252,4 +258,4 @@ open watchos/CatNestWatchSolo.xcodeproj
 xcrun simctl spawn booted defaults write com.catnest.watch server http://localhost:8737
 ```
 
-调试版的启动参数：`-CatNestDebugCode 找回码`（直接登录）、`-server http://localhost:8737`（这一次连哪个小镇）、`-CatNestDebugScreen map|menu|status|wardrobe|shop|town|neighbors|collection|journal|settings|towns|letters|feed|movein`（直接打开某一页）、`-CatNestDebugAct "buy:straw_hat,wear:straw_hat,feed:treat_fish,brush"`（依次做这些事）。图标由 `scripts/make-watch-icon.ts` 用游戏里的画法生成。
+调试版的启动参数：`-CatNestDebugCode 找回码`（直接登录）、`-server http://localhost:8737`（这一次连哪个小镇）、`-CatNestDebugScreen map|widgets|menu|status|wardrobe|shop|town|neighbors|collection|journal|settings|towns|letters|feed|movein`（直接打开某一页）、`-CatNestDebugAct "buy:straw_hat,wear:straw_hat,feed:treat_fish,brush"`（依次做这些事）。`widgets` 页把各种小组件按 App 存下的数据画出来，不用去改表盘就能看。图标由 `scripts/make-watch-icon.ts` 用游戏里的画法生成。
