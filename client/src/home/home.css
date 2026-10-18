@@ -150,8 +150,9 @@ h3.px { font-size: 22px; --scale: 2; margin-top: 18px; }
 .tag span, .platforms span { display: inline-block; }
 .cta { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 14px; }
 .cta[hidden], .cta-note[hidden] { display: none; }
-.cta-note { margin: 18px auto 0; max-width: 34em; font-size: 15px; line-height: 1.7; color: var(--cream); opacity: 0.92; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
+.cta-note { width: fit-content; max-width: min(36em, 100%); margin: 18px auto 0; padding: 6px 14px; font-size: 15px; line-height: 1.7; color: var(--cream); background: rgba(35, 29, 63, 0.5); box-shadow: 0 0 0 2px rgba(35, 29, 63, 0.5); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
 .cta-note span { display: inline-block; }
+.cta-note a { color: var(--cream); }
 @media (max-width: 520px) {
   .cta { gap: 6px; }
   .cta .pbtn, .cta .pbtn.big { font-size: 16px; padding: 10px 12px 12px; gap: 6px; }

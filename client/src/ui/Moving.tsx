@@ -34,7 +34,7 @@ export function TrialNote(p: { short?: boolean }) {
       <b>这里是猫窝的体验服</b>
       <span>
         {p.short ? '不保证会一直开着。' : '欢迎先来玩玩看。它不保证会一直开着，'}
-        想和猫猫长长久久，可以自己开一个小镇，再把猫猫搬过去。
+        {p.short ? '' : '不过'}猫猫随时可以带走，搬到你自己或别人开的小镇上。
       </span>
       <a href={GUIDE_URL} target={isNative ? undefined : '_blank'} rel="noopener">
         开服教程 →
