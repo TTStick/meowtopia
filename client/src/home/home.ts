@@ -1,6 +1,11 @@
 // The website (home.html, deploy.html): pixel headings, the Android download details,
 // the trial-server banner, copy buttons on commands, small touches.
 import './home.css';
+// bundled like the pages' own images (hashed file names in the build)
+import iconDown from '../../site/icon-down.png';
+import iconPhone from '../../site/icon-phone.png';
+import iconPaw from '../../site/icon-paw.png';
+import iconPlay from '../../site/icon-play.png';
 
 const INK = [0x4a, 0x3a, 0x34];
 
@@ -228,29 +233,29 @@ function suggest(kind: Device, info: Download | null, play: string) {
   const card = el('div', { class: 'modal-card pbox' });
   if (kind === 'android' && info) {
     card.append(
-      el('img', { class: 'icon', src: '/site/icon-phone.png', alt: '' }),
+      el('img', { class: 'icon', src: iconPhone, alt: '' }),
       el('h3', { textContent: '装个 Android App 吧' }),
       el('p', {}, 'App 里玩更顺手：猫猫的小纸条准时送到，返回键一层层退，拍的照片直接存进相册。', el('span', { class: 'meta', textContent: `版本 ${info.version} · ${mb(info.size)} MB · Android 7.0 以上` })),
-      el('a', { class: 'pbtn', href: `/download/${encodeURIComponent(info.file)}`, download: '猫窝.apk' }, el('img', { src: '/site/icon-down.png', alt: '' }), '下载 Android App'),
+      el('a', { class: 'pbtn', href: `/download/${encodeURIComponent(info.file)}`, download: '猫窝.apk' }, el('img', { src: iconDown, alt: '' }), '下载 Android App'),
       el('p', { class: 'fine', textContent: '安装时如果提示“未知来源”，在系统设置里允许浏览器安装应用就好。以后自己开了小镇，在 App 的登录页换个小镇就能去。' }),
       web,
     );
   } else if (kind === 'mac' && info) {
     card.append(
-      el('img', { class: 'icon', src: '/site/icon-paw.png', alt: '' }),
+      el('img', { class: 'icon', src: iconPaw, alt: '' }),
       el('h3', { textContent: '装个 Mac 版吧' }),
       el('p', {}, '小猫会住在屏幕右上角的菜单栏里：点一下就能摸摸、喂食、和它说话，也能打开完整的游戏窗口。', el('span', { class: 'meta', textContent: `版本 ${info.version} · ${mb(info.size)} MB · macOS ${info.minOS ?? '14'} 以上` })),
-      el('a', { class: 'pbtn', href: `/download/${encodeURIComponent(info.file)}` }, el('img', { src: '/site/icon-down.png', alt: '' }), '下载 Mac 版'),
+      el('a', { class: 'pbtn', href: `/download/${encodeURIComponent(info.file)}` }, el('img', { src: iconDown, alt: '' }), '下载 Mac 版'),
       el('p', { class: 'fine', textContent: '解压后把「猫窝」拖进「应用程序」。第一次打开时，macOS 会提示无法验证开发者：到「系统设置 → 隐私与安全性」点「仍要打开」（macOS 14 也可以右键点 App，选「打开」）。' }),
       web,
     );
   } else {
-    const open = el('a', { class: 'pbtn', href: play }, el('img', { src: '/site/icon-play.png', alt: '' }), '打开网页版');
+    const open = el('a', { class: 'pbtn', href: play }, el('img', { src: iconPlay, alt: '' }), '打开网页版');
     open.addEventListener('click', chooseWeb);
     const how = el('a', { href: '/#download', textContent: '看看怎么装' });
     how.addEventListener('click', close);
     card.append(
-      el('img', { class: 'icon', src: '/site/icon-phone.png', alt: '' }),
+      el('img', { class: 'icon', src: iconPhone, alt: '' }),
       el('h3', { textContent: '把猫窝放到主屏幕' }),
       el('p', { textContent: 'iPhone 版暂时不能直接下载（苹果只允许从 App Store 安装）。网页版可以像 App 一样用：在 Safari 里点底部的分享按钮，选「添加到主屏幕」。' }),
       open,
