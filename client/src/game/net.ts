@@ -27,6 +27,12 @@ export function clearLegacyToken() {
   }
 }
 
+/** Called when the server says the town is paused or closed (503 with a mode). */
+let shutHook: (() => void) | null = null;
+export function onShut(fn: () => void) {
+  shutHook = fn;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, msg: string) {
@@ -48,6 +54,7 @@ export async function api<T = any>(method: string, path: string, body?: unknown,
   }
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 503 && data && typeof data.mode === 'string') shutHook?.();
     // Only trust auth failures that come from our own server (JSON {error}); anything else is a hiccup.
     const ours = data && typeof data.error === 'string';
     throw new ApiError(ours ? res.status : res.status === 401 ? 502 : res.status, ours ? data.error : '服务器暂时连不上');
@@ -97,8 +104,8 @@ export class WorldSocket {
       this.connected = false;
       this.onState?.(false);
       clearInterval(this.pingTimer);
-      if (ev.code === 4003) {
-        // signed out elsewhere, deleted or suspended: don't hammer the server
+      if (ev.code === 4003 || ev.code === 4005) {
+        // signed out elsewhere, deleted or suspended (4003), or the town was paused or closed (4005): don't hammer the server
         this.closed = true;
         this.onKicked?.();
       }

@@ -12,6 +12,7 @@ import { ADMIN_TOKEN, DATA_DIR, HMAC_KEY } from './config';
 import { isHttps } from './security';
 import * as db from './db';
 import * as game from './game';
+import { townMode, setTownMode, DEFAULT_NOTICE, type TownMode } from './townmode';
 import { ITEMS } from '../../shared/items';
 import { POIS } from '../../shared/world';
 import { ageOf, bondLevel, moodWord } from '../../shared/stats';
@@ -156,10 +157,37 @@ route('GET', '/api/admin/overview', (r) => {
     cats: { total: count("SELECT COUNT(*) n FROM cats WHERE owner_id != 'town'") },
     reports: count("SELECT COUNT(*) n FROM reports WHERE status = 'open'"),
     moves: count("SELECT COUNT(*) n FROM move_requests WHERE status = 'pending'"),
+    town: townMode(),
     days,
     server: { startedAt: STARTED, uptime: Math.round((now - STARTED) / 1000), rss: process.memoryUsage().rss, dbBytes, node: process.version, worldTz: WORLD_TZ },
     llm: { active: llmEnabled(), model: llmSettings().model, calls: u.calls, failed: u.failed, cost: u.cost, currency: u.currency },
   };
+}, { auth: false });
+
+// ---------- open, paused (暂停) or closed (关服) ----------
+const MODES: TownMode[] = ['open', 'paused', 'closed'];
+route('GET', '/api/admin/mode', (r) => {
+  requireAdmin(r);
+  return { ...townMode(), defaults: DEFAULT_NOTICE };
+}, { auth: false });
+
+route('POST', '/api/admin/mode', (r) => {
+  requireAdmin(r);
+  const mode = r.body?.mode as TownMode;
+  if (!MODES.includes(mode)) throw new HttpError(400, '状态不对');
+  const notice = typeof r.body.notice === 'string' ? r.body.notice.slice(0, 300) : '';
+  const s = setTownMode(mode, notice);
+  // optionally, a letter to everyone (it also goes out as a notification to those who turned them on)
+  let letters = 0;
+  if (r.body.letter) {
+    const title = mode === 'open' ? '小镇重新开放啦' : mode === 'paused' ? '小镇暂停开放' : '小镇要关门了';
+    const text = mode === 'open' ? '小镇又开门啦，你的猫猫在窝里等你。' : s.notice;
+    for (const u of db.db.prepare('SELECT id FROM users WHERE banned = 0').all() as { id: string }[]) {
+      game.notify(u.id, 'town', title, text);
+      letters++;
+    }
+  }
+  return { ...s, letters };
 }, { auth: false });
 
 // ---------- the town, live ----------

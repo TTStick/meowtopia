@@ -1,0 +1,52 @@
+// Whether the town is open. An admin can pause it (暂停: it'll be back) or close it
+// (关服: for good). Either way the town stands still and the game itself is shut,
+// but players can still sign in, on the website too, and pack their cat up to take
+// to another town. Set from the admin panel; kept in the kv table.
+import { kvGet, kvSet } from './db';
+
+export type TownMode = 'open' | 'paused' | 'closed';
+
+export interface ModeState {
+  mode: TownMode;
+  notice: string; // what players see
+  since: number;
+}
+
+export const DEFAULT_NOTICE: Record<Exclude<TownMode, 'open'>, string> = {
+  paused: '小镇暂停开放一阵子，会再回来的。这段时间可以把猫猫打包带走，搬到你自己或别人开的小镇。',
+  closed: '这个小镇要关门了，谢谢你来过。请把猫猫打包带走，搬到你自己或别人开的小镇，它会带着猫窝、背包和日记一起过去。',
+};
+
+const KEY = 'town:mode';
+let state: ModeState | null = null;
+const listeners: ((s: ModeState) => void)[] = [];
+
+export function townMode(): ModeState {
+  return (state ??= kvGet<ModeState>(KEY) ?? { mode: 'open', notice: '', since: 0 });
+}
+export const isOpen = () => townMode().mode === 'open';
+
+export function setTownMode(mode: TownMode, notice = ''): ModeState {
+  state = { mode, notice: mode === 'open' ? '' : notice.trim() || DEFAULT_NOTICE[mode], since: Date.now() };
+  kvSet(KEY, state);
+  for (const l of listeners) l(state);
+  return state;
+}
+
+export function onModeChange(l: (s: ModeState) => void) {
+  listeners.push(l);
+}
+
+/**
+ * What still works while the town is paused or closed: reading (GET), signing in
+ * (but not signing up), packing the cat, withdrawing a move, deleting the account,
+ * and the admin panel.
+ */
+export function allowedWhileShut(method: string, path: string): boolean {
+  if (method === 'GET' || method === 'HEAD') return true;
+  if (path.startsWith('/api/admin/')) return true;
+  if (path.startsWith('/api/auth/')) return path !== '/api/auth/guest';
+  if (path === '/api/move/export' || path === '/api/account/delete') return true;
+  if (path === '/api/move/request') return method === 'DELETE';
+  return false;
+}

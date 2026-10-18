@@ -292,6 +292,8 @@ details.fine summary { cursor: pointer; color: var(--coral-d); }
 .trial-bar b { margin-right: 8px; }
 .trial-bar span { display: inline-block; }
 .trial-bar a { color: var(--ink); font-weight: 700; }
+.shut-bar { background: #f2b8a2; }
+.shut-bar span { display: inline; margin-right: 4px; }
 
 /* ---------- the deploy guide (deploy.html) ---------- */
 .guide-hero { min-height: 0; }

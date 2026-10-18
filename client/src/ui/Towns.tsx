@@ -94,8 +94,8 @@ export function TownPicker() {
                   {s?.trial && <span class="tag soft">体验服</span>}
                 </b>
                 <span class="muted">
-                  <i class={`dot ${s ? (s.ok ? 'on' : 'off') : ''}`} />
-                  {s ? (s.ok ? '开着' : '联系不上') : '看看在不在…'} · {new URL(t.url).host}
+                  <i class={`dot ${s ? (s.ok && (s.mode ?? 'open') === 'open' ? 'on' : 'off') : ''}`} />
+                  {s ? (!s.ok ? '联系不上' : s.mode === 'paused' ? '暂停开放中' : s.mode === 'closed' ? '要关门了' : '开着') : '看看在不在…'} · {new URL(t.url).host}
                 </span>
               </button>
               {!t.builtin && !here && (

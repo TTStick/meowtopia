@@ -8,6 +8,7 @@ import { TopBar, Hint, Toasts, NestBar, WorldBar, VisitBar, BuildTray, ConnBadge
 import { Panels } from './Panels';
 import { DialogHost } from './Dialog';
 import { TownPicker, Unreachable } from './Towns';
+import { TownShut } from './Moving';
 
 export function App() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -39,6 +40,7 @@ export function App() {
       {phase === 'loading' && <div class="onboard">{unreachable ? <Unreachable /> : <p class="muted">猫猫正在伸懒腰…</p>}</div>}
       {phase === 'welcome' && <Welcome />}
       {phase === 'adopt' && <Adopt />}
+      {phase === 'shut' && <TownShut />}
       {phase === 'game' && (
         <>
           <TopBar />

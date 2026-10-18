@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { updateUser, type UserRow } from './db';
 import { allow, clientIp, corsHeaders, fromApp, LIMITS, originAllowed, securityHeaders } from './security';
 import { sessionFromRequest, touchSession, type SessionRow } from './sessions';
+import { townMode, allowedWhileShut } from './townmode';
 
 import { HttpError } from './errors';
 export { HttpError };
@@ -88,6 +89,12 @@ export async function handleApi(req: IncomingMessage, res: ServerResponse): Prom
     if (!allow(`ip:${ip}`, ...LIMITS.ipGlobal)) throw new HttpError(429, '太快啦，歇一会儿再来');
     const r = routes.find((x) => x.method === method && x.re.test(url.pathname));
     if (!r) throw new HttpError(404, 'not found');
+    // a paused or closed town: only signing in, packing the cat up and the admin panel
+    const tm = townMode();
+    if (tm.mode !== 'open' && !allowedWhileShut(method, url.pathname)) {
+      send(res, 503, { error: tm.notice, mode: tm.mode });
+      return true;
+    }
     const m = r.re.exec(url.pathname)!;
     // CSRF: state-changing browser requests must be same-origin and carry our header.
     if (method !== 'GET' && method !== 'HEAD') {

@@ -2,6 +2,7 @@
 // appointments to play. Nothing here asks anyone to hurry: an unanswered knock
 // or invitation simply lapses, and a missed appointment is nobody's fault.
 import { route, HttpError, str, cleanText } from './http';
+import { isOpen } from './townmode';
 import * as db from './db';
 import * as game from './game';
 import { HOUSES, MY_HOUSE, houseDoor, HOME_SPAWN, POI_MAP, roomById } from '../../shared/world';
@@ -426,6 +427,7 @@ function tick() {
   }
 }
 setInterval(() => {
+  if (!isOpen()) return; // appointments wait while the town is shut
   try {
     tick();
   } catch (e) {

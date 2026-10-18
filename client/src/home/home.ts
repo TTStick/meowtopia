@@ -131,15 +131,27 @@ async function androidDownload() {
  */
 async function trialBanner() {
   let trial: boolean;
+  let mode = 'open';
+  let notice = '';
   try {
     const r = await fetch('/api/status', { cache: 'no-cache' });
     if (!r.ok) return;
-    trial = !!(await r.json()).trial;
+    const s = await r.json();
+    trial = !!s.trial;
+    mode = s.mode ?? 'open';
+    notice = s.notice ?? '';
   } catch {
     return; // keep the page as it is
   }
+  // a paused or closed town says so first; players can still come for their cats
+  const shut = document.querySelector<HTMLElement>('[data-shut]');
+  if (shut && mode !== 'open') {
+    shut.hidden = false;
+    shut.querySelector('[data-shut-title]')!.textContent = mode === 'paused' ? '小镇暂停开放' : '小镇要关门了';
+    shut.querySelector('[data-shut-notice]')!.textContent = notice;
+  }
   const bar = document.querySelector<HTMLElement>('[data-trial]');
-  if (bar) bar.hidden = !trial;
+  if (bar) bar.hidden = !trial || mode !== 'open';
   document.querySelectorAll<HTMLElement>('[data-cta]').forEach((el) => (el.hidden = el.dataset.cta !== (trial ? 'trial' : 'town')));
   const label = document.querySelector('[data-play-label]');
   if (label) label.textContent = trial ? '体验服' : '开始玩';

@@ -24,6 +24,7 @@ const { flushCats } = await import('./game');
 const { db } = await import('./db');
 const { WebSocketServer } = await import('ws');
 const { llmEnabled } = await import('./llm');
+const { isOpen } = await import('./townmode');
 
 migrateLegacyAccounts();
 onBan((uid) => kickUser(uid));
@@ -118,7 +119,7 @@ server.on('upgrade', (req, socket, head) => {
   };
   if (url.pathname !== '/ws') return reject(404);
   if (!allow(`ws:${ip}`, ...LIMITS.wsConnect) || (perIp.get(ip) ?? 0) >= MAX_PER_IP) return reject(429);
-  if (wss.clients.size >= MAX_CONNECTIONS) return reject(503);
+  if (wss.clients.size >= MAX_CONNECTIONS || !isOpen()) return reject(503);
   const origin = req.headers.origin as string | undefined;
   const sameSite = originAllowed(req, origin) && !fromApp(req);
   const found = sameSite ? sessionFromRequest(req) : null;

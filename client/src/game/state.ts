@@ -42,7 +42,8 @@ export interface VisitInfo {
 }
 
 export interface UIState {
-  phase: 'loading' | 'welcome' | 'adopt' | 'game';
+  phase: 'loading' | 'welcome' | 'adopt' | 'game' | 'shut'; // shut: the town is paused or closed
+  townMode: { mode: 'open' | 'paused' | 'closed'; notice: string };
   me: MeResponse | null;
   scene: 'nest' | 'world';
   panel: Panel;
@@ -79,6 +80,7 @@ export interface UIState {
 
 export const ui = new Store<UIState>({
   phase: 'loading',
+  townMode: { mode: 'open', notice: '' },
   me: null,
   scene: 'nest',
   panel: null,

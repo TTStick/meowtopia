@@ -1232,3 +1232,12 @@ textarea {
   font-weight: 600;
   text-decoration: none;
 }
+.trial-note.shut {
+  border-color: var(--coral);
+}
+.move-wait .guide-link {
+  color: var(--coral);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}

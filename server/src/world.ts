@@ -17,6 +17,7 @@ import * as db from './db';
 import { catLine, catDialogue, npcLine, npcStory, journalEntry, type NpcPersona } from './llm';
 import { befriend, bondOf, usedToday, markToday, usedEver, markEver, errandOf, setErrand } from './townsfolk';
 import { progressWish } from './wish';
+import { isOpen, onModeChange } from './townmode';
 
 const world = getWorld();
 const CAT_SPEED = 46;
@@ -1245,6 +1246,7 @@ function restoreCats() {
 // ---------- main loop ----------
 let lastAuto = 0;
 function tick() {
+  if (!isOpen()) return; // a paused or closed town stands still
   const now = Date.now();
   tickShow(now);
   for (const e of [...ents.values()]) {
@@ -1286,6 +1288,7 @@ export function startWorld() {
   game.keepCached((id) => ents.has(id));
   ensureResidents();
   restoreCats();
+  if (!isOpen()) shutTown();
   setInterval(tick, 250).unref();
 }
 
@@ -1319,6 +1322,18 @@ function snapshot(now: number): EntState[] {
   }
   return out;
 }
+
+/** Pausing or closing the town: everyone's cat goes home, and the pages are told to look again. */
+function shutTown() {
+  for (const e of [...ents.values()]) {
+    if (!e.cat || e.cat.ownerId === 'town') continue;
+    despawn(e, 'home');
+    e.cat.location = 'nest';
+    game.saveNow(e.cat);
+  }
+  for (const c of [...clients]) c.ws.close(4005, 'town');
+}
+onModeChange((s) => s.mode !== 'open' && shutTown());
 
 /** A banned or deleted account: drop its connections and send its cats home. */
 export function kickUser(uid: string, deletedCats: string[] = []) {

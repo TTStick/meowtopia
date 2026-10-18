@@ -96,8 +96,8 @@ const uptime = (s: number) => (s < 3600 ? `${Math.floor(s / 60)} 分钟` : s < 8
 function OverviewTab({ go }: { go: (t: Tab) => void }) {
   const [o, setO] = useState<Overview | null>(null);
   const [err, setErr] = useState('');
+  const load = () => adminApi<Overview>('GET', '/overview').then((x) => (setO(x), setErr('')), (e) => setErr(e.message));
   useEffect(() => {
-    const load = () => adminApi<Overview>('GET', '/overview').then((x) => (setO(x), setErr('')), (e) => setErr(e.message));
     void load();
     const t = setInterval(load, 15_000);
     return () => clearInterval(t);
@@ -112,6 +112,12 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
   );
   return (
     <>
+      {o.town.mode !== 'open' && (
+        <div class="card notice shut row between">
+          <span>{o.town.mode === 'paused' ? '⏸ 小镇暂停开放中' : '🌙 小镇已经关服'}：游戏停着，玩家只能登录、把猫猫打包带走。</span>
+          <button class="btn small" onClick={() => document.getElementById('town-mode')?.scrollIntoView({ behavior: 'smooth' })}>去看看</button>
+        </div>
+      )}
       {o.moves > 0 && (
         <div class="card notice row between">
           <span>📦 有 {o.moves} 份从别的小镇搬来的申请，等你看一看。</span>
@@ -158,7 +164,82 @@ function OverviewTab({ go }: { go: (t: Tab) => void }) {
           </dl>
         </div>
       </section>
+      <section id="town-mode">
+        <h2>小镇状态</h2>
+        <TownModeCard current={o.town} onSaved={() => void load()} />
+      </section>
     </>
+  );
+}
+
+// ---------------- open / paused / closed ----------------
+type TownMode = Overview['town']['mode'];
+const TOWN_MODES: [TownMode, string, string][] = [
+  ['open', '开放', '照常运行'],
+  ['paused', '暂停', '临时关一阵子，之后还会开'],
+  ['closed', '关服', '不再开了，请大家把猫带走'],
+];
+
+function TownModeCard({ current, onSaved }: { current: Overview['town']; onSaved: () => void }) {
+  const [mode, setMode] = useState<TownMode>(current.mode);
+  const [notice, setNotice] = useState(current.notice);
+  const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [letter, setLetter] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    adminApi<{ defaults: Record<string, string> }>('GET', '/mode').then((d) => setDefaults(d.defaults), () => {});
+  }, []);
+  const pick = (m: TownMode) => {
+    setMode(m);
+    // a fresh default for the new state, unless the admin wrote their own
+    if (!notice || Object.values(defaults).includes(notice) || notice === current.notice) setNotice(m === 'open' ? '' : m === current.mode ? current.notice : defaults[m] ?? '');
+  };
+  const save = async () => {
+    const what = mode === 'open' ? '重新开放小镇' : mode === 'paused' ? '暂停小镇' : '关闭小镇（关服）';
+    const more = mode === 'open' ? '大家又能进来玩了。' : '在线的玩家会马上看到提示，游戏和小镇都会停下来；大家仍然可以登录，把猫猫打包带走。';
+    if (!confirm(`${what}？${more}${letter ? '\n\n还会给所有玩家寄一封信。' : ''}`)) return;
+    setBusy(true);
+    try {
+      const r = await adminApi<{ letters: number }>('POST', '/mode', { mode, notice, letter });
+      if (letter) alert(`已经给 ${r.letters} 位玩家寄了信。`);
+      setLetter(false);
+      onSaved();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const changed = mode !== current.mode || (mode !== 'open' && notice !== current.notice);
+  return (
+    <div class="card town-mode">
+      <p>
+        现在：<b>{TOWN_MODES.find(([m]) => m === current.mode)?.[1]}</b>
+        {current.mode !== 'open' && current.since > 0 && <span class="muted small">（{new Date(current.since).toLocaleString('zh-CN', { hour12: false })} 起）</span>}
+      </p>
+      <p class="muted small">暂停或关服时，小镇停下来，新玩家进不来；已经在这里的玩家仍然可以登录（网页版也行），把猫猫打包成搬家包，带到自己或别人开的小镇。手机 App 平时也会在手机上存一份。准备关掉服务器前，先关服一段时间，让大家有时间搬走。</p>
+      <div class="row">
+        {TOWN_MODES.map(([m, label, desc]) => (
+          <label key={m} class="check mode-pick">
+            <input type="radio" name="town-mode" checked={mode === m} onChange={() => pick(m)} />
+            <b>{label}</b>
+            <span class="muted small">{desc}</span>
+          </label>
+        ))}
+      </div>
+      {mode !== 'open' && (
+        <textarea class="field" rows={3} maxLength={300} value={notice} placeholder={defaults[mode]} onInput={(e) => setNotice((e.target as HTMLTextAreaElement).value)} />
+      )}
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" checked={letter} onChange={(e) => setLetter((e.target as HTMLInputElement).checked)} />
+          同时给所有玩家寄一封信（开了通知的玩家会收到提醒）
+        </label>
+      </div>
+      <button class={mode === 'open' ? 'btn small' : 'btn small danger'} disabled={busy || (!changed && !letter)} onClick={save}>
+        {busy ? '正在保存…' : '保存'}
+      </button>
+    </div>
   );
 }
 

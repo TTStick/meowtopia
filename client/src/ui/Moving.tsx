@@ -280,3 +280,74 @@ export function MoveIn(p: { onBack: () => void }) {
     </div>
   );
 }
+
+// ---------- a paused or closed town ----------
+/** Instead of the game: what's happened, and packing the cat up to take along. */
+export function TownShut() {
+  const me = useStore(ui, (s) => s.me)!;
+  const tm = useStore(ui, (s) => s.townMode);
+  const [busy, setBusy] = useState(false);
+  const [packed, setPacked] = useState(false);
+  const own = me.cats.find((c) => c.ownerId === me.user.id && !c.coOwnerId);
+  const kept = keepsakeHere();
+  const pack = async () => {
+    if (!own) return;
+    setBusy(true);
+    try {
+      await acc.packForMove(own.name);
+      setPacked(true);
+      toast(`${own.name}的搬家包打好啦`, '📦');
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="onboard">
+      {own && <LiveCat genes={own.genes} outfit={own.outfit} age={ageOf(own.born)} height={140} cycle={['sit', 'loaf', 'groom']} />}
+      <h1 style={{ fontSize: '26px', letterSpacing: '1px' }}>{tm.mode === 'paused' ? '小镇暂停开放' : '小镇要关门了'}</h1>
+      <p class="sub" style={{ maxWidth: 360 }}>{tm.notice}</p>
+      <div class="card move-wait">
+        {own ? (
+          <>
+            <b>把{own.name}带走</b>
+            <p class="muted">打包成一个「搬家包」，带到你自己或别人开的小镇：在那边的领养页选「从别的小镇搬过来」。猫窝、背包、收藏和日记都会一起过去。</p>
+            <button class="btn primary" disabled={busy} onClick={pack}>
+              {busy ? '正在打包…' : packed ? '再打包一次' : `打包${own.name}`}
+            </button>
+            {isNative && kept && (
+              <p class="muted" style={{ fontSize: 13 }}>
+                这台设备上也带着{kept.cat.name}的搬家包（{when(kept.at)}）。换到别的小镇后，领养页会直接列出它。
+              </p>
+            )}
+            {isNative && (
+              <button class="btn small" onClick={() => ui.set({ towns: true })}>
+                换一个小镇
+              </button>
+            )}
+          </>
+        ) : (
+          <p class="muted">你在这里没有自己的猫猫要带走（一起养的猫会留在这里）。</p>
+        )}
+        <a class="guide-link" href={GUIDE_URL} target={isNative ? undefined : '_blank'} rel="noopener">
+          还没有小镇？看看怎么开一个 →
+        </a>
+      </div>
+      {tm.mode === 'paused' && <p class="muted" style={{ fontSize: 13, marginTop: 14 }}>小镇重新开放以后，回到这里就能接着玩。</p>}
+    </div>
+  );
+}
+
+/** On the welcome screen of a paused or closed town: no new players, but old ones can come for their cat. */
+export function ShutNote() {
+  const tm = useStore(ui, (s) => s.townMode);
+  if (tm.mode === 'open') return null;
+  return (
+    <div class="trial-note shut">
+      <b>{tm.mode === 'paused' ? '小镇暂停开放' : '小镇要关门了'}</b>
+      <span>{tm.notice}</span>
+      <span>已经在这里养猫的，用「找回我的猫窝」登录，就能把猫猫打包带走。</span>
+    </div>
+  );
+}

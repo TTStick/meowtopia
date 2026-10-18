@@ -60,7 +60,7 @@ function leading(h: Buffer) {
 
 before(async () => {
   server = spawn(process.execPath, ['--import', 'tsx', 'server/src/main.ts'], {
-    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_IP_BURST: '5000', CAT_BACKUPS: 'off', CAT_WORLD_TZ: String(12 - new Date().getUTCHours()) },
+    env: { ...process.env, PORT: String(PORT), CAT_DATA_DIR: dir, CAT_DB: join(dir, 'test.db'), ANTHROPIC_API_KEY: '', NODE_ENV: 'test', CAT_ADMIN_TOKEN: ADMIN, CAT_REGISTER_PER_HOUR: '200', CAT_IP_BURST: '5000', CAT_LOGIN_BURST: '200', CAT_BACKUPS: 'off', CAT_WORLD_TZ: String(12 - new Date().getUTCHours()) },
     stdio: 'ignore',
   });
   for (let i = 0; i < 100; i++) {
@@ -828,4 +828,60 @@ test('a town is not a trial server unless CAT_TRIAL says so', async () => {
   await p.call('POST', '/api/adopt', { name: '团团', seed: 9 });
   await p.call('GET', '/api/me');
   assert.ok(!(await p.call('GET', '/api/events')).data.some((e: { title: string }) => e.title.includes('体验服')), 'no trial letter on a normal town');
+});
+
+test('pausing and closing a town: the game stops, but players can still sign in and pack their cat', async () => {
+  const admin = new Player();
+  await admin.call('POST', '/api/admin/login', { token: ADMIN });
+  const p = new Player();
+  await p.join('要搬走的人');
+  const cat = (await p.call('POST', '/api/adopt', { name: '圆圆', seed: 31 })).data.cats[0].id;
+  const code = (await p.call('POST', '/api/auth/recovery-code')).data.code as string;
+  assert.equal((await p.call('POST', '/api/admin/mode', { mode: 'paused' })).status, 404, 'players cannot');
+
+  // pause, with a letter to everyone
+  const set = await admin.call('POST', '/api/admin/mode', { mode: 'paused', notice: '维护一下，很快回来', letter: true });
+  assert.equal(set.data.mode, 'paused');
+  assert.ok(set.data.letters >= 1);
+  const st = (await new Player().call('GET', '/api/status')).data;
+  assert.deepEqual([st.mode, st.notice], ['paused', '维护一下，很快回来']);
+  assert.equal((await admin.call('GET', '/api/admin/overview')).data.town.mode, 'paused');
+
+  // the game is shut: actions get the notice; no new players, no moving in, no town
+  const act = await p.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' });
+  assert.equal(act.status, 503);
+  assert.deepEqual([act.data.mode, act.data.error], ['paused', '维护一下，很快回来']);
+  assert.equal((await new Player().call('POST', '/api/auth/guest', {})).status, 503);
+  assert.equal((await p.call('POST', '/api/move/request', { pkg: {} })).status, 503);
+  const wsStatus = await new Promise<number>((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`);
+    ws.on('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0));
+    ws.on('open', () => (ws.close(), resolve(101)));
+    ws.on('error', () => {});
+  });
+  assert.equal(wsStatus, 503);
+
+  // but reading, signing in on another device and packing the cat up all still work
+  assert.equal((await p.call('GET', '/api/me')).status, 200);
+  assert.ok((await p.call('GET', '/api/events')).data.some((e: { title: string }) => e.title === '小镇暂停开放'));
+  const phone = new Player('app');
+  const back = await phone.call('POST', '/api/auth/code', { code, client: 'app' });
+  assert.equal(back.status, 200, JSON.stringify(back.data));
+  phone.token = back.data.token;
+  const pkg = await phone.call('POST', '/api/move/export', { keep: true });
+  assert.equal(pkg.status, 200, JSON.stringify(pkg.data));
+  assert.equal(JSON.parse(pkg.data.body).cat.name, '圆圆');
+
+  // closing: the same, with the default notice when none is given
+  await admin.call('POST', '/api/admin/mode', { mode: 'closed' });
+  const closed = (await new Player().call('GET', '/api/status')).data;
+  assert.equal(closed.mode, 'closed');
+  assert.match(closed.notice, /关门/);
+  assert.equal((await p.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' })).status, 503);
+  assert.equal((await p.call('POST', '/api/move/export')).status, 200);
+
+  // and open again
+  await admin.call('POST', '/api/admin/mode', { mode: 'open' });
+  assert.equal((await new Player().call('GET', '/api/status')).data.mode, 'open');
+  assert.equal((await p.call('POST', `/api/cat/${cat}/act`, { kind: 'pet' })).status, 200);
 });

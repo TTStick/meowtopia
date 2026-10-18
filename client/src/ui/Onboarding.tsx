@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { game } from '../game/game';
-import { toast } from '../game/state';
+import { toast, ui } from '../game/state';
 import { LiveCat } from './LiveCat';
 import { randomGenes, randomPersonality, coatName, traitWords, CAT_NAMES } from '../../../shared/genes';
 import { audio } from '../game/audio';
 import { hash3 } from '../../../shared/rng';
 import { prepareGuest } from '../game/pow';
 import { RecoverForm } from './Account';
-import { MoveIn, TrialNote } from './Moving';
+import { MoveIn, TrialNote, ShutNote } from './Moving';
+import { useStore } from '../game/store';
 import { TownLine } from './Towns';
 import { moveStatus } from '../game/account';
 import { keepsakesFromElsewhere } from '../game/keepsake';
 
 export function Welcome() {
   const [mode, setMode] = useState<'start' | 'name' | 'code'>('start');
+  const open = useStore(ui, (s) => s.townMode.mode === 'open');
   const [nick, setNick] = useState('');
   const [busy, setBusy] = useState(false);
   const heroGenes = useMemo(() => randomGenes((Date.now() / 86400000) | 0), []);
@@ -40,9 +42,11 @@ export function Welcome() {
       </p>
       {mode === 'start' && (
         <div class="actions">
-          <button class="btn primary" onClick={() => (audio.unlock(), void prepareGuest().catch(() => {}), setMode('name'))}>
-            开始养猫
-          </button>
+          {open && (
+            <button class="btn primary" onClick={() => (audio.unlock(), void prepareGuest().catch(() => {}), setMode('name'))}>
+              开始养猫
+            </button>
+          )}
           <button class="btn" onClick={() => setMode('code')}>
             找回我的猫窝
           </button>
@@ -60,7 +64,7 @@ export function Welcome() {
         </div>
       )}
       {mode === 'code' && <RecoverForm onBack={() => setMode('start')} />}
-      {mode === 'start' && <TrialNote />}
+      {mode === 'start' && (open ? <TrialNote /> : <ShutNote />)}
       {mode !== 'name' && <TownLine />}
     </div>
   );

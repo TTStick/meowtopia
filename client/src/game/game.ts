@@ -3,7 +3,7 @@ import { refreshKeepsake } from './keepsake';
 import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
-import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError } from './net';
+import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError, onShut } from './net';
 import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, matchSystemBars, onResume, initNativePush, handOffToWatch, onBackButton } from './platform';
 import { confirmBox, dismissDialog } from '../ui/Dialog';
 import { takeGuestPow } from './pow';
@@ -49,6 +49,8 @@ class Game {
     ro.observe(canvas);
     this.ws.onState = (c) => ui.set({ connected: c });
     this.ws.onKicked = () => location.reload();
+    // the town was paused or closed while we played: start over, which shows what's happened
+    onShut(() => ui.state.phase === 'game' && location.reload());
     let lastInv: unknown = null;
     ui.subscribe(() => {
       const inv = ui.state.me?.inventory;
@@ -110,9 +112,9 @@ class Game {
       void refreshKeepsake();
     });
     try {
-      const st = await api<{ llm: boolean; worldTz: number; trial?: boolean }>('GET', '/api/status');
+      const st = await api<{ llm: boolean; worldTz: number; trial?: boolean; mode?: 'open' | 'paused' | 'closed'; notice?: string }>('GET', '/api/status');
       setWorldTz(st.worldTz);
-      ui.set({ llm: !!st.llm, trial: !!st.trial });
+      ui.set({ llm: !!st.llm, trial: !!st.trial, townMode: { mode: st.mode ?? 'open', notice: st.notice ?? '' } });
     } catch {
       /* the boot loop below retries */
     }
@@ -137,6 +139,12 @@ class Game {
         const me = await api<MeResponse>('GET', '/api/me');
         ui.set({ unreachable: false });
         this.setMe(me);
+        if (ui.state.townMode.mode !== 'open') {
+          // a paused or closed town: no game, but the cat can still be packed up and taken along
+          ui.set({ phase: 'shut' });
+          void refreshKeepsake(true);
+          return;
+        }
         await this.enterGame();
         return;
       } catch (e) {

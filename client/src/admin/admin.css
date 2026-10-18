@@ -253,3 +253,7 @@ section { margin-bottom: 28px; }
 .notice { margin-bottom: 20px; background: #fff4dc; }
 .report .kv { margin: 8px 0; }
 .report .row + .row { margin-top: 8px; }
+.notice.shut { background: #fde2dc; }
+.town-mode textarea.field { width: 100%; min-height: 72px; margin: 8px 0; padding: 8px 10px; font: inherit; resize: vertical; }
+.town-mode .mode-pick { display: inline-flex; gap: 6px; align-items: baseline; margin-right: 18px; }
+.town-mode .row { margin: 6px 0; }

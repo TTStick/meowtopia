@@ -56,7 +56,7 @@ setInterval(() => {
 export const LIMITS = {
   ipGlobal: [Number(process.env.CAT_IP_BURST || 240), 4] as const, // any API call per IP (the tests, all from one IP, raise the burst)
   register: [Number(process.env.CAT_REGISTER_PER_HOUR || 6), Number(process.env.CAT_REGISTER_PER_HOUR || 6) / 3600] as const, // new guests per IP
-  login: [10, 10 / 900] as const, // recovery-code / passkey logins per IP
+  login: [Number(process.env.CAT_LOGIN_BURST || 10), 10 / 900] as const, // recovery-code / passkey logins per IP (the tests raise the burst)
   pair: [12, 12 / 600] as const, // watches asking for a pairing code, per IP
   llm: [30, 30 / 600] as const, // model-backed calls per user
   write: [60, 1] as const, // state-changing calls per user

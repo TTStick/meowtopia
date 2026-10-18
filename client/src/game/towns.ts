@@ -10,6 +10,7 @@ export interface Town {
 export interface TownStatus {
   ok: boolean;
   trial?: boolean;
+  mode?: 'open' | 'paused' | 'closed';
 }
 
 const LIST_KEY = 'catnest.towns';
@@ -80,7 +81,7 @@ export async function checkTown(url: string): Promise<TownStatus> {
     const r = await fetch(`${url}/api/status`, { signal: ctl.signal, cache: 'no-store' });
     if (!r.ok) return { ok: false };
     const s = await r.json();
-    return typeof s?.worldTz === 'number' ? { ok: true, trial: !!s.trial } : { ok: false };
+    return typeof s?.worldTz === 'number' ? { ok: true, trial: !!s.trial, mode: s.mode ?? 'open' } : { ok: false };
   } catch {
     return { ok: false };
   } finally {

@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA_DIR } from './config';
 import { apnsEnabled, sendApns } from './apns';
+import { isOpen } from './townmode';
 import { route, HttpError } from './http';
 import * as db from './db';
 import * as game from './game';
@@ -123,7 +124,7 @@ async function tick() {
       const e = evs[0];
       payload = { title: e.title, body: evs.length > 1 ? `${e.text}（还有${evs.length - 1}件小事）` : e.text, tag: e.kind };
       db.db.prepare('UPDATE events SET pushed = 1 WHERE user_id = ? AND pushed = 0').run(u.id);
-    } else if (ck.hour >= 20 && ck.hour < 21.5 && now - u.last_seen > 20 * 3600_000 && now - u.last_seen < 21 * 86400_000 && u.push_day !== ck.day) {
+    } else if (isOpen() && ck.hour >= 20 && ck.hour < 21.5 && now - u.last_seen > 20 * 3600_000 && now - u.last_seen < 21 * 86400_000 && u.push_day !== ck.day) {
       // one soft evening letter on days the user hasn't come by
       const cat = game.catsOf(u.id)[0];
       if (cat) {
