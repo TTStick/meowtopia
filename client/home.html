@@ -24,7 +24,7 @@
         <a href="#source">开源</a>
         <a href="/deploy/">开服</a>
       </nav>
-      <a class="pbtn small" href="/play/"><img src="/site/icon-play.png" alt="" /><span data-play-label>体验服</span></a>
+      <a class="pbtn small" href="/play/" data-play><img src="/site/icon-play.png" alt="" /><span data-play-label>体验服</span></a>
     </header>
 
     <div class="trial-bar" data-trial hidden>
@@ -40,7 +40,7 @@
         <div class="cta" data-cta="trial">
           <a class="pbtn big" href="/deploy/"><img src="/site/icon-star.png" alt="" />文档</a>
           <a class="pbtn alt" href="https://github.com/TTStick/meowtopia" rel="noopener"><img src="/site/icon-code.png" alt="" />开源</a>
-          <a class="pbtn alt" href="/play/"><img src="/site/icon-play.png" alt="" />体验服</a>
+          <a class="pbtn alt" href="/play/" data-play><img src="/site/icon-play.png" alt="" />体验服</a>
         </div>
         <p class="cta-note" data-cta="trial"><span>想和猫猫长长久久，跟着文档自己开一个小镇。</span><span>体验服只供短暂停留，不保证一直开着。</span></p>
         <div class="cta" data-cta="town" hidden>
@@ -217,10 +217,18 @@
           <article class="pbox">
             <img class="icon" src="/site/icon-phone.png" alt="" />
             <h3 class="px" data-px="14">Android</h3>
-            <p>直接下载安装，连接官方体验服。<span class="meta" data-apk-meta>Android 7.0 以上</span></p>
+            <p>直接下载安装。默认连官方体验服，登录页可以换到你自己的小镇。<span class="meta" data-apk-meta>Android 7.0 以上</span></p>
             <a class="pbtn" href="/download/meowtopia.apk" download="猫窝.apk" data-apk-link><img src="/site/icon-down.png" alt="" />下载 APK</a>
             <p class="fine">安装时如果提示“未知来源”，在系统设置里允许浏览器安装应用就好。通知不需要谷歌服务。</p>
             <p class="fine hash" data-apk-hash hidden></p>
+          </article>
+          <article class="pbox" data-mac-card>
+            <img class="icon" src="/site/icon-paw.png" alt="" />
+            <h3 class="px" data-px="14">Mac 菜单栏</h3>
+            <p>小猫住在屏幕右上角，点一下就能摸摸、喂食、和它说话，也能打开完整的游戏窗口。<span class="meta" data-mac-meta>macOS 14 以上 · Apple 芯片和 Intel 都能用</span></p>
+            <a class="pbtn" href="/download/meowtopia-mac.zip" data-mac-link><img src="/site/icon-down.png" alt="" />下载 Mac 版</a>
+            <p class="fine">解压后把「猫窝」拖进「应用程序」。第一次打开时，macOS 会提示无法验证开发者：到「系统设置 → 隐私与安全性」点「仍要打开」（macOS 14 也可以右键点 App，选「打开」）。</p>
+            <p class="fine hash" data-mac-hash hidden></p>
           </article>
           <article class="pbox">
             <img class="icon" src="/site/icon-code.png" alt="" />
@@ -239,7 +247,7 @@
             </details>
           </article>
         </div>
-        <p class="aside"><img src="/site/icon-star.png" alt="" /><span>Mac 菜单栏和 Apple Watch 版也在源代码里（<code>macos/</code>、<code>ios/</code>），用 Xcode 打开就能构建，默认连接我们的服务器。</span></p>
+        <p class="aside"><img src="/site/icon-star.png" alt="" /><span>Apple Watch 版也在源代码里（<code>ios/</code>），和 iPhone 版一起用 Xcode 构建。所有 App 默认连官方体验服，都能在登录页换到你自己的小镇。</span></p>
       </section>
 
       <section class="band" id="source">

@@ -60,6 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
         sync.start()
 
         DebugDump.startIfRequested(app: self)
+
+        // A downloaded app that only shows up as a tiny icon is easy to miss: the very
+        // first time, open the game window too (the cat stays in the menu bar after).
+        if !UserDefaults.standard.bool(forKey: "CatNestWelcomed") {
+            UserDefaults.standard.set(true, forKey: "CatNestWelcomed")
+            openGame()
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {

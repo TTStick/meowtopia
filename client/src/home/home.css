@@ -247,7 +247,7 @@ main > section { padding: 72px 0; }
 @media (max-width: 640px) { .calm .sleeper { display: none; } }
 
 /* downloads */
-.dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-top: 26px; align-items: start; }
+.dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-top: 26px; align-items: start; }
 .dl .icon { width: 48px; height: 48px; }
 .dl h3.px { margin-top: 10px; }
 .dl p { margin: 8px 0 14px; }
@@ -351,3 +351,15 @@ details.fine summary { cursor: pointer; color: var(--coral-d); }
   .big-steps > li::after { left: 15px; top: 40px; }
   .cmd { font-size: 13px; }
 }
+
+/* ---------- "there's an app for this": shown when phone / Mac visitors open the trial town ---------- */
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(35, 29, 63, 0.55); }
+.modal-card { width: min(420px, 100%); max-height: calc(100vh - 32px); overflow: auto; text-align: center; }
+.modal-card h3 { margin: 6px 0 8px; font-size: 21px; }
+.modal-card p { margin: 6px 0 12px; font-size: 15px; line-height: 1.7; }
+.modal-card .icon { width: 48px; height: 48px; }
+.modal-card .meta { display: block; color: var(--ink-soft); font-size: 13px; }
+.modal-card .pbtn { margin: 8px auto 4px; }
+.modal-card .fine { text-align: left; }
+.modal-card .later { display: inline-block; margin-top: 6px; padding: 8px 10px; background: none; border: 0; color: var(--ink-soft); font: inherit; font-size: 15px; text-decoration: underline; cursor: pointer; }
+.modal-card .later:hover { color: var(--coral-d); }

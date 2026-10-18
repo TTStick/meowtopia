@@ -18,6 +18,7 @@
   <a href="https://mycat.xioix.xin/play/"><b>▶ 体验服，马上玩</b></a> ·
   <a href="https://mycat.xioix.xin/deploy/"><b>🛠 开服教程</b></a> ·
   <a href="https://mycat.xioix.xin/download/meowtopia.apk"><b>⬇ Android 安装包</b></a> ·
+  <a href="https://mycat.xioix.xin/download/meowtopia-mac.zip"><b>⬇ Mac 版</b></a> ·
   <a href="docs/apps.md#ios-app"><b>iPhone：用 Xcode 安装</b></a>
 </p>
 

@@ -181,11 +181,29 @@ cd macos && xcodegen generate
 open macos/CatNest.xcodeproj
 ```
 
-调试版连接 `https://localhost`（本机 Docker）。正式版默认连接公共服务器 `https://mycat.xioix.xin`；连自己的服务器时，把 `macos/project.yml` 里 Release 的 `CATNEST_SERVER` 改成你的域名，已经装好的 App 也可以这样改：
+调试版连接 `https://localhost`（本机 Docker）。正式版默认连接公共服务器 `https://mycat.xioix.xin`，在游戏里「设置 → 所在的小镇」可以换到任何一个小镇。想让 App 默认连你的小镇，把 `macos/project.yml` 里 Release 的 `CATNEST_SERVER` 改成你的域名，已经装好的 App 也可以这样改：
 
 ```bash
 defaults write com.catnest.mac serverURL https://你的域名
 ```
+
+第一次打开时，App 会顺便打开游戏窗口（之后只住在菜单栏里）。
+
+### 打包给别人下载
+
+用 Release 配置构建一个同时支持 Apple 芯片和 Intel 的 App：
+
+```bash
+xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Release -derivedDataPath build/mac ONLY_ACTIVE_ARCH=NO build
+```
+
+再放到服务器的下载目录（官网「下载」里的 Mac 卡片会显示版本、大小和 SHA-256；服务器上没有 Mac 版时，这张卡片自动隐藏）：
+
+```bash
+./deploy/publish-mac.sh build/mac/Build/Products/Release/CatNest.app 1.0 root@你的服务器IP:/opt/catnest
+```
+
+这样打出来的 App 是本机签名（ad-hoc），没有经过苹果公证，别人第一次打开时会看到「无法验证开发者」，要在「系统设置 → 隐私与安全性」里点「仍要打开」。有 Apple 开发者账号的话，用 Developer ID 签名并公证（`notarytool`）后就没有这一步了。
 
 ## Apple Watch App
 

@@ -306,6 +306,16 @@ fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /
 
 以后发新版本，把版本号（`android/app/build.gradle` 里的 `versionCode` 加 1、`versionName` 改新）改好后重新打包、再运行一次这条命令即可。已经装了旧版的玩家直接覆盖安装，猫和登录都还在。
 
+### 发布 Mac 版
+
+同样放在 `downloads/` 里（`meowtopia-mac.zip` 和 `mac.json`）。在 Mac 上按 [docs/apps.md「打包给别人下载」](docs/apps.md#打包给别人下载) 构建，再运行：
+
+```bash
+./deploy/publish-mac.sh build/mac/Build/Products/Release/CatNest.app 1.0 root@你的服务器IP:/opt/catnest
+```
+
+安卓手机和 Mac 的访客点官网顶部和中间的「体验服 / 开始玩」时，如果服务器上有对应的安装包，会先看到「装个 App 吧」的建议，也可以继续用网页版（选过一次，30 天内不再问）。iPhone 访客会看到怎么把网页版添加到主屏幕。
+
 ## 12. 安全提醒
 
 - `.env` 里有管理口令，保持 `chmod 600`，不要提交或发给别人。
