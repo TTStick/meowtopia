@@ -74,6 +74,7 @@ server/   Node HTTP + WebSocket；SQLite 存储、REST API、小镇模拟、居�
 - `client/src/art/`：猫（6 种视角、30+ 动作、9 种花纹、装扮）、家具、小镇物件、居民、图标。
 - `client/src/game/actor.ts`：猫的动画控制器（姿态插值、眨眼、耳朵抖动、呼吸、视角切换的挤压过渡）。
 - `client/src/game/nestBrain.ts`：猫在窝里的效用 AI。
+- 画面的开销（手机上要留意）：`game.ts` 的主循环最多每秒画 60 帧（90 / 120 Hz 的屏幕不会画得更勤）；连续卡顿时降低画布分辨率（`Viewport.maxDpr`，每次降 0.25，最低 1），流畅一阵后再升回去。别在主画布上 `getImageData`：每次读回都让 GPU 停下来等，App 的状态栏颜色由场景的 `topColor()` 给出。小镇地面按 512 像素一块缓存成小画布，总量有上限（`CHUNK_BUDGET`），换下的画布立刻清零释放；夜里的光照层用一半分辨率画。
 - `server/src/world.ts`：小镇模拟（路径、探险行程、发现与拾取、相遇与对话、居民作息、陪逛和居民的小互动）。
 - `shared/rooms.ts`：七家店的室内布置。每间屋子放在小镇东边很远的「世界坐标」里，走路、相遇、谁在附近都和室外一样算；进出靠门，`shared/world.ts` 的 `planRoute` 会把一次行走拆成几段，过门时瞬移到另一边。
 - `server/src/townsfolk.ts`：猫和居民的熟悉度（每天有上限）、每天一次的小互动、送信的小委托。

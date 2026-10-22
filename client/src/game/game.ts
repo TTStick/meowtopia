@@ -1,4 +1,5 @@
 import { Viewport } from '../engine/view';
+import { parseHex } from '../engine/pen';
 import { refreshKeepsake } from './keepsake';
 import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
@@ -19,11 +20,15 @@ import { clockAt, phaseOf, setWorldTz } from '../../../shared/time';
 import { now as clockNow } from './clock';
 import type { ServerMsg } from '../../../shared/protocol';
 
+const FRAME = 1000 / 60;
+
 export interface Scene {
   update(dt: number, T: number): void;
   draw(v: Viewport, T: number): void;
   fit(v: Viewport): void;
   makeInput(v: Viewport): import('../engine/input').InputHandler;
+  /** The colour along the top of the screen (#rrggbb), for the phone's status bar. */
+  topColor?(): string;
 }
 
 class Game {
@@ -34,7 +39,11 @@ class Game {
   ws = new WorldSocket();
   private scene: Scene | null = null;
   private last = 0;
+  private lastVsync = 0;
+  private owed = 0;
   private T = 0;
+  /** Frame pacing: how the last frames went, to lower (or bring back) the canvas resolution. */
+  private pace = { frames: 0, time: 0, slow: 0, good: 0, slowAt: 9, tried: 0, capped: false };
   private savedLayout: NestLayout | null = null;
   private running = false;
 
@@ -67,12 +76,10 @@ class Game {
       if (s.phase !== 'loading' || s.unreachable) hideSplash();
       if (!isNative) return;
       if (s.phase !== 'game') return matchSystemBars([246, 238, 223]); // the cream onboarding pages
-      try {
-        const px = canvas.getContext('2d')!.getImageData(Math.floor(canvas.width / 2), 1, 1, 1).data;
-        if (px[3] > 0) matchSystemBars([px[0], px[1], px[2]]);
-      } catch {
-        /* canvas not ready */
-      }
+      // the scene says what it drew up there: reading the pixel back from the canvas would make
+      // the GPU stop and wait every time, a hitch on phones (and can push the canvas off the GPU)
+      const top = this.scene?.topColor?.();
+      if (top) matchSystemBars(parseHex(top));
     };
     ui.subscribe(chrome);
     if (isNative) setInterval(chrome, 1500);
@@ -461,14 +468,28 @@ class Game {
 
   private setScene(s: Scene) {
     this.scene = s;
+    // frame times from one scene say nothing about the next (the town is a lot more to draw than the nest)
+    Object.assign(this.pace, { frames: 0, time: 0, slow: 0, good: 0, tried: 0 });
     s.fit(this.view);
     this.input.handler = s.makeInput(this.view);
   }
 
   // ---------- loop ----------
   private frame(ts: number) {
-    const dt = Math.min(0.05, (ts - this.last) / 1000 || 0.016);
+    // Screens that refresh 90 or 120 times a second would have the whole town drawn that often.
+    // 60 frames a second is plenty, and on those phones it halves the work (and the heat).
+    const vsync = this.lastVsync ? ts - this.lastVsync : FRAME;
+    this.lastVsync = ts;
+    this.owed = Math.min(this.owed + vsync, FRAME * 3);
+    if (this.owed < FRAME - 1.5) {
+      requestAnimationFrame((t) => this.frame(t));
+      return;
+    }
+    this.owed = Math.max(0, this.owed - FRAME);
+    const gap = ts - this.last;
+    const dt = Math.min(0.05, gap / 1000 || 0.016);
     this.last = ts;
+    this.keepPace(gap);
     this.T += dt;
     if (this.scene) {
       try {
@@ -484,6 +505,50 @@ class Game {
       ctx.fillRect(0, 0, this.view.w, this.view.h);
     }
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /**
+   * A device that can't draw the scene 40 times a second gets a lower canvas resolution, a
+   * step at a time (2 → 1.75 → … → 1 canvas pixels per CSS pixel); after a smooth spell it
+   * tries one step finer again, though not where it was slow until a longer one. If a step down
+   * doesn't make it faster, the frame rate is capped (battery saver, say): undo it and leave it.
+   */
+  private keepPace(gap: number) {
+    if (gap <= 0 || gap > 250) return; // the first frame, or back from the background
+    const p = this.pace;
+    p.frames++;
+    p.time += gap;
+    if (p.frames < 90) return;
+    const avg = p.time / p.frames;
+    p.frames = p.time = 0;
+    const v = this.view;
+    const native = Math.min(2, window.devicePixelRatio || 1);
+    const cur = Math.min(v.maxDpr, native);
+    const tried = p.tried;
+    p.tried = 0;
+    if (tried && avg > tried * 0.88) {
+      p.capped = true;
+      v.maxDpr = Math.min(native, cur + 0.25);
+    } else if (avg > 25) {
+      p.good = 0;
+      if (p.capped || ++p.slow < 2 || cur <= 1) return;
+      p.slow = 0;
+      p.slowAt = Math.min(p.slowAt, cur);
+      p.tried = avg;
+      v.maxDpr = Math.max(1, cur - 0.25);
+    } else if (avg < 18) {
+      p.slow = 0;
+      // a minute and a half of smooth going: forget where it was slow (the phone cooled down, other apps closed)
+      if (++p.good >= 60) p.slowAt = 9;
+      if (p.good < 12 || cur >= native || cur + 0.25 >= p.slowAt) return;
+      p.good = 0;
+      v.maxDpr = cur + 0.25;
+    } else {
+      p.slow = p.good = 0;
+      return;
+    }
+    v.resize();
+    if (import.meta.env.DEV) console.info(`[pace] ${(1000 / avg).toFixed(0)} fps → canvas at ${v.maxDpr}x`);
   }
 
   // ---------- speech ----------

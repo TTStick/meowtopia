@@ -223,6 +223,11 @@ export class NestScene implements NestHost {
   hour() {
     return clock.localHour();
   }
+  /** For the phone's status bar: the top of the backdrop drawn in draw(). */
+  topColor() {
+    return mix('#f6eedf', '#2e3150', this.night() * 0.85);
+  }
+
   night() {
     return 1 - daylight(this.hour());
   }

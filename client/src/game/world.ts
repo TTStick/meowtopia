@@ -29,6 +29,17 @@ interface GameLike {
 const CHUNK = 16; // tiles per chunk
 const INK_TEXT = '#4a3a34';
 const CPX = CHUNK * TILE;
+/** Ground colours by season (spring, summer, autumn, winter). */
+const GROUND = {
+  grass: ['#cfe6ae', '#cfe6ae', '#d9e6b2', '#e4ebde'],
+  forest: ['#b9d99a', '#b2d394', '#cdd59a', '#d6e0d2'],
+  hill: ['#d5ebb4', '#d2e8ae', '#e2e2ac', '#eef1ea'],
+  field: ['#dde8b0', '#e6e3a8', '#eadbb0', '#ecebe4'],
+  bamboo: ['#b4d79c', '#a9d293', '#c6d59c', '#d8e2d2'],
+  orchard: ['#d6ebb0', '#cbe6a6', '#dfe2a6', '#e8ede2'],
+};
+/** Ground-chunk pictures kept at most (canvas pixels): about 80 MB; phones run short of GPU memory long before the 40 chunks once kept. */
+const CHUNK_BUDGET = 20e6;
 const CAT_SPEED = 46;
 
 interface WEnt {
@@ -53,6 +64,8 @@ interface WEnt {
 }
 
 // tall things fade when my cat walks behind them; leafy things sway in the wind
+/** Props that give light at night. */
+const LIGHTS = new Set<PropKind>(['lamp', 'lanterns', 'lighthouse', 'campfire', 'stageback', 'stagelight', 'stonelamp', 'gazebo', 'house', 'shop', 'fountain']);
 const FADE = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'house', 'shop', 'windmill', 'lighthouse', 'fruittree', 'bamboo', 'palm', 'gazebo', 'tent']);
 const SWAY = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'reed', 'crop', 'flower', 'bush', 'fruittree', 'bamboo', 'palm']);
 
@@ -94,6 +107,7 @@ export class WorldScene implements Scene {
   private lastSend = 0;
   private critters: Critter[] = [];
   private light: HTMLCanvasElement | null = null;
+  private lamps: Prop[] | null = null;
   private pen: Pen | null = null;
   private v: Viewport | null = null;
   private dragPan = false;
@@ -644,9 +658,10 @@ export class WorldScene implements Scene {
   }
 
   // ---------------- drawing helpers ----------------
-  private bucket(v: Viewport) {
+  /** The resolution to draw cached pictures at; no finer than `max` (each step up is a lot more GPU memory). */
+  private bucket(v: Viewport, max: number) {
     const s = v.zoom * v.dpr;
-    const steps = [0.75, 1, 1.5, 2, 2.5, 3, 4];
+    const steps = [0.75, 1, 1.5, 2, 2.5, 3, 4].filter((st) => st <= max);
     let best = steps[0];
     for (const st of steps) if (Math.abs(st - s) < Math.abs(best - s)) best = st;
     return best;
@@ -671,9 +686,16 @@ export class WorldScene implements Scene {
     ctx.translate(-cx * CPX, -cy * CPX);
     this.paintGround(ctx, cx, cy, season);
     this.chunks.set(key, { c, used: this.T });
-    if (this.chunks.size > 40) {
-      const old = [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used).slice(0, 10);
-      for (const [k] of old) this.chunks.delete(k);
+    // over budget: let go of the ones not seen for longest (never one on screen now)
+    let px = 0;
+    for (const ch of this.chunks.values()) px += ch.c.width * ch.c.height;
+    if (px > CHUNK_BUDGET) {
+      for (const [k, ch] of [...this.chunks.entries()].sort((a, b) => a[1].used - b[1].used)) {
+        if (px <= CHUNK_BUDGET || ch.used >= this.T) break;
+        px -= ch.c.width * ch.c.height;
+        this.chunks.delete(k);
+        release(ch.c);
+      }
     }
     return c;
   }
@@ -681,12 +703,12 @@ export class WorldScene implements Scene {
   private paintGround(ctx: CanvasRenderingContext2D, cx: number, cy: number, season: number) {
     const pen = new Pen(ctx).begin(cx * 31 + cy * 7, 0.5, 1.6);
     const tx0 = cx * CHUNK - 1, ty0 = cy * CHUNK - 1, tx1 = tx0 + CHUNK + 2, ty1 = ty0 + CHUNK + 2;
-    const grass = ['#cfe6ae', '#cfe6ae', '#d9e6b2', '#e4ebde'][season];
-    const forest = ['#b9d99a', '#b2d394', '#cdd59a', '#d6e0d2'][season];
-    const hill = ['#d5ebb4', '#d2e8ae', '#e2e2ac', '#eef1ea'][season];
-    const field = ['#dde8b0', '#e6e3a8', '#eadbb0', '#ecebe4'][season];
-    const bamboo = ['#b4d79c', '#a9d293', '#c6d59c', '#d8e2d2'][season];
-    const orchard = ['#d6ebb0', '#cbe6a6', '#dfe2a6', '#e8ede2'][season];
+    const grass = GROUND.grass[season];
+    const forest = GROUND.forest[season];
+    const hill = GROUND.hill[season];
+    const field = GROUND.field[season];
+    const bamboo = GROUND.bamboo[season];
+    const orchard = GROUND.orchard[season];
     // base
     for (let ty = ty0; ty < ty1; ty++)
       for (let tx = tx0; tx < tx1; tx++) {
@@ -881,14 +903,17 @@ export class WorldScene implements Scene {
     const night = 1 - day;
     const wthr = clock.weather();
     const season = ck.season;
-    const scale = this.bucket(v);
+    const scale = this.bucket(v, 2.5);
     if (scale !== this.chunkScale) {
+      for (const ch of this.chunks.values()) release(ch.c);
       this.chunks.clear();
       this.chunkScale = scale;
     }
-    if (scale !== this.spriteScale) {
+    const spriteScale = this.bucket(v, 3);
+    if (spriteScale !== this.spriteScale) {
+      for (const sp of this.sprites.values()) release(sp.c);
       this.sprites.clear();
-      this.spriteScale = scale;
+      this.spriteScale = spriteScale;
     }
     v.screen();
     ctx.fillStyle = '#8fc3e3';
@@ -973,7 +998,7 @@ export class WorldScene implements Scene {
       items.push({
         y: flat ? p.y - 200 : p.y,
         f: () => {
-          const sp = this.getSprite(p, scale, pc);
+          const sp = this.getSprite(p, spriteScale, pc);
           ctx.save();
           if (focus && focus.y < p.y - 4 && FADE.has(p.k)) {
             const fx = focus.x, fy = focus.y - 16;
@@ -1601,70 +1626,104 @@ export class WorldScene implements Scene {
   private drawLighting(v: Viewport, night: number, dusk: number, T: number) {
     if (night < 0.05 && dusk < 0.05) return;
     const ctx = v.ctx;
+    if (night <= 0.05) {
+      // dusk: only a warm wash over everything
+      v.screen();
+      ctx.fillStyle = `rgba(255,140,70,${0.14 * dusk})`;
+      ctx.fillRect(0, 0, v.w, v.h);
+      return;
+    }
+    // the dark, with the lights cut out of it, is all soft edges: half the resolution is plenty
+    // (a quarter of the pixels to fill, every frame, on phones too)
+    const R = 0.5;
     if (!this.light) this.light = document.createElement('canvas');
     const L = this.light;
-    if (L.width !== v.canvas.width || L.height !== v.canvas.height) {
-      L.width = v.canvas.width;
-      L.height = v.canvas.height;
+    const lw = Math.ceil(v.canvas.width * R), lh = Math.ceil(v.canvas.height * R);
+    if (L.width !== lw || L.height !== lh) {
+      L.width = lw;
+      L.height = lh;
     }
     const lc = L.getContext('2d')!;
     lc.setTransform(1, 0, 0, 1, 0, 0);
     lc.globalCompositeOperation = 'source-over';
     lc.clearRect(0, 0, L.width, L.height);
-    lc.fillStyle = night > 0.05 ? `rgba(18,26,78,${0.62 * night})` : `rgba(255,140,70,${0.14 * dusk})`;
+    lc.fillStyle = `rgba(18,26,78,${0.62 * night})`;
     lc.fillRect(0, 0, L.width, L.height);
-    if (night > 0.05) {
-      const z = v.zoom * v.dpr;
-      lc.setTransform(z, 0, 0, z, v.dpr * (v.w / 2 - v.camX * v.zoom), v.dpr * (v.midY - v.camY * v.zoom));
-      lc.globalCompositeOperation = 'destination-out';
-      const [bx0, by0, bx1, by1] = v.bounds(200);
-      const lights: [number, number, number, number][] = [];
-      for (const p of this.w.props) {
-        if (p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) continue;
-        if (p.season !== undefined && p.season !== clock.season()) continue;
-        if (p.k === 'lamp') lights.push([p.x, p.y - 66, 120, 1]);
-        else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
-        else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
-        else if (p.k === 'campfire') lights.push([p.x, p.y - 16, 170, 1]);
-        else if (p.k === 'stageback') {
-          for (let i = 0; i < 5; i++) lights.push([p.x - 150 + i * 75, p.y - 182, 56, 0.8]);
-          if (this.show?.live) lights.push([p.x, p.y + 64, 230, 1]);
-        } else if (p.k === 'stagelight' && this.show?.live) lights.push([p.x, p.y - 74, 60, 0.9]);
-        else if (p.k === 'stonelamp') lights.push([p.x, p.y - 26, 70, 0.8]);
-        else if (p.k === 'gazebo') lights.push([p.x, p.y - 52, 80, 0.8]);
-        else if (p.k === 'house' || p.k === 'shop') {
-          const s = p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136);
-          const off = p.k === 'shop' ? 70 : 42;
-          lights.push([p.x - off * s, p.y - 50 * s, 70, 0.8], [p.x + off * s, p.y - 50 * s, 70, 0.8], [p.x, p.y - 20 * s, 60, 0.6]);
-        } else if (p.k === 'fountain') lights.push([p.x, p.y - 20, 80, 0.4]);
-      }
-      for (const e of this.ents.values()) lights.push([e.x, e.y - 20, e.mine ? 80 : 34, e.mine ? 0.7 : 0.35]);
-      for (const c of this.critters) if (c.k === 'firefly') lights.push([c.x, c.y - c.z, 22, 0.5]);
-      for (const [x, y, r, a] of lights) {
-        const g = lc.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, `rgba(0,0,0,${a})`);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        lc.fillStyle = g;
-        lc.fillRect(x - r, y - r, r * 2, r * 2);
-      }
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(L, 0, 0);
-      v.world();
-      ctx.globalCompositeOperation = 'lighter';
-      for (const [x, y, r, a] of lights) {
-        if (a < 0.75) continue;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r * 0.7);
-        g.addColorStop(0, `rgba(255,190,110,${0.16 * night})`);
-        g.addColorStop(1, 'rgba(255,190,110,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
-      }
-      ctx.globalCompositeOperation = 'source-over';
-    } else {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(L, 0, 0);
+    const z = v.zoom * v.dpr * R;
+    lc.setTransform(z, 0, 0, z, R * v.dpr * (v.w / 2 - v.camX * v.zoom), R * v.dpr * (v.midY - v.camY * v.zoom));
+    lc.globalCompositeOperation = 'destination-out';
+    const [bx0, by0, bx1, by1] = v.bounds(200);
+    const lights: [number, number, number, number][] = [];
+    this.lamps ??= this.w.props.filter((p) => LIGHTS.has(p.k));
+    for (const p of this.lamps) {
+      if (p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) continue;
+      if (p.season !== undefined && p.season !== clock.season()) continue;
+      if (p.k === 'lamp') lights.push([p.x, p.y - 66, 120, 1]);
+      else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
+      else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
+      else if (p.k === 'campfire') lights.push([p.x, p.y - 16, 170, 1]);
+      else if (p.k === 'stageback') {
+        for (let i = 0; i < 5; i++) lights.push([p.x - 150 + i * 75, p.y - 182, 56, 0.8]);
+        if (this.show?.live) lights.push([p.x, p.y + 64, 230, 1]);
+      } else if (p.k === 'stagelight' && this.show?.live) lights.push([p.x, p.y - 74, 60, 0.9]);
+      else if (p.k === 'stonelamp') lights.push([p.x, p.y - 26, 70, 0.8]);
+      else if (p.k === 'gazebo') lights.push([p.x, p.y - 52, 80, 0.8]);
+      else if (p.k === 'house' || p.k === 'shop') {
+        const s = p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136);
+        const off = p.k === 'shop' ? 70 : 42;
+        lights.push([p.x - off * s, p.y - 50 * s, 70, 0.8], [p.x + off * s, p.y - 50 * s, 70, 0.8], [p.x, p.y - 20 * s, 60, 0.6]);
+      } else if (p.k === 'fountain') lights.push([p.x, p.y - 20, 80, 0.4]);
     }
+    for (const e of this.ents.values()) lights.push([e.x, e.y - 20, e.mine ? 80 : 34, e.mine ? 0.7 : 0.35]);
+    for (const c of this.critters) if (c.k === 'firefly') lights.push([c.x, c.y - c.z, 22, 0.5]);
+    for (const [x, y, r, a] of lights) {
+      const g = lc.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(0,0,0,${a})`);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      lc.fillStyle = g;
+      lc.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(L, 0, 0, v.canvas.width, v.canvas.height);
+    v.world();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, r, a] of lights) {
+      if (a < 0.75) continue;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 0.7);
+      g.addColorStop(0, `rgba(255,190,110,${0.16 * night})`);
+      g.addColorStop(1, 'rgba(255,190,110,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
     void T;
+  }
+
+  /** For the phone's status bar: the ground along the top of the screen (or a shop's backdrop), in the light of the hour. */
+  topColor() {
+    const ck = clock.worldClock();
+    const night = 1 - daylight(ck.hour);
+    if (roomAt(this.camX, this.camY)) return mix('#f3e7d3', '#2e3150', night * 0.85);
+    const v = this.v;
+    const [x, y] = v ? v.toWorld(v.w / 2, 1) : [this.camX, this.camY];
+    const t = this.terAt(Math.floor(x / TILE), Math.floor(y / TILE));
+    const s = ck.season;
+    const ground =
+      t === Ter.Forest ? GROUND.forest[s]
+      : t === Ter.Hill ? GROUND.hill[s]
+      : t === Ter.Field ? GROUND.field[s]
+      : t === Ter.Bamboo ? GROUND.bamboo[s]
+      : t === Ter.Orchard ? GROUND.orchard[s]
+      : t === Ter.Sand ? '#f4e4bf'
+      : t === Ter.Path ? '#ecdcc0'
+      : t === Ter.Plaza ? '#efe4d2'
+      : t === Ter.Deep ? '#93c6e3'
+      : t === Ter.Water || t === Ter.Wood || t === Ter.Stone ? '#a9d6ec'
+      : GROUND.grass[s];
+    // the same tint drawLighting lays over the scene
+    if (night > 0.05) return mix(ground, '#121a4e', 0.62 * night);
+    const dusk = sunset(ck.hour);
+    return dusk > 0.05 ? mix(ground, '#ff8c46', 0.14 * dusk) : ground;
   }
 
   // ---------------- input ----------------
@@ -1805,6 +1864,11 @@ export class WorldScene implements Scene {
   visitTarget(id: string) {
     void this.g.visit(id);
   }
+}
+
+/** Give a canvas's memory back now (phones count GPU memory closely), not whenever it's collected. */
+function release(c: HTMLCanvasElement) {
+  c.width = c.height = 0;
 }
 
 export { BUILDINGS };

@@ -5,6 +5,8 @@ export class Viewport {
   ctx: CanvasRenderingContext2D;
   pen: Pen;
   dpr = 1;
+  /** The most canvas pixels per CSS pixel; lowered while a slow device can't keep up (see Game.pace). */
+  maxDpr = 2;
   w = 0;
   h = 0;
   camX = 0;
@@ -22,7 +24,7 @@ export class Viewport {
   }
 
   resize() {
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.dpr = Math.min(this.maxDpr, window.devicePixelRatio || 1);
     const r = this.canvas.getBoundingClientRect();
     this.w = Math.max(1, r.width);
     this.h = Math.max(1, r.height);
