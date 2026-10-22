@@ -143,7 +143,7 @@ docker compose up -d
 
 ## 6. 国内服务器下载慢 / 内存小
 
-**方法一：换源。** 在 `.env` 里加上 `NPM_REGISTRY=https://registry.npmmirror.com`。如果拉取 Docker 基础镜像也很慢，可以在 `/etc/docker/daemon.json` 里配置你所用云厂商提供的镜像加速地址，然后重启 Docker。
+**方法一：换源。** 在 `.env` 里加上 `NPM_REGISTRY=https://registry.npmmirror.com` 和 `GOPROXY=https://goproxy.cn,direct`。如果拉取 Docker 基础镜像也很慢，可以在 `/etc/docker/daemon.json` 里配置你所用云厂商提供的镜像加速地址，然后重启 Docker。
 
 **方法二：用预构建镜像包。** 如果拿到了 `catnest-images-amd64-*.tar.gz`（已经编译好的游戏镜像和 Caddy 镜像，适用于 x86_64 服务器），把它和项目放在同一目录（`/opt/catnest/` 或 `/opt/`），再运行 `./deploy/setup.sh 你的域名`。脚本会直接导入镜像，服务器上不需要联网下载依赖，也不需要编译，1G 内存也够用。
 
@@ -287,6 +287,8 @@ cd /opt/catnest && git pull && ./deploy/setup.sh
 ```
 
 用 ZIP 装的：下载新的 ZIP，解压后覆盖到 `/opt/catnest`，再运行 `./deploy/setup.sh`。
+
+`setup.sh` 构建时会拉取最新的 Node 和 Caddy 基础镜像，它们的安全补丁随每次更新一起装上。Node、Go（Caddy 用它写成）出了安全更新时，即使猫窝本身没有新版本，也可以运行一次 `./deploy/setup.sh` 补上。
 
 ## 10. 常见问题
 

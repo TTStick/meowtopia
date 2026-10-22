@@ -35,7 +35,12 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   caddy:
-    image: caddy:2-alpine
+    # Caddy rebuilt with a patched Go (see deploy/caddy/Dockerfile)
+    build:
+      context: deploy/caddy
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    image: catnest-caddy:latest
     restart: unless-stopped
     depends_on:
       app:

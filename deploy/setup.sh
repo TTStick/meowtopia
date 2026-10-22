@@ -50,7 +50,9 @@ if [ -n "$bundle" ]; then
   docker compose up -d
 else
   say "构建镜像并启动（第一次大约需要几分钟）"
-  docker compose up -d --build
+  # --pull: build on the newest Node / Caddy base images, so their security fixes come with every update
+  docker compose build --pull
+  docker compose up -d
 fi
 
 # ---------- 等待就绪 ----------
