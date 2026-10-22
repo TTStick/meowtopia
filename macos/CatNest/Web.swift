@@ -50,9 +50,61 @@ private final class WeakBridge: NSObject, WKScriptMessageHandler {
     }
 }
 
-/// Shared navigation behaviour: stay on our site, open everything else in the browser.
+/// Shared navigation behaviour: stay on our site, open everything else in the browser,
+/// and load a page again when it couldn't be reached (just after the Mac starts, the
+/// network often isn't up yet).
+@MainActor
 final class WebNavigator: NSObject, WKNavigationDelegate, WKUIDelegate {
     static let shared = WebNavigator()
+
+    private final class Failed {
+        weak var view: WKWebView?
+        let url: URL
+        var tries = 0
+        init(_ view: WKWebView, _ url: URL) {
+            self.view = view
+            self.url = url
+        }
+    }
+    private var failed: [ObjectIdentifier: Failed] = [:]
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        couldNotLoad(webView, error)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        couldNotLoad(webView, error)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        failed[ObjectIdentifier(webView)] = nil
+    }
+
+    private func couldNotLoad(_ wv: WKWebView, _ error: Error) {
+        let e = error as NSError
+        // another load took over, or the link went to the browser: nothing failed
+        if (e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled) || (e.domain == "WebKitErrorDomain" && e.code == 102) { return }
+        guard let url = (e.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? wv.url, url.scheme?.hasPrefix("http") == true else { return }
+        let key = ObjectIdentifier(wv)
+        let f = failed[key] ?? Failed(wv, url)
+        f.tries += 1
+        DebugDump.note("page \(url.path) didn't load (\(e.code)), try \(f.tries)")
+        failed[key] = f
+        // again in 5 s, 10 s, 20 s … at most a minute apart (and at once when the network comes back)
+        DispatchQueue.main.asyncAfter(deadline: .now() + min(60, 5 * pow(2, Double(f.tries - 1)))) { [weak self, weak wv] in
+            MainActor.assumeIsolated {
+                guard let self, let wv, self.failed[key] === f else { return }
+                wv.load(URLRequest(url: f.url))
+            }
+        }
+    }
+
+    /// The network is back: try the pages that didn't load right away.
+    func retryNow() {
+        for (key, f) in failed {
+            if let v = f.view { v.load(URLRequest(url: f.url)) } else { failed[key] = nil }
+        }
+    }
 
     func webView(_ webView: WKWebView, respondTo challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
         Server.handle(challenge)

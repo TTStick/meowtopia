@@ -20,6 +20,8 @@ enum DebugDump {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         log("dump started, server \(Server.base.absoluteString)")
         Task {
+            // -CatNestDumpDelay N: look only after N seconds (to see the app recover from a bad start)
+            try? await Task.sleep(for: .seconds(UserDefaults.standard.integer(forKey: "CatNestDumpDelay")))
             // optional test sign-in: -CatNestDebugCode XXXX-XXXX-XXXX (test accounts only)
             if let code = UserDefaults.standard.string(forKey: "CatNestDebugCode") {
                 try? await Task.sleep(for: .seconds(2))
@@ -58,6 +60,13 @@ enum DebugDump {
             log("done")
             if UserDefaults.standard.bool(forKey: "CatNestDumpQuit") { NSApp.terminate(nil) }
         }
+        #endif
+    }
+
+    /// A line in the system log (debug builds), readable with `log show --predicate 'process == "CatNest"'`.
+    static func note(_ s: String) {
+        #if DEBUG
+        NSLog("[catnest-dump] %@", s)
         #endif
     }
 

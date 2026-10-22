@@ -2,7 +2,8 @@ import AppKit
 
 /// Your cat, living in the menu bar. Frames come from the server (drawn with the
 /// game's own art); the little life in between (blinks, tail flicks, grooming,
-/// snoozing) is timed here.
+/// snoozing) is timed here. The last frames are kept on disk, so after a restart the
+/// cat is there straight away, even before the network is.
 @MainActor
 final class StatusCat: NSObject, URLSessionDelegate {
     enum Mode: Equatable { case signedOut, awake, sleepy, away }
@@ -14,6 +15,12 @@ final class StatusCat: NSObject, URLSessionDelegate {
     private(set) var frames: [String: NSImage] = [:]
     private var catId: String?
     private var look = ""
+    /// Whose frames are showing ("id|look"). Until it matches catId and look, loading is tried
+    /// again (a failed try, say just after the Mac starts and the network isn't up yet, isn't the end).
+    private var loaded = ""
+    private var loading = false
+    private var failures = 0
+    private var retryAt = Date.distantPast
     private(set) var mode: Mode = .signedOut
     private var name = ""
     var unread = 0 { didSet { if unread != oldValue { shown = nil } } }
@@ -31,6 +38,7 @@ final class StatusCat: NSObject, URLSessionDelegate {
         super.init()
         button.imagePosition = .imageOnly
         show(symbol: "cat.fill", tip: "猫窝")
+        restore()
         timer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -55,8 +63,10 @@ final class StatusCat: NSObject, URLSessionDelegate {
         if catId != self.catId || look != self.look {
             self.catId = catId
             self.look = look
-            Task { await loadFrames(catId) }
+            failures = 0
+            retryAt = .distantPast
         }
+        loadIfNeeded()
     }
 
     /// A happy face for a moment (after being petted, fed…).
@@ -64,31 +74,102 @@ final class StatusCat: NSObject, URLSessionDelegate {
         happyUntil = Date().addingTimeInterval(2.6)
     }
 
-    private func loadFrames(_ id: String) async {
-        var loaded: [String: NSImage] = [:]
-        await withTaskGroup(of: (String, NSImage?).self) { group in
+    private func loadIfNeeded() {
+        guard let id = catId, "\(id)|\(look)" != loaded, !loading, Date() >= retryAt else { return }
+        loading = true
+        let look = look
+        Task { await loadFrames(id, look: look) }
+    }
+
+    private func loadFrames(_ id: String, look: String) async {
+        defer { loading = false }
+        var got: [String: Data] = [:]
+        await withTaskGroup(of: (String, Data?).self) { group in
             for f in Self.frameNames {
                 group.addTask { @MainActor in
-                    let url = Server.url("/api/sprite/cat/\(id)/\(f)?size=44&outline=1")
-                    guard let (data, res) = try? await self.session.data(from: url),
+                    // the look in the address: a new outfit is a new picture, never an old one from the cache
+                    let url = Server.url("/api/sprite/cat/\(id)/\(f)?size=44&outline=1&v=\(look)")
+                    guard !Self.debugFail(),
+                          let (data, res) = try? await self.session.data(from: url),
                           (res as? HTTPURLResponse)?.statusCode == 200,
-                          let img = NSImage(data: data) else { return (f, nil) }
-                    img.size = NSSize(width: Self.point, height: Self.point)
-                    return (f, img)
+                          NSImage(data: data) != nil else { return (f, nil) }
+                    return (f, data)
                 }
             }
-            for await (f, img) in group { if let img { loaded[f] = img } }
+            for await (f, d) in group { if let d { got[f] = d } }
         }
-        guard id == catId, loaded["sit"] != nil else { return }
-        frames = loaded
-        composites.removeAll()
-        shown = nil
+        DebugDump.note("frames: \(got.count)/\(Self.frameNames.count) loaded (try \(failures + 1))")
+        guard id == catId, look == self.look else { return } // someone else by now; the next tick loads them
+        if got["sit"] != nil {
+            frames = got.compactMapValues(Self.image)
+            composites.removeAll()
+            shown = nil
+        }
+        if got.count == Self.frameNames.count {
+            loaded = "\(id)|\(look)"
+            failures = 0
+            save(got, id: id, look: look)
+        } else {
+            // try again soon, then less often: 5 s, 10 s, 20 s … at most every 5 minutes
+            failures += 1
+            retryAt = Date().addingTimeInterval(min(300, 5 * pow(2, Double(failures - 1))))
+        }
+    }
+
+    private static func image(_ data: Data) -> NSImage? {
+        let img = NSImage(data: data)
+        img?.size = NSSize(width: point, height: point)
+        return img
+    }
+
+    // MARK: kept on disk
+
+    private static var store: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("menu-bar-cat", isDirectory: true)
+    }
+
+    private func save(_ pictures: [String: Data], id: String, look: String) {
+        guard let dir = Self.store else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for (f, d) in pictures { try? d.write(to: dir.appendingPathComponent("\(f).png"), options: .atomic) }
+        UserDefaults.standard.set(["server": Server.base.absoluteString, "id": id, "look": look, "name": name], forKey: "menuBarCat")
+    }
+
+    /// The cat from last time (in this town), until the town says how it is now.
+    private func restore() {
+        guard let m = UserDefaults.standard.dictionary(forKey: "menuBarCat") as? [String: String],
+              m["server"] == Server.base.absoluteString, let id = m["id"], let look = m["look"], let dir = Self.store else { return }
+        var got: [String: NSImage] = [:]
+        for f in Self.frameNames {
+            if let d = try? Data(contentsOf: dir.appendingPathComponent("\(f).png")), let img = Self.image(d) { got[f] = img }
+        }
+        guard got.count == Self.frameNames.count else { return }
+        DebugDump.note("frames: restored \(got.count) from disk")
+        frames = got
+        catId = id
+        self.look = look
+        loaded = "\(id)|\(look)"
+        name = m["name"] ?? ""
+        mode = .awake
+    }
+
+    /// Debug builds: -CatNestDebugFailSprites N makes the first N picture requests fail, to try the retrying.
+    private static var debugFailLeft = UserDefaults.standard.integer(forKey: "CatNestDebugFailSprites")
+    private static func debugFail() -> Bool {
+        #if DEBUG
+        guard debugFailLeft > 0 else { return false }
+        debugFailLeft -= 1
+        return true
+        #else
+        return false
+        #endif
     }
 
     // MARK: animation
 
     private func tick() {
         let now = Date()
+        if mode != .signedOut { loadIfNeeded() }
         switch mode {
         case .signedOut:
             show(symbol: "cat.fill", tip: "猫窝 · 点一下登录")

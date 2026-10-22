@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
             self.cat.unread = home?.unread ?? 0
             DebugDump.stateArrived()
         }
+        sync.onOnline = { WebNavigator.shared.retryNow() }
         sync.start()
 
         DebugDump.startIfRequested(app: self)
@@ -71,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         openGame()
+        sync.poll()
         return true
     }
 
