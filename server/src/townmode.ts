@@ -75,6 +75,15 @@ export function setTownAccess(next: Partial<Access>): Access {
   return access;
 }
 
+/**
+ * Pictures of the cats and residents are public, and open whatever the web version's state:
+ * the Mac menu bar fetches its cat's frames with a plain URLSession, which on macOS carries the
+ * web pages' sign-in cookie but not the app's name, so it can't be told apart from a browser.
+ */
+export function publicPicture(method: string, path: string): boolean {
+  return method === 'GET' && path.startsWith('/api/sprite/');
+}
+
 /** What a browser that's already signed in may still do while the web version is off. */
 export function allowedOnClosedWeb(method: string, path: string): boolean {
   if (method === 'GET') return path === '/api/me' || path === '/api/account/export' || path === '/api/move/request';

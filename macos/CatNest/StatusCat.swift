@@ -31,7 +31,16 @@ final class StatusCat: NSObject, URLSessionDelegate {
     private var nextBlink = Date()
     private var nextGesture = Date().addingTimeInterval(12)
     private var shown: String?
-    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
+    /// The pictures are public. On macOS a default session shares the pages' cookie jar, and a request
+    /// with their sign-in cookie but without the app's name looks like a browser, which the town turns
+    /// away while its web version is off (that kept the menu bar cat white): no cookies, and our name.
+    private lazy var session: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.httpShouldSetCookies = false
+        c.httpCookieAcceptPolicy = .never
+        c.httpAdditionalHeaders = ["User-Agent": Server.userAgent]
+        return URLSession(configuration: c, delegate: self, delegateQueue: .main)
+    }()
 
     init(button: NSStatusBarButton) {
         self.button = button

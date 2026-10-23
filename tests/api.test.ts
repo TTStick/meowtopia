@@ -930,6 +930,10 @@ test('turning the website and the web version off: only the apps come in, and no
   assert.equal((await app.call('POST', `/api/cat/${acat}/act`, { kind: 'pet' })).status, 200);
   assert.equal((await web.call('POST', `/api/cat/${wcat}/act`, { kind: 'pet' }, { ...site, 'user-agent': 'Mozilla/5.0 (Macintosh) CatNestMac/1.0' })).status, 200);
   await new Player('app').join('新来的 App 玩家');
+  // the Mac menu bar's cat: its frames come from a plain URLSession, which carries the pages' cookie
+  // but not the app's name (on macOS the two share a cookie jar); pictures are public anyway
+  const frame = await web.call('GET', `/api/sprite/cat/${wcat}/sit?size=44&outline=1`, undefined, { 'user-agent': 'CatNest/1 CFNetwork/3860 Darwin/25.0.0' });
+  assert.equal(frame.status, 200, 'the menu bar cat gets its pictures');
 
   // the homepage and the guide aren't there at all (search engines drop them); the admin panel still works
   for (const path of ['/', '/deploy/', '/deploy', '/home.html']) {

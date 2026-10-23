@@ -80,7 +80,7 @@ final class CompanionSync: NSObject, URLSessionDelegate {
             }
             var req = URLRequest(url: Server.url("/api/companion"))
             req.setValue("cn_sid=\(sid.value)", forHTTPHeaderField: "Cookie")
-            req.setValue("CatNestMac/1.0", forHTTPHeaderField: "User-Agent")
+            req.setValue(Server.userAgent, forHTTPHeaderField: "User-Agent")
             guard let (data, res) = try? await session.data(for: req), let http = res as? HTTPURLResponse else {
                 retrySoon() // offline: keep what we show
                 DebugDump.note("companion: town unreachable, asking again soon")

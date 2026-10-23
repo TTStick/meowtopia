@@ -10,6 +10,9 @@ enum Server {
         return URL(string: s) ?? URL(string: "https://localhost")!
     }
 
+    /// How the app introduces itself; the town lets "CatNestMac" in even while its web version is off.
+    static let userAgent = "CatNestMac/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1")"
+
     static func url(_ path: String) -> URL {
         URL(string: path, relativeTo: base)?.absoluteURL ?? base
     }
@@ -151,7 +154,7 @@ enum Web {
     static func make(bridge: BridgeReceiver) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
-        config.applicationNameForUserAgent = "CatNestMac/1.0"
+        config.applicationNameForUserAgent = Server.userAgent
         config.userContentController.add(WeakBridge(bridge), name: "catnest")
         config.preferences.isElementFullscreenEnabled = true
         let wv = WKWebView(frame: .zero, configuration: config)
