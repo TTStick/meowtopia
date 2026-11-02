@@ -1,7 +1,7 @@
 // Anthropomorphic townsfolk: upright cats wearing clothes, doing their jobs.
 import { Pen, shade, rgba } from '../engine/pen';
 import { drawCatHead, defaultPose, catPalette, type CatPose } from './cat';
-import { drawHeadwear } from './wear';
+import { drawHeadwear, CROWN_DROP } from './wear';
 import type { CatGenes } from '../../../shared/types';
 import type { NpcOutfit } from '../../../shared/npcs';
 
@@ -301,22 +301,27 @@ export function drawNpc(pen: Pen, g: CatGenes, outfit: NpcOutfit, p: NpcPose, ki
   ctx.rotate(headTilt);
   drawCatHead(pen, g, 11, pose);
   // hats
-  if (look.hat === 'chef') {
-    pen.shape([-8, -9, -12, -18, -8, -26, 0, -24, 8, -26, 12, -18, 8, -9], '#ffffff');
-    pen.line([-8, -12, 8, -12], 1, rgba(INK, 0.4));
-  } else if (look.hat === 'cap') {
-    pen.shape([-11, -6, -9, -14, 0, -16, 9, -14, 11, -6], '#5c7f68');
-    pen.shape([4, -6, 18, -5, 16, -2, 4, -3], '#4b6a56', 1.2);
-    pen.ellipse(0, -11, 2.4, 2.4, '#ffd45e', 0.6);
+  if (look.hat === 'chef' || look.hat === 'cap') {
+    ctx.save();
+    ctx.translate(0, 11 * CROWN_DROP);
+    if (look.hat === 'chef') {
+      pen.shape([-8, -9, -12, -18, -8, -26, 0, -24, 8, -26, 12, -18, 8, -9], '#ffffff');
+      pen.line([-8, -12, 8, -12], 1, rgba(INK, 0.4));
+    } else {
+      pen.shape([-11, -6, -9, -14, 0, -16, 9, -14, 11, -6], '#5c7f68');
+      pen.shape([4, -6, 18, -5, 16, -2, 4, -3], '#4b6a56', 1.2);
+      pen.ellipse(0, -11, 2.4, 2.4, '#ffd45e', 0.6);
+    }
+    ctx.restore();
   } else if (look.hat) {
     drawHeadwear(pen, [look.hat], 11, false);
   }
   if (look.glasses) {
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.1;
-    for (const ex of [-4.2, 6.6]) {
+    for (const ex of [-4.5, 7.5]) {
       ctx.beginPath();
-      ctx.arc(ex, 0.5, 3.4, 0, Math.PI * 2);
+      ctx.arc(ex, 1.3, 3.3, 0, Math.PI * 2);
       ctx.stroke();
     }
   }

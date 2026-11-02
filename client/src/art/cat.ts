@@ -1,4 +1,4 @@
-import { Pen, mix, shade, rgba } from '../engine/pen';
+import { Pen, INK, mix, shade, rgba, parseHex } from '../engine/pen';
 import { Rng, hashf } from '../../../shared/rng';
 import type { CatGenes } from '../../../shared/types';
 import { drawHeadwear, drawNeckwear, drawFacewear } from './wear';
@@ -81,6 +81,9 @@ interface Pal {
 
 function palette(g: CatGenes): Pal {
   const pointed = g.pattern === 'pointed';
+  // cats are drawn with a deep shade of their own fur rather than the world's brown ink,
+  // dark enough to stand out from a cream floor even on a white cat
+  const fur = mix(shade(pointed ? mix(g.base, g.accent, 0.6) : g.base, -0.5), INK, 0.12);
   return {
     base: g.base,
     dark: shade(g.base, -0.13),
@@ -89,8 +92,27 @@ function palette(g: CatGenes): Pal {
     white: WHITE,
     belly: g.white > 0.12 ? WHITE : shade(g.base, 0.35),
     points: pointed ? g.accent : null,
-    ink: '#4a3a34',
+    ink: luma(fur) > 0.42 ? mix(fur, INK, 0.5) : fur,
   };
+}
+
+function luma(hex: string): number {
+  const [r, g, b] = parseHex(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/** A cat's lines are a little finer than the world's, and take the colour of its fur. */
+const LINE = 0.72;
+function withCatLine(pen: Pen, pal: Pal, draw: () => void) {
+  const ink = pen.ink, lw = pen.lw;
+  pen.ink = pal.ink;
+  pen.lw = lw * LINE;
+  try {
+    draw();
+  } finally {
+    pen.ink = ink;
+    pen.lw = lw;
+  }
 }
 
 // ---------- head ----------
@@ -99,21 +121,22 @@ interface HeadOpts {
   scale?: number;
 }
 
+const HW = 1.2, HH = 0.88; // the head is a wide, soft bun
+
 function headOutline(R: number, fluff: number, seed: number): number[] {
   const pts: number[] = [];
-  const hw = R * 1.13, hh = R * 0.94;
+  const hw = R * HW, hh = R * HH;
   const n = fluff > 0.35 ? 20 : 14;
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2;
     const s = Math.sin(a), c = Math.cos(a);
     let x = c * hw, y = s * hh;
     if (s > 0) {
-      x *= 1 + 0.07 * s; // chubby cheeks
-      y *= 0.9;
-    } else y *= 0.96;
+      x *= 1 + 0.08 * s; // full cheeks
+      y *= 0.92;
+    } else y *= 0.96 - 0.08 * -s; // a flatter crown
     if (fluff > 0.35 && s > -0.1 && Math.abs(c) > 0.45 && i % 2 === 0) {
-      const k = 1 + 0.1 * fluff;
-      x *= k;
+      x *= 1 + 0.08 * fluff;
       y *= 1 + 0.04 * fluff;
     }
     pts.push(x, y);
@@ -129,68 +152,70 @@ function fx(R: number, phi: number, turn: number) {
 
 function drawEar(pen: Pen, g: CatGenes, pal: Pal, R: number, side: number, pose: CatPose, back: boolean) {
   const turn = pose.turn;
-  const hw = R * 1.13, hh = R * 0.94;
-  const a0 = -Math.PI / 2 + side * 0.98;
-  let bx = Math.cos(a0) * hw * 0.8 + turn * R * 0.16;
-  const by = Math.sin(a0) * hh * 0.8;
+  const hw = R * HW, hh = R * HH;
+  const a0 = -Math.PI / 2 + side * 1.08;
+  let bx = Math.cos(a0) * hw * 0.78 + turn * R * 0.16;
+  const by = Math.sin(a0) * hh * 0.78;
   const far = (side < 0 && turn > 0.1) || (side > 0 && turn < -0.1);
   const wk = far ? 1 - Math.abs(turn) * 0.35 : 1;
-  const E = R * 0.82 * g.earSize;
+  const E = R * 0.68 * g.earSize;
   const twitch = side < 0 ? pose.earL : pose.earR;
-  let ang = -Math.PI / 2 + side * (0.42 - pose.ear * 0.16 + Math.max(0, -pose.ear) * 0.75) + side * twitch * 0.35;
+  let ang = -Math.PI / 2 + side * (0.55 - pose.ear * 0.16 + Math.max(0, -pose.ear) * 0.7) + side * twitch * 0.35;
   const fold = g.earFold;
-  const len = fold ? E * 0.52 : E * (1 - Math.max(0, -pose.ear) * 0.18);
+  const len = fold ? E * 0.55 : E * (1 - Math.max(0, -pose.ear) * 0.18);
   if (fold) ang += side * 0.9;
   const dx = Math.cos(ang), dy = Math.sin(ang);
   const px = -dy, py = dx; // perpendicular
-  const bw = E * 0.5 * wk;
+  const bw = E * 0.62 * wk;
   const tipx = bx + dx * len, tipy = by + dy * len;
+  // a rounded tip, like a little rice dumpling
   const pts = [
     bx - px * bw, by - py * bw,
-    bx - px * bw * 0.55 + dx * len * 0.55, by - py * bw * 0.55 + dy * len * 0.55,
-    tipx - px * bw * 0.1, tipy - py * bw * 0.1,
-    tipx + px * bw * 0.1, tipy + py * bw * 0.1,
-    bx + px * bw * 0.55 + dx * len * 0.55, by + py * bw * 0.55 + dy * len * 0.55,
+    bx - px * bw * 0.62 + dx * len * 0.6, by - py * bw * 0.62 + dy * len * 0.6,
+    tipx - px * bw * 0.26 - dx * len * 0.06, tipy - py * bw * 0.26 - dy * len * 0.06,
+    tipx, tipy,
+    tipx + px * bw * 0.26 - dx * len * 0.06, tipy + py * bw * 0.26 - dy * len * 0.06,
+    bx + px * bw * 0.62 + dx * len * 0.6, by + py * bw * 0.62 + dy * len * 0.6,
     bx + px * bw, by + py * bw,
     bx - dx * R * 0.2, by - dy * R * 0.2,
   ];
   const earColor = pal.points ?? (g.pattern === 'calico' || g.pattern === 'tortie' ? (side < 0 ? pal.accent : pal.accent2) : pal.base);
   pen.shape(pts, earColor);
   if (!back && !fold) {
-    const k = 0.52;
-    const ix = bx + dx * len * 0.12, iy = by + dy * len * 0.12;
+    // a soft pink inside, no outline
+    const k = 0.5;
+    const ix = bx + dx * len * 0.16, iy = by + dy * len * 0.16;
     const inner = [
       ix - px * bw * k, iy - py * bw * k,
-      ix + dx * len * 0.62, iy + dy * len * 0.62,
+      ix - px * bw * 0.22 + dx * len * 0.56, iy - py * bw * 0.22 + dy * len * 0.56,
+      ix + px * bw * 0.22 + dx * len * 0.56, iy + py * bw * 0.22 + dy * len * 0.56,
       ix + px * bw * k, iy + py * bw * k,
     ];
-    pen.shape(inner, pal.points ? mix(pal.points, EAR_PINK, 0.35) : EAR_PINK, pen.lw * 0.6, rgba('#4a3a34', 0.5));
-    // two wisps of ear fur
-    const fc = rgba('#4a3a34', 0.35);
-    for (const k of [-0.25, 0.2]) {
-      const sx = ix + px * bw * k, sy = iy + py * bw * k;
-      pen.line([sx, sy, sx + dx * len * 0.3 - px * bw * 0.1, sy + dy * len * 0.3 - py * bw * 0.1], pen.lw * 0.5, fc, 0.2);
-    }
+    pen.shape(inner, pal.points ? mix(pal.points, EAR_PINK, 0.35) : EAR_PINK, 0, null);
+    // one wisp of ear fur
+    pen.line([ix - px * bw * 0.1, iy - py * bw * 0.1, ix + dx * len * 0.34 - px * bw * 0.2, iy + dy * len * 0.34 - py * bw * 0.2], pen.lw * 0.55, rgba(pal.ink, 0.35), 0.2);
   }
 }
 
-function drawEye(pen: Pen, x: number, y: number, rx: number, ry: number, color: string, pose: CatPose, base: string, side: number) {
+/** rim: on a dark coat, eyes get a light rim and light lines so they don't vanish into the fur. */
+function drawEye(pen: Pen, x: number, y: number, rx: number, ry: number, color: string, pose: CatPose, side: number, rim: string | null) {
   const ctx = pen.ctx;
   const lw = pen.lw * 0.9;
+  const ink = rim ?? pen.ink;
   const e = pose.eyes;
   switch (e) {
     case 'happy':
-      pen.line([x - rx, y + ry * 0.25, x, y - ry * 0.55, x + rx, y + ry * 0.25], lw * 1.1);
+      pen.line([x - rx, y + ry * 0.25, x, y - ry * 0.55, x + rx, y + ry * 0.25], lw * 1.1, ink);
       return;
     case 'closed':
-      pen.line([x - rx, y - ry * 0.05, x, y + ry * 0.45, x + rx, y - ry * 0.05], lw * 1.1);
+      pen.line([x - rx, y - ry * 0.05, x, y + ry * 0.45, x + rx, y - ry * 0.05], lw * 1.1, ink);
       return;
     case 'blink':
-      pen.line([x - rx, y + ry * 0.05, x, y + ry * 0.2, x + rx, y + ry * 0.05], lw * 1.1);
+      pen.line([x - rx, y + ry * 0.05, x, y + ry * 0.2, x + rx, y + ry * 0.05], lw * 1.1, ink);
       return;
     case 'squint': {
       const s = side;
-      pen.line([x - rx * s, y - ry * 0.45, x + rx * 0.7 * s, y, x - rx * s, y + ry * 0.45], lw * 1.1);
+      pen.line([x - rx * s, y - ry * 0.45, x + rx * 0.7 * s, y, x - rx * s, y + ry * 0.45], lw * 1.1, ink);
       return;
     }
     case 'heart': {
@@ -210,39 +235,41 @@ function drawEye(pen: Pen, x: number, y: number, rx: number, ry: number, color: 
       return;
     }
   }
-  // open-ish eyes
+  if (e === 'half' || e === 'sleepy') {
+    // drowsy: a soft, content curve with a little flick at the outer corner
+    const yy = y + ry * (e === 'sleepy' ? 0.3 : 0.15);
+    pen.line([x - rx * 1.05, yy - ry * 0.1, x, yy + ry * 0.28, x + rx * 1.05, yy - ry * 0.1], lw * 1.05, ink);
+    pen.line([x + side * rx * 1.0, yy - ry * 0.08, x + side * rx * 1.35, yy - ry * 0.32], lw * 0.7, ink);
+    return;
+  }
+  // open eyes: a glossy bead, its colour glowing up from the bottom
   const wide = e === 'wide';
-  const er = wide ? 1.12 : 1;
-  const path = pen.ellipse(x, y, rx * er, ry * er, color, lw, pen.ink, 0, 10);
-  const lx = pose.lookX * rx * 0.28, ly = pose.lookY * ry * 0.25;
-  const pr = wide ? 0.82 : 0.58;
-  pen.ctx.fillStyle = PUPIL;
-  ctx.beginPath();
-  ctx.ellipse(x + lx, y + ly + ry * 0.05, rx * pr * er, ry * (wide ? 0.85 : 0.78) * er, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const er = wide ? 1.15 : 1;
+  const ex = x + pose.lookX * rx * 0.22, ey = y + pose.lookY * ry * 0.18;
+  const bead = pen.path(Pen.ellipsePts(ex, ey, rx * er, ry * er, 0, 10), true, 0.25);
+  if (rim) pen.fillStroke(bead, null, rx * 0.4, rim);
+  ctx.fillStyle = mix(PUPIL, color, 0.12);
+  ctx.fill(bead);
+  pen.clip(bead, () => {
+    ctx.fillStyle = rgba(color, 0.9);
+    ctx.beginPath();
+    ctx.ellipse(ex, ey + ry * er * 0.78, rx * er * 0.95, ry * er * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(x + lx - rx * 0.3, y + ly - ry * 0.32, rx * (wide ? 0.42 : 0.36), 0, Math.PI * 2);
+  ctx.arc(ex - rx * 0.32 * er, ey - ry * 0.34 * er, rx * (wide ? 0.42 : 0.36), 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(x + lx + rx * 0.32, y + ly + ry * 0.38, rx * 0.17, 0, Math.PI * 2);
+  ctx.arc(ex + rx * 0.34 * er, ey + ry * 0.2 * er, rx * 0.15, 0, Math.PI * 2);
   ctx.fill();
-  if (e === 'half' || e === 'sleepy') {
-    const lid = e === 'sleepy' ? 0.62 : 0.4;
-    pen.clip(path, () => {
-      ctx.fillStyle = base;
-      ctx.fillRect(x - rx * 1.5, y - ry * 1.5, rx * 3, ry * (0.5 + lid * 2));
-    });
-    const ly2 = y - ry + ry * 2 * lid;
-    pen.line([x - rx * 1.05, ly2 + ry * 0.1, x, ly2 - ry * 0.05, x + rx * 1.05, ly2 + ry * 0.1], lw);
-  }
 }
 
 function drawMouth(pen: Pen, nx: number, ny: number, R: number, k: number, pose: CatPose) {
   const lw = pen.lw * 0.85;
   const m = pose.mouth === 'chew' ? (Math.sin(pose.t * 14) > 0 ? 'w' : 'o') : pose.mouth;
-  const w = R * 0.22 * k;
-  const top = ny + R * 0.07;
+  const w = R * 0.18 * k;
+  const top = ny + R * 0.06;
   const drawW = (wide = 1) => {
     pen.line([nx, top - R * 0.02, nx - w * 0.45 * wide, top + R * 0.11, nx - w * wide, top + R * 0.04], lw);
     pen.line([nx, top - R * 0.02, nx + w * 0.45 * wide, top + R * 0.11, nx + w * wide, top + R * 0.04], lw);
@@ -303,7 +330,7 @@ export function drawHead(pen: Pen, g: CatGenes, pal: Pal, R: number, pose: CatPo
   drawEar(pen, g, pal, R, 1, p2, back);
 
   const outline = headOutline(R, g.fluff, g.seed);
-  const headPath = pen.path(outline, true);
+  const headPath = pen.path(outline, true, 0.6);
   ctx.fillStyle = pal.base;
   ctx.fill(headPath);
   const rng = new Rng(g.seed * 7 + 3);
@@ -368,40 +395,58 @@ export function drawHead(pen: Pen, g: CatGenes, pal: Pal, R: number, pose: CatPo
 
   if (back) return;
 
-  // face
-  const eyeY = R * 0.04 + pose.lookY * R * 0.03;
-  const el = fx(R, -0.52, turn), er = fx(R, 0.52, turn), no = fx(R, 0, turn);
-  const erx = R * 0.2, ery = R * 0.25;
+  // face: eyes set wide and low, a soft muzzle between them
+  const eyeY = R * 0.12 + pose.lookY * R * 0.03;
+  const el = fx(R, -0.56, turn), er = fx(R, 0.56, turn), no = fx(R, 0, turn);
+  const erx = R * 0.19, ery = R * 0.225;
+  const ny = R * 0.33;
+  const dark = luma(pal.points ?? pal.base) < 0.4;
+  const bare = !pal.points && g.white <= 0.3 && g.pattern !== 'tuxedo'; // no white on the face
+  if (bare && !dark) {
+    ctx.fillStyle = mix(pal.base, WHITE, 0.4);
+    ctx.fill(pen.path(Pen.ellipsePts(no.x, ny + R * 0.08, R * 0.34 * (0.65 + no.k * 0.35), R * 0.2, 0, 8), true, 0.4));
+  }
   // blush
-  ctx.fillStyle = `rgba(242,135,150,${0.22 + pose.blush * 0.38})`;
+  ctx.fillStyle = `rgba(242,135,150,${0.28 + pose.blush * 0.38})`;
   for (const e of [el, er]) {
     ctx.beginPath();
-    ctx.ellipse(e.x + (e === el ? -1 : 1) * R * 0.08, R * 0.36, R * 0.17 * e.k, R * 0.085, 0, 0, Math.PI * 2);
+    ctx.ellipse(e.x + (e === el ? -1 : 1) * R * 0.1, R * 0.4, R * 0.13 * e.k, R * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
   }
   if (pose.coverEyes > 0.5) {
     // paws over eyes (sleep quirk)
-    pen.ellipse(no.x, eyeY + R * 0.05, R * 0.62, R * 0.26, g.socks ? WHITE : pal.base);
+    pen.ellipse(no.x, eyeY + R * 0.05, R * 0.66, R * 0.26, g.socks ? WHITE : pal.base);
     pen.line([no.x - R * 0.2, eyeY - R * 0.05, no.x - R * 0.2, eyeY + R * 0.12], pen.lw * 0.6);
     pen.line([no.x + R * 0.2, eyeY - R * 0.05, no.x + R * 0.2, eyeY + R * 0.12], pen.lw * 0.6);
   } else {
-    drawEye(pen, el.x, eyeY, erx * el.k, ery, g.eye, pose, pal.points ? mix(pal.base, pal.points, 0.7) : pal.base, -1);
-    drawEye(pen, er.x, eyeY, erx * er.k, ery, g.eye2, pose, pal.points ? mix(pal.base, pal.points, 0.7) : pal.base, 1);
+    const rim = dark ? mix(pal.base, WHITE, 0.6) : null;
+    drawEye(pen, el.x, eyeY, erx * el.k, ery, g.eye, pose, -1, rim);
+    drawEye(pen, er.x, eyeY, erx * er.k, ery, g.eye2, pose, 1, rim);
   }
-  // nose
-  const ny = R * 0.3;
-  const nw = R * 0.1 * (0.7 + no.k * 0.3);
-  pen.shape([no.x - nw, ny - R * 0.03, no.x + nw, ny - R * 0.03, no.x, ny + R * 0.08], g.nose, pen.lw * 0.75, pen.ink, 0.3);
+  // nose: a small rounded heart
+  const nw = R * 0.075 * (0.7 + no.k * 0.3);
+  pen.shape([no.x - nw, ny - R * 0.035, no.x, ny - R * 0.015, no.x + nw, ny - R * 0.035, no.x, ny + R * 0.055], g.nose, 0, null, 0.2);
+  // a mouth on dark fur is drawn light
+  const ink = pen.ink;
+  if (dark && bare) pen.ink = mix(pal.base, WHITE, 0.55);
   drawMouth(pen, no.x, ny, R, no.k, pose);
-  // whiskers
-  const wc = rgba('#4a3a34', 0.45);
+  pen.ink = ink;
+  // whisker dots on the muzzle and two short whiskers a side
+  const wc = rgba(pal.ink, 0.4);
+  ctx.fillStyle = wc;
   for (const s of [-1, 1]) {
+    const k = s < 0 ? el.k : er.k;
+    for (const [ox, oy] of [[0.17, 0.05], [0.24, 0.1], [0.16, 0.14]]) {
+      ctx.beginPath();
+      ctx.arc(no.x + s * R * ox * k, ny + R * oy, R * 0.022, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const far = (s < 0 && turn > 0.15) || (s > 0 && turn < -0.15);
-    const L = R * (far ? 0.38 : 0.6);
-    const sx = no.x + s * R * 0.42 * (s < 0 ? el.k : er.k);
-    for (let i = 0; i < 3; i++) {
-      const yy = ny + R * (0.02 + i * 0.09);
-      pen.line([sx, yy, sx + s * L * 0.55, yy - R * 0.02 + i * R * 0.03, sx + s * L, yy + (i - 1) * R * 0.08], pen.lw * 0.5, wc, 0.4);
+    const L = R * (far ? 0.3 : 0.46);
+    const sx = no.x + s * R * 0.4 * k;
+    for (let i = 0; i < 2; i++) {
+      const yy = ny + R * (0.06 + i * 0.1);
+      pen.line([sx, yy, sx + s * L * 0.55, yy - R * 0.015 + i * R * 0.03, sx + s * L, yy + (i - 0.5) * R * 0.1], pen.lw * 0.5, wc, 0.4);
     }
   }
 }
@@ -471,7 +516,7 @@ function tailPoints(base: [number, number], ang0: number, segLen: number, curl: 
 
 function drawTail(pen: Pen, g: CatGenes, pal: Pal, pts: number[], R: number) {
   const fluff = 1 + g.fluff * 0.5;
-  const w0 = R * 0.4 * fluff, w1 = R * 0.26 * fluff;
+  const w0 = R * 0.44 * fluff, w1 = R * 0.36 * fluff; // plump all the way to the tip
   const patched = g.pattern === 'calico' || g.pattern === 'tortie';
   const color = pal.points ?? (patched ? ((g.seed & 1) ? pal.accent : pal.accent2) : pal.base);
   const striped = g.pattern === 'tabby' || g.pattern === 'mackerel' || g.pattern === 'spotted';
@@ -486,9 +531,9 @@ function drawTail(pen: Pen, g: CatGenes, pal: Pal, pts: number[], R: number) {
 }
 
 function paw(pen: Pen, x: number, y: number, R: number, color: string, toes = true, rot = 0) {
-  pen.ellipse(x, y, R * 0.25, R * 0.16, color, pen.lw * 0.95, pen.ink, rot, 8);
+  pen.ellipse(x, y - R * 0.01, R * 0.26, R * 0.18, color, pen.lw * 0.95, pen.ink, rot, 8);
   if (toes) {
-    const c = rgba('#4a3a34', 0.6);
+    const c = rgba(pen.ink, 0.6);
     for (const s of [-1, 1]) pen.line([x + s * R * 0.07, y - R * 0.09, x + s * R * 0.07, y - R * 0.01], pen.lw * 0.55, c, 0.2);
   }
 }
@@ -500,10 +545,10 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
   const sit = pose.sitH;
   const beg = pose.beg;
   const breathe = 1 + pose.breathe * 0.03;
-  const bw = R * (0.98 + 0.32 * (1 - sit)) * c * bodyK * breathe;
-  const bh = R * (1.0 + 0.85 * sit + 0.7 * beg) * bodyK;
-  const nw = R * (0.6 + 0.3 * (1 - sit)) * c * bodyK;
-  const legX = R * 0.34 * bodyK;
+  const bw = R * (1.08 + 0.3 * (1 - sit)) * c * bodyK * breathe;
+  const bh = R * (1.0 + 0.72 * sit + 0.7 * beg) * bodyK;
+  const nw = R * (0.74 + 0.26 * (1 - sit)) * c * bodyK;
+  const legX = R * 0.36 * bodyK;
   const t = pose.t;
   const tailColor = pal.points ?? pal.base;
 
@@ -511,7 +556,7 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
   const tailUp = pose.tailUp > 0.5;
   const side = back ? -1 : 1;
   if (tailUp && !back) {
-    const pts = tailPoints([bw * 0.55 * side, -bh * 0.25], -Math.PI / 2 + 0.35 * side, R * 0.35 * g.tail, -pose.tailCurl * side, pose.tailSwish, t);
+    const pts = tailPoints([bw * 0.55 * side, -bh * 0.25], -Math.PI / 2 + 0.45 * side, R * 0.3 * g.tail, -(pose.tailCurl + 0.35) * side, pose.tailSwish, t);
     drawTail(pen, g, pal, pts, R);
   }
 
@@ -544,32 +589,34 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
   ctx.fillStyle = pal.base;
   ctx.fill(body);
   bodyMarkings(pen, g, pal, body, 0, -bh * 0.5, bw, bh * 0.5, back ? 'back' : 'front');
-  if (!back && (g.white > 0.12 || pal.points)) {
+  // a white bib, or on plain light coats a softer, lighter chest
+  const plain = !(g.white > 0.12 || pal.points);
+  if (!back && !(plain && luma(pal.base) < 0.4)) {
     pen.clip(body, () => {
-      ctx.fillStyle = pal.points ? shade(pal.base, 0.15) : pal.white;
-      const ww = bw * Math.min(0.95, 0.32 + g.white * 0.75);
-      ctx.fill(pen.path(Pen.ellipsePts(0, -bh * 0.48 + R * 0.1, ww, bh * (0.42 + g.white * 0.3), 0, 8), true, 1.5));
+      ctx.fillStyle = plain ? mix(pal.base, WHITE, 0.28) : pal.points ? shade(pal.base, 0.15) : pal.white;
+      const ww = bw * (plain ? 0.34 : Math.min(0.95, 0.32 + g.white * 0.75));
+      ctx.fill(pen.path(Pen.ellipsePts(0, plain ? -bh * 0.8 : -bh * 0.48 + R * 0.1, ww, plain ? bh * 0.24 : bh * (0.42 + g.white * 0.3), 0, plain ? 10 : 8), true, plain ? 0.5 : 1.5));
     });
   }
   pen.fillStroke(body, null);
   // haunch lines
   if (sit > 0.45 && beg < 0.3) {
-    const hc = rgba('#4a3a34', 0.55);
+    const hc = rgba(pal.ink, 0.55);
     for (const s of [-1, 1]) {
-      pen.line([s * bw * 0.9, -bh * 0.48, s * bw * 0.58, -bh * 0.2, s * bw * 0.55, -R * 0.04], pen.lw * 0.75, hc, 0.6);
+      pen.line([s * bw * 1.0, -bh * 0.52, s * bw * 0.66, -bh * 0.44, s * bw * 0.5, -bh * 0.2, s * bw * 0.56, -R * 0.03], pen.lw * 0.75, hc, 0.6);
     }
   }
   // belly/back texture
   if (back) {
-    pen.line([0, -bh * 0.92, 0, -bh * 0.35], pen.lw * 0.5, rgba('#4a3a34', 0.25), 0.6);
+    pen.line([0, -bh * 0.92, 0, -bh * 0.35], pen.lw * 0.5, rgba(pal.ink, 0.25), 0.6);
   }
 
   // front legs
   if (!back) {
     const legColor = pal.points ?? (g.white > 0.35 ? pal.white : pal.base);
     const pawColor = g.socks ? WHITE : legColor;
-    const legW = R * 0.4 * bodyK;
-    const topY = -bh * 0.6;
+    const legW = R * 0.46 * bodyK;
+    const topY = -bh * 0.52;
     for (const s of [-1, 1]) {
       const raise = s < 0 ? pose.pawL : pose.pawR;
       const groomSide = s > 0 ? pose.groom : 0;
@@ -580,7 +627,7 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
         fy = -bh * 0.7 - raise * R * 0.2;
       }
       if (groomSide > 0.01) {
-        const hx = pose.headDX * R, hy = -bh - R * 0.55 + pose.headDY * R;
+        const hx = pose.headDX * R, hy = -bh - R * 0.42 + pose.headDY * R;
         fx2 = fx2 + (hx + R * 0.15 - fx2) * groomSide;
         fy = fy + (hy + R * 0.6 - fy) * groomSide;
       }
@@ -609,7 +656,7 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
         for (const e of [-1, 1]) {
           const ox = nx * e * hw, oy = ny * e * hw;
           const outer = ox * s > 0;
-          const st = groomSide > 0.01 ? 0.25 : outer ? 0.38 : 0.1;
+          const st = groomSide > 0.01 ? 0.25 : outer ? 0.5 : 0.42;
           pen.line([tx + ox + dx * st, topY + oy + dy * st, tx + ox + dx * 0.97, topY + oy + dy * 0.97], pen.lw * 0.95, pen.ink, 0.4);
         }
       }
@@ -635,7 +682,7 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
     }
     // a little tuft of chest fur
     if (sit >= 0.4 && beg < 0.3) {
-      const fc = rgba('#4a3a34', 0.4);
+      const fc = rgba(pal.ink, 0.4);
       pen.line([-R * 0.12, -bh * 0.82, -R * 0.05, -bh * 0.76, 0, -bh * 0.83], pen.lw * 0.6, fc, 0.3);
       pen.line([0, -bh * 0.83, R * 0.06, -bh * 0.76, R * 0.13, -bh * 0.82], pen.lw * 0.6, fc, 0.3);
     }
@@ -653,8 +700,8 @@ function drawFront(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bo
 
   // neckwear under head
   const hx = pose.headDX * R;
-  const hy = -bh - R * 0.55 + pose.headDY * R + pose.headDown * R * 0.95;
-  if (!back) drawNeckwear(pen, outfit, 0, -bh + R * 0.05, R * bodyK, 0);
+  const hy = -bh - R * 0.42 + pose.headDY * R + pose.headDown * R * 0.95;
+  if (!back) drawNeckwear(pen, outfit, 0, -bh + R * 0.15, R * bodyK, 0);
 
   ctx.save();
   ctx.translate(hx, hy);
@@ -671,13 +718,13 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   const t = pose.t;
   const run = pose.gait > 1.5;
   const L = R * bodyK;
-  const legLen = L * (0.78 - pose.crouch * 0.45);
-  const T = R * 0.7 * c * bodyK * (1 + pose.breathe * 0.02);
+  const legLen = L * (0.66 - pose.crouch * 0.38);
+  const T = R * 0.8 * c * bodyK * (1 + pose.breathe * 0.02);
   const air = pose.air * R;
   const by = -(legLen + T * 0.62) - air;
   const moving = Math.min(1, pose.gait);
   // gallop: the body stretches and bunches; walk: a gentle rocking
-  const halfLen = L * 0.92 * (run ? 1.1 + Math.sin(pose.phase) * 0.07 : 1);
+  const halfLen = L * 0.88 * (run ? 1.1 + Math.sin(pose.phase) * 0.07 : 1);
   const tilt = pose.tilt + pose.standUp * 1.15 + Math.sin(pose.phase * 2) * 0.03 * moving * (run ? 2 : 1);
   const ct = Math.cos(tilt), st = Math.sin(tilt);
   // body local -> world (pivot at hip when standing up, center otherwise)
@@ -695,8 +742,8 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   const S = B(halfLen * 0.72, -pose.reach * T * 0.3);
   const H = B(-halfLen * 0.82, 0);
 
-  const stride = pose.gait > 1.5 ? R * 0.85 : R * 0.42;
-  const liftH = pose.gait > 1.5 ? R * 0.42 : R * 0.26;
+  const stride = pose.gait > 1.5 ? R * 0.75 : R * 0.36;
+  const liftH = pose.gait > 1.5 ? R * 0.36 : R * 0.22;
   const ph = pose.phase;
   const legs = [
     { front: true, near: false, off: Math.PI },
@@ -734,12 +781,12 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   const tailBase = B(-halfLen * 1.02, -T * 0.35);
   const tUp = pose.tailUp;
   const ang0 = Math.PI * (0.9 + tUp * 0.5) - tilt;
-  const tpts = tailPoints(tailBase, ang0 + Math.PI * 0, L * 0.33 * g.tail, pose.tailCurl * (tUp > 0.4 ? 1 : -0.4), pose.tailSwish + (pose.gait > 0.5 ? 0.25 : 0), t);
+  const tpts = tailPoints(tailBase, ang0 + Math.PI * 0, L * 0.28 * g.tail, (pose.tailCurl + (tUp > 0.4 ? 0.35 : 0)) * (tUp > 0.4 ? 1 : -0.4), pose.tailSwish + (pose.gait > 0.5 ? 0.25 : 0), t);
   drawTail(pen, g, pal, tpts, R);
 
   const legColor = pal.points ?? pal.base;
   const farColor = shade(legColor, -0.14);
-  const legW = R * 0.38 * bodyK * (0.95 + c * 0.05);
+  const legW = R * 0.46 * bodyK * (0.95 + c * 0.05);
   const drawLeg = (leg: (typeof legs)[number]) => {
     const j = leg.front ? S : H;
     const jx = j[0] + (leg.near ? 0 : (leg.front ? -L * 0.12 : L * 0.1));
@@ -749,13 +796,13 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
     const fyp = f[1] - R * 0.1;
     // knees: rear legs bend backwards at the hock, front legs bend a little forward while lifting
     const lift = Math.max(0, -(fyp + R * 0.1)) / (R * 0.4);
-    const mx = (jx + fxp) / 2 + (leg.front ? L * (0.02 + lift * 0.12) : -L * 0.17);
+    const mx = (jx + fxp) / 2 + (leg.front ? L * (0.02 + lift * 0.12) : -L * 0.12);
     const my = (jy + fyp) / 2;
     const col = leg.near ? legColor : farColor;
     const pc = g.socks ? (leg.near ? WHITE : shade(WHITE, -0.1)) : col;
     const legLenNow = Math.hypot(mx - jx, my - jy) + Math.hypot(fxp - mx, fyp - my);
     pen.taperTube([jx, jy, mx, my, fxp, fyp], legW * 1.12, legW * 0.8, col, { tip: g.socks ? { color: pc, len: legLenNow * 0.4 } : undefined });
-    pen.ellipse(fxp + R * 0.08, fyp + R * 0.03, R * 0.24, R * 0.14, pc, pen.lw * 0.9);
+    pen.ellipse(fxp + R * 0.08, fyp + R * 0.02, R * 0.26, R * 0.16, pc, pen.lw * 0.9);
   };
   drawLeg(legs[0]);
   drawLeg(legs[1]);
@@ -796,7 +843,7 @@ function drawSide(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   }
   pen.fillStroke(body, null);
   // haunch line
-  pen.line([...B(-halfLen * 0.25, T * 0.75), ...B(-halfLen * 0.45, -T * 0.2), ...B(-halfLen * 0.85, -T * 0.35)], pen.lw * 0.7, rgba('#4a3a34', 0.45), 0.5);
+  pen.line([...B(-halfLen * 0.25, T * 0.75), ...B(-halfLen * 0.45, -T * 0.2), ...B(-halfLen * 0.85, -T * 0.35)], pen.lw * 0.7, rgba(pal.ink, 0.45), 0.5);
 
   drawLeg(legs[2]);
   drawLeg(legs[3]);
@@ -837,7 +884,7 @@ function drawCurl(pen: Pen, g: CatGenes, pal: Pal, pose: CatPose, R: number, bod
   bodyMarkings(pen, g, pal, body, 0, cy + ry * 0.2, rx, ry, 'curl');
   pen.fillStroke(body, null);
   // spine curl hint
-  pen.line([rx * 0.55, cy - ry * 0.35, rx * 0.15, cy - ry * 0.55, -rx * 0.35, cy - ry * 0.45], pen.lw * 0.55, rgba('#4a3a34', 0.3), 0.6);
+  pen.line([rx * 0.55, cy - ry * 0.35, rx * 0.15, cy - ry * 0.55, -rx * 0.35, cy - ry * 0.45], pen.lw * 0.55, rgba(pal.ink, 0.3), 0.6);
   // head tucked
   ctx.save();
   ctx.translate(-rx * 0.42, cy + ry * 0.22);
@@ -964,32 +1011,35 @@ export function drawCat(pen: Pen, g: CatGenes, pose: CatPose, opts: CatDrawOpts)
     ctx.ellipse(pose.view === 'side' ? 0 : 0, R * 0.05, sw * g.chonk * k, R * 0.32 * k, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  switch (pose.view) {
-    case 'front':
-      drawFront(pen, g, pal, pose, R, bodyK, false, outfit);
-      break;
-    case 'back':
-      drawFront(pen, g, pal, pose, R, bodyK, true, outfit);
-      break;
-    case 'side':
-      drawSide(pen, g, pal, pose, R, bodyK, outfit);
-      break;
-    case 'curl':
-      drawCurl(pen, g, pal, pose, R, bodyK, outfit);
-      break;
-    case 'belly':
-      drawBelly(pen, g, pal, pose, R, bodyK, outfit);
-      break;
-    case 'lie':
-      drawLie(pen, g, pal, pose, R, bodyK, outfit);
-      break;
-  }
+  withCatLine(pen, pal, () => {
+    switch (pose.view) {
+      case 'front':
+        drawFront(pen, g, pal, pose, R, bodyK, false, outfit);
+        break;
+      case 'back':
+        drawFront(pen, g, pal, pose, R, bodyK, true, outfit);
+        break;
+      case 'side':
+        drawSide(pen, g, pal, pose, R, bodyK, outfit);
+        break;
+      case 'curl':
+        drawCurl(pen, g, pal, pose, R, bodyK, outfit);
+        break;
+      case 'belly':
+        drawBelly(pen, g, pal, pose, R, bodyK, outfit);
+        break;
+      case 'lie':
+        drawLie(pen, g, pal, pose, R, bodyK, outfit);
+        break;
+    }
+  });
   ctx.globalAlpha = 1;
 }
 
 /** Draw just a cat head (used for townsfolk and portraits). Head center at (0,0). */
 export function drawCatHead(pen: Pen, g: CatGenes, R: number, pose: CatPose, back = false) {
-  drawHead(pen, g, palette(g), R, pose, { back });
+  const pal = palette(g);
+  withCatLine(pen, pal, () => drawHead(pen, g, pal, R, pose, { back }));
 }
 
 export function catPalette(g: CatGenes) {

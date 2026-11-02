@@ -43,9 +43,14 @@ export function drawNeckwear(pen: Pen, outfit: string[], x: number, y: number, R
   }
 }
 
+/** How far below the old crown the cat's (flatter) head now starts, in head radii. */
+export const CROWN_DROP = 0.12;
+
 export function drawHeadwear(pen: Pen, outfit: string[], R: number, back: boolean) {
   if (!outfit.length) return;
   const ctx = pen.ctx;
+  ctx.save();
+  ctx.translate(0, R * CROWN_DROP);
   for (const id of outfit) {
     switch (id) {
       case 'flower_crown': {
@@ -117,6 +122,7 @@ export function drawHeadwear(pen: Pen, outfit: string[], R: number, back: boolea
       }
     }
   }
+  ctx.restore();
   void back;
 }
 
@@ -124,19 +130,20 @@ export function drawFacewear(pen: Pen, outfit: string[], R: number, turn: number
   if (!outfit.includes('glasses')) return;
   const ctx = pen.ctx;
   const a = turn * 0.62;
-  const ex1 = Math.sin(-0.52 + a) * R * 1.05, ex2 = Math.sin(0.52 + a) * R * 1.05;
+  const ex1 = Math.sin(-0.56 + a) * R * 1.05, ex2 = Math.sin(0.56 + a) * R * 1.05;
+  const y = R * 0.12;
   ctx.strokeStyle = '#4a3a34';
   ctx.lineWidth = pen.lw * 0.9;
   ctx.fillStyle = 'rgba(200,230,255,0.25)';
   for (const ex of [ex1, ex2]) {
     ctx.beginPath();
-    ctx.arc(ex, R * 0.04, R * 0.3, 0, Math.PI * 2);
+    ctx.arc(ex, y, R * 0.28, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
   ctx.beginPath();
-  ctx.moveTo(ex1 + R * 0.3, R * 0.0);
-  ctx.quadraticCurveTo((ex1 + ex2) / 2, -R * 0.08, ex2 - R * 0.3, R * 0.0);
+  ctx.moveTo(ex1 + R * 0.28, y - R * 0.04);
+  ctx.quadraticCurveTo((ex1 + ex2) / 2, y - R * 0.12, ex2 - R * 0.28, y - R * 0.04);
   ctx.stroke();
 }
 

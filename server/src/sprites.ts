@@ -34,8 +34,11 @@ export interface SpriteSpec {
   outline: boolean; // white sticker border so the cat reads on dark backgrounds
 }
 
+/** Bumped whenever the cats are drawn differently, so apps that keep pictures fetch new ones. */
+const ART = 2;
+
 export function spriteKey(s: SpriteSpec): string {
-  const raw = JSON.stringify([s.genes, [...s.outfit].sort(), Math.round(s.age * 20) / 20, s.frame, s.size, s.outline]);
+  const raw = JSON.stringify([s.genes, [...s.outfit].sort(), Math.round(s.age * 20) / 20, s.frame, s.size, s.outline, ART]);
   return createHash('sha1').update(raw).digest('base64url').slice(0, 20);
 }
 
