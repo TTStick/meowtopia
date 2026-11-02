@@ -5,6 +5,7 @@
 // Android and the standalone watch app have their own scripts (make-android-icons.ts, make-watch-icon.ts).
 import { createCanvas, GlobalFonts, Path2D, type Canvas } from '@napi-rs/canvas';
 import { existsSync, writeFileSync } from 'node:fs';
+import { crc32, deflateSync } from 'node:zlib';
 (globalThis as { Path2D?: unknown }).Path2D ??= Path2D;
 const { Pen } = await import('../client/src/engine/pen');
 const { drawCat, defaultPose } = await import('../client/src/art/cat');
@@ -123,8 +124,38 @@ function macIcon(src: Canvas): Canvas {
   return c;
 }
 
-function save(c: Canvas, path: string) {
-  writeFileSync(path, c.toBuffer('image/png'));
+/** An RGB PNG without an alpha channel: Xcode turns down app icons that have one. */
+function opaquePng(c: Canvas): Buffer {
+  const { width: w, height: h } = c;
+  const px = c.getContext('2d').getImageData(0, 0, w, h).data;
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0, o = 0; y < h; y++) {
+    raw[o++] = 0; // no filter
+    for (let x = 0; x < w; x++, o += 3) {
+      const i = (y * w + x) * 4;
+      raw[o] = px[i];
+      raw[o + 1] = px[i + 1];
+      raw[o + 2] = px[i + 2];
+    }
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // truecolour
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+}
+
+function save(c: Canvas, path: string, opaque = true) {
+  writeFileSync(path, opaque ? opaquePng(c) : c.toBuffer('image/png'));
   console.log('wrote', path, `${c.width}x${c.height}`);
 }
 
@@ -137,4 +168,4 @@ save(resized(ic, 192), 'client/public/icon-192.png');
 const sp = splash();
 for (const n of ['', '-1', '-2']) save(sp, `ios/App/App/Assets.xcassets/Splash.imageset/splash-2732x2732${n}.png`);
 const mac = macIcon(ic);
-for (const size of [16, 32, 64, 128, 256, 512, 1024]) save(size === 1024 ? mac : resized(mac, size), `macos/CatNest/Assets.xcassets/AppIcon.appiconset/icon_${size}.png`);
+for (const size of [16, 32, 64, 128, 256, 512, 1024]) save(size === 1024 ? mac : resized(mac, size), `macos/CatNest/Assets.xcassets/AppIcon.appiconset/icon_${size}.png`, false);
