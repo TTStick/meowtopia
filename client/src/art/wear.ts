@@ -23,9 +23,13 @@ export function drawNeckwear(pen: Pen, outfit: string[], x: number, y: number, R
         break;
       }
       case 'scarf': {
-        const p = pen.line([x - R * 0.65, y - R * 0.05, x, y + R * 0.18, x + R * 0.65, y - R * 0.05], R * 0.3, '#e8735f', 0.3);
+        // wound low enough to show under the round chin
+        const sy = y + R * 0.2;
+        const p = pen.line([x - R * 0.7, sy - R * 0.05, x, sy + R * 0.18, x + R * 0.7, sy - R * 0.05], R * 0.3, '#e8735f', 0.3);
         pen.tubeOverlay(p, R * 0.3, '#f6d27a', [R * 0.12, R * 0.16]);
-        pen.tube([x + R * 0.35 + side * R * 0.2, y + R * 0.1, x + R * 0.42 + side * R * 0.2, y + R * 0.6], R * 0.22, '#e8735f');
+        // the loose end hangs off to one side, striped like the rest
+        const end = pen.tube([x + R * 0.48 + side * R * 0.2, sy + R * 0.06, x + R * 0.64 + side * R * 0.2, sy + R * 0.52], R * 0.22, '#e8735f');
+        pen.tubeOverlay(end, R * 0.22, '#f6d27a', [R * 0.1, R * 0.12]);
         break;
       }
       case 'bandana': {
