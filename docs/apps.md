@@ -92,7 +92,7 @@ xcrun simctl push booted com.catnest.app push.apns
 
 其中 `push.apns` 的内容是 `{"aps":{"alert":{"title":"汤圆探险回来啦","body":"带回了一片枫叶"}}}`。
 
-`client/appicon.html` 是生成图标和启动图的小工具：开发服务器跑起来后，访问 `/appicon.html?pick=1` 可以挑猫，访问 `/appicon.html?seed=951` 会渲染出图标和启动图。
+`client/appicon.html` 是生成图标和启动图的小工具：开发服务器跑起来后，访问 `/appicon.html?pick=1` 可以挑猫，访问 `/appicon.html?seed=951` 会渲染出图标和启动图。改了猫的画法以后，运行 `node --import tsx scripts/make-app-icons.ts` 会用同一只猫重画 iPhone、配套手表 App、Mac 和网页版的图标与启动图（Android 和独立手表 App 见下文各自的脚本）。
 
 ## Android App
 
