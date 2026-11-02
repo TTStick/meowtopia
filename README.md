@@ -50,7 +50,7 @@
 
 ### 网页
 
-<img src="docs/images/client-web.png" alt="网页版：猫猫小镇，汤圆在路上遇见了棉花奶奶和街头音乐家阿乐" width="100%">
+<img src="docs/images/client-web.png" alt="网页版：猫猫小镇，汤圆从家里跑出来，遇见了棉花奶奶和邮递员阿信" width="100%">
 
 **打开浏览器就能玩，什么都不用装。** 电脑上画面最大，小镇一眼能看得很远；手机浏览器里可以「添加到主屏幕」，像 App 一样全屏打开，也能收到它的小纸条（Web Push）。
 
@@ -102,7 +102,7 @@
   <p>另有一个<b>独立的「猫窝手表版」</b>：不需要 iPhone，功能像一个缩小的手机 App：猫可以在小镇的像素地图上走来走去，找居民和别的猫玩（转表冠缩放），还有状态、日记、收藏册、衣柜（转表冠试穿）、商店（转表冠选数量）、邻居和换小镇；表盘和智能叠放里也能放上彩色的小猫和小镇的时间、今晚的舞台。两个手表 App 可以同时装在一块表上。</p>
 </td>
 <td width="58%" valign="middle" align="center">
-  <img src="docs/images/client-watch.png" alt="Apple Watch：汤圆坐着，顺毛时它说「咕噜～我把幸福都给你听」" width="90%">
+  <img src="docs/images/client-watch.png" alt="Apple Watch：汤圆揣着手打盹，顺毛时它说「才不是……尾巴竖起来了，你懂的。」" width="90%">
 </td>
 </tr>
 </table>
