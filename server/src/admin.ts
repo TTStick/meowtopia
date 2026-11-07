@@ -206,9 +206,12 @@ route('GET', '/api/admin/world', (r) => {
   const now = Date.now();
   const ck = clockAt(now);
   const h = Math.floor(ck.hour), m = Math.floor((ck.hour - h) * 60);
+  const w = weatherAt(now);
   return {
     ...worldSnapshot(),
-    clock: { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, phase: PHASE_NAME[phaseOf(ck.hour)], season: SEASON_NAME[ck.season], weather: WEATHER_NAME[weatherAt(now).kind] },
+    clock: { time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, phase: PHASE_NAME[phaseOf(ck.hour)], season: SEASON_NAME[ck.season], weather: WEATHER_NAME[w.kind] },
+    // the same numbers the game draws the town with: light, season, rain and snow
+    sky: { hour: ck.hour, season: ck.season, kind: w.kind, rain: w.rain, snow: w.snow, cloud: w.cloud, wind: w.wind },
   };
 }, { auth: false });
 

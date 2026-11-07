@@ -1,8 +1,9 @@
 import type { Viewport } from '../engine/view';
 import type { InputHandler } from '../engine/input';
 import { Pen, rgba, mix } from '../engine/pen';
-import { CatActor, type AnimName } from './actor';
-import { drawProp, BOUNDS, type PropCtx } from '../art/props';
+import { CatActor, ANIM_MAP, type AnimName } from './actor';
+import { drawProp, drawPropLive, propLights, propScale, BOUNDS, type PropCtx } from '../art/props';
+import { paintGround, GROUND } from '../art/ground';
 import { drawNpc } from '../art/npc';
 import { drawBubble, drawNameTag, drawEmote, measureBubble, roundRect, type EmoteKind } from '../art/fx';
 import { HOUSES, HOOD_BOARD } from '../../../shared/world';
@@ -11,7 +12,7 @@ import { roomOpen } from '../../../shared/rooms';
 import { showAt, STAGE, type ShowNow } from '../../../shared/shows';
 import { CELL, WALL_H, drawWallpaper, drawFloor, drawFurniture, drawWallItem, wallpaperBase, HAS_FRONT, type DrawCtx, type SkyInfo } from '../art/furniture';
 import { drawShopPiece, drawShopWall, drawPlaque, isShopPiece } from '../art/interior';
-import { hashf, noise2 } from '../../../shared/rng';
+import { hashf } from '../../../shared/rng';
 import { daylight, sunset, skyColor } from '../../../shared/time';
 import * as clock from './clock';
 import type { EntState, ServerMsg } from '../../../shared/protocol';
@@ -29,15 +30,6 @@ interface GameLike {
 const CHUNK = 16; // tiles per chunk
 const INK_TEXT = '#4a3a34';
 const CPX = CHUNK * TILE;
-/** Ground colours by season (spring, summer, autumn, winter). */
-const GROUND = {
-  grass: ['#cfe6ae', '#cfe6ae', '#d9e6b2', '#e4ebde'],
-  forest: ['#b9d99a', '#b2d394', '#cdd59a', '#d6e0d2'],
-  hill: ['#d5ebb4', '#d2e8ae', '#e2e2ac', '#eef1ea'],
-  field: ['#dde8b0', '#e6e3a8', '#eadbb0', '#ecebe4'],
-  bamboo: ['#b4d79c', '#a9d293', '#c6d59c', '#d8e2d2'],
-  orchard: ['#d6ebb0', '#cbe6a6', '#dfe2a6', '#e8ede2'],
-};
 /** Ground-chunk pictures kept at most (canvas pixels): about 80 MB; phones run short of GPU memory long before the 40 chunks once kept. */
 const CHUNK_BUDGET = 20e6;
 const CAT_SPEED = 46;
@@ -68,12 +60,6 @@ interface WEnt {
 const LIGHTS = new Set<PropKind>(['lamp', 'lanterns', 'lighthouse', 'campfire', 'stageback', 'stagelight', 'stonelamp', 'gazebo', 'house', 'shop', 'fountain']);
 const FADE = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'house', 'shop', 'windmill', 'lighthouse', 'fruittree', 'bamboo', 'palm', 'gazebo', 'tent']);
 const SWAY = new Set<PropKind>(['tree', 'sakura', 'pine', 'bigtree', 'reed', 'crop', 'flower', 'bush', 'fruittree', 'bamboo', 'palm']);
-
-const ANIM_MAP: Record<string, AnimName> = {
-  sit: 'sit', sit_happy: 'sit_happy', watch: 'watch', window: 'window', groom: 'groom', sniff: 'sniff' as AnimName, think: 'think', beg: 'beg',
-  nap: 'nap', sleep: 'sleep', loaf: 'loaf', pounce: 'pounce', bat: 'bat', run: 'run', belly: 'belly', roll: 'belly', scratch: 'scratch',
-  stand: 'stand', walk: 'walk', meow: 'meow', stretch: 'stretch', yawn: 'yawn', purr: 'purr',
-};
 
 interface Critter {
   k: 'butterfly' | 'petal' | 'leaf' | 'firefly' | 'splash' | 'bird' | 'note';
@@ -684,7 +670,7 @@ export class WorldScene implements Scene {
     const ctx = c.getContext('2d')!;
     ctx.scale(scale, scale);
     ctx.translate(-cx * CPX, -cy * CPX);
-    this.paintGround(ctx, cx, cy, season);
+    paintGround(ctx, (tx, ty) => this.terAt(tx, ty), cx, cy, CHUNK, season);
     this.chunks.set(key, { c, used: this.T });
     // over budget: let go of the ones not seen for longest (never one on screen now)
     let px = 0;
@@ -698,163 +684,6 @@ export class WorldScene implements Scene {
       }
     }
     return c;
-  }
-
-  private paintGround(ctx: CanvasRenderingContext2D, cx: number, cy: number, season: number) {
-    const pen = new Pen(ctx).begin(cx * 31 + cy * 7, 0.5, 1.6);
-    const tx0 = cx * CHUNK - 1, ty0 = cy * CHUNK - 1, tx1 = tx0 + CHUNK + 2, ty1 = ty0 + CHUNK + 2;
-    const grass = GROUND.grass[season];
-    const forest = GROUND.forest[season];
-    const hill = GROUND.hill[season];
-    const field = GROUND.field[season];
-    const bamboo = GROUND.bamboo[season];
-    const orchard = GROUND.orchard[season];
-    // base
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        const t = this.terAt(tx, ty);
-        const n = noise2(tx * 0.18, ty * 0.18, 5) - 0.5;
-        const base = t === Ter.Forest ? forest : t === Ter.Hill ? hill : t === Ter.Field ? field : t === Ter.Bamboo ? bamboo : t === Ter.Orchard ? orchard : grass;
-        ctx.fillStyle = mix(base, n > 0 ? '#ffffff' : '#7a9a5a', Math.abs(n) * 0.18);
-        ctx.fillRect(tx * TILE - 0.5, ty * TILE - 0.5, TILE + 1, TILE + 1);
-      }
-    const layer = (types: number[], fill: string, outline: boolean, r = 0.72) => {
-      const tiles: [number, number, number][] = [];
-      for (let ty = ty0; ty < ty1; ty++)
-        for (let tx = tx0; tx < tx1; tx++) if (types.includes(this.terAt(tx, ty))) tiles.push([tx, ty, (r + (hashf(tx, ty, 41) - 0.5) * 0.12) * TILE]);
-      if (!tiles.length) return;
-      if (outline) {
-        ctx.fillStyle = '#4a3a34';
-        ctx.beginPath();
-        for (const [tx, ty, rr] of tiles) {
-          ctx.moveTo((tx + 0.5) * TILE + rr + 1.8, (ty + 0.5) * TILE);
-          ctx.arc((tx + 0.5) * TILE, (ty + 0.5) * TILE, rr + 1.8, 0, Math.PI * 2);
-        }
-        ctx.fill();
-      }
-      ctx.fillStyle = fill;
-      ctx.beginPath();
-      for (const [tx, ty, rr] of tiles) {
-        ctx.moveTo((tx + 0.5) * TILE + rr, (ty + 0.5) * TILE);
-        ctx.arc((tx + 0.5) * TILE, (ty + 0.5) * TILE, rr, 0, Math.PI * 2);
-      }
-      ctx.fill();
-    };
-    // grass tufts before overlays
-    ctx.strokeStyle = 'rgba(90,120,60,0.45)';
-    ctx.lineWidth = 1.2;
-    ctx.lineCap = 'round';
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        const t = this.terAt(tx, ty);
-        if (t !== Ter.Grass && t !== Ter.Forest && t !== Ter.Hill && t !== Ter.Bamboo && t !== Ter.Orchard) continue;
-        for (let k = 0; k < 2; k++) {
-          if (hashf(tx, ty, 50 + k) > 0.45) continue;
-          const x = (tx + hashf(tx, ty, 60 + k)) * TILE, y = (ty + hashf(tx, ty, 70 + k)) * TILE;
-          ctx.beginPath();
-          ctx.moveTo(x - 3, y - 4);
-          ctx.lineTo(x, y);
-          ctx.lineTo(x + 1, y - 5);
-          ctx.moveTo(x, y);
-          ctx.lineTo(x + 4, y - 3);
-          ctx.stroke();
-        }
-        if (season < 3 && hashf(tx, ty, 80) < 0.06) {
-          ctx.fillStyle = ['#ffffff', '#ffe08a', '#f8c6d4'][Math.floor(hashf(tx, ty, 81) * 3)];
-          ctx.beginPath();
-          ctx.arc((tx + hashf(tx, ty, 82)) * TILE, (ty + hashf(tx, ty, 83)) * TILE, 1.8, 0, 7);
-          ctx.fill();
-        }
-      }
-    layer([Ter.Sand], '#f4e4bf', true);
-    layer([Ter.Path, Ter.Plaza], '#ecdcc0', true, 0.7);
-    layer([Ter.Plaza], '#efe4d2', false, 0.74);
-    // path pebbles & plaza tiles
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        const t = this.terAt(tx, ty);
-        if (t === Ter.Path && hashf(tx, ty, 90) < 0.5) {
-          pen.ellipse((tx + 0.2 + hashf(tx, ty, 91) * 0.6) * TILE, (ty + 0.2 + hashf(tx, ty, 92) * 0.6) * TILE, 3 + hashf(tx, ty, 93) * 2, 2.2, null, 1, 'rgba(150,120,90,0.45)');
-        } else if (t === Ter.Plaza) {
-          ctx.strokeStyle = 'rgba(160,130,100,0.28)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(tx * TILE + 2, ty * TILE + 2, TILE / 2 - 2, TILE / 2 - 2);
-          ctx.strokeRect(tx * TILE + TILE / 2 + 1, ty * TILE + TILE / 2 + 1, TILE / 2 - 3, TILE / 2 - 3);
-        } else if (t === Ter.Sand && hashf(tx, ty, 94) < 0.5) {
-          ctx.fillStyle = 'rgba(190,150,100,0.4)';
-          ctx.fillRect((tx + hashf(tx, ty, 95)) * TILE, (ty + hashf(tx, ty, 96)) * TILE, 1.6, 1.6);
-        }
-      }
-    layer([Ter.Water, Ter.Deep, Ter.Wood, Ter.Stone], '#a9d6ec', true, 0.74);
-    layer([Ter.Deep], '#93c6e3', false, 0.7);
-    // stepping stones
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        if (this.terAt(tx, ty) !== Ter.Stone) continue;
-        const sx = (tx + 0.5 + (hashf(tx, ty, 110) - 0.5) * 0.25) * TILE, sy = (ty + 0.5) * TILE;
-        pen.ellipse(sx, sy + 2, 12, 7, 'rgba(74,58,52,0.18)', 0, null);
-        pen.ellipse(sx, sy, 12, 8, ['#d6d0c6', '#c9c6c0'][(tx + ty) % 2], 1.4);
-        pen.line([sx - 6, sy - 2, sx - 1, sy - 4], 1, 'rgba(255,255,255,0.7)');
-      }
-    // shore highlights
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.lineWidth = 1.4;
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        const t = this.terAt(tx, ty);
-        if (t !== Ter.Water) continue;
-        if (hashf(tx, ty, 100) < 0.3) {
-          const x = (tx + 0.3) * TILE, y = (ty + 0.5) * TILE;
-          ctx.beginPath();
-          ctx.moveTo(x, y);
-          ctx.quadraticCurveTo(x + 5, y - 3, x + 10, y);
-          ctx.stroke();
-        }
-      }
-    // bridges and pier (wood planks)
-    for (let ty = ty0; ty < ty1; ty++)
-      for (let tx = tx0; tx < tx1; tx++) {
-        if (this.terAt(tx, ty) !== Ter.Wood) continue;
-        const x = tx * TILE, y = ty * TILE;
-        ctx.fillStyle = '#dcb58a';
-        ctx.fillRect(x, y, TILE, TILE);
-        ctx.strokeStyle = 'rgba(120,80,50,0.5)';
-        ctx.lineWidth = 1.2;
-        const vertical = this.terAt(tx, ty - 1) === Ter.Wood && this.terAt(tx, ty + 1) === Ter.Wood && !(this.terAt(tx - 1, ty) === Ter.Wood && this.terAt(tx + 1, ty) === Ter.Wood);
-        for (let i = 0; i < 4; i++) {
-          ctx.beginPath();
-          if (vertical) {
-            ctx.moveTo(x, y + i * 8);
-            ctx.lineTo(x + TILE, y + i * 8);
-          } else {
-            ctx.moveTo(x + i * 8, y);
-            ctx.lineTo(x + i * 8, y + TILE);
-          }
-          ctx.stroke();
-        }
-        // railings on edges facing water
-        ctx.strokeStyle = '#4a3a34';
-        ctx.lineWidth = 1.8;
-        for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-          const n = this.terAt(tx + dx, ty + dy);
-          if (n !== Ter.Water && n !== Ter.Deep) continue;
-          ctx.beginPath();
-          if (dy === -1) {
-            ctx.moveTo(x, y + 1);
-            ctx.lineTo(x + TILE, y + 1);
-          } else if (dy === 1) {
-            ctx.moveTo(x, y + TILE - 1);
-            ctx.lineTo(x + TILE, y + TILE - 1);
-          } else if (dx === -1) {
-            ctx.moveTo(x + 1, y);
-            ctx.lineTo(x + 1, y + TILE);
-          } else {
-            ctx.moveTo(x + TILE - 1, y);
-            ctx.lineTo(x + TILE - 1, y + TILE);
-          }
-          ctx.stroke();
-        }
-      }
   }
 
   private getSprite(p: Prop, scale: number, pc: PropCtx): { c: HTMLCanvasElement; ox: number; oy: number; s: number } {
@@ -992,7 +821,7 @@ export class WorldScene implements Scene {
     for (const p of this.w.props) {
       if (p.season !== undefined && p.season !== season) continue;
       const b = BOUNDS[p.k] ?? [-40, -80, 40, 10];
-      const pw = p.k === 'house' || p.k === 'shop' ? p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136) : p.s;
+      const pw = propScale(p);
       if (p.x + b[2] * pw < bx0 || p.x + b[0] * pw > bx1 || p.y + b[1] * pw > by1 || p.y + b[3] * pw < by0) continue;
       const flat = p.k === 'lily' || p.k === 'picnic' || p.k === 'sandbox' || p.k === 'hotspring' || p.k === 'stage';
       items.push({
@@ -1015,7 +844,7 @@ export class WorldScene implements Scene {
           ctx.scale(pw, pw);
           ctx.drawImage(sp.c, sp.ox, sp.oy, sp.c.width / sp.s, sp.c.height / sp.s);
           ctx.restore();
-          this.drawPropLive(p, pw, T, night);
+          drawPropLive(v.pen, p, pw, T, { night, hour: ck.hour, show: !!this.show?.live });
         },
       });
     }
@@ -1387,154 +1216,6 @@ export class WorldScene implements Scene {
     }
   }
 
-  private drawPropLive(p: Prop, s: number, T: number, night: number) {
-    const ctx = this.v!.ctx;
-    const pen = this.v!.pen;
-    switch (p.k) {
-      case 'windmill': {
-        ctx.save();
-        ctx.translate(p.x, p.y - 128);
-        ctx.rotate(T * 0.6);
-        pen.begin(77, 0.3, 1.7);
-        for (let i = 0; i < 4; i++) {
-          ctx.rotate(Math.PI / 2);
-          pen.shape([0, -4, 70, -10, 72, 10, 0, 4], '#fffaf0');
-          pen.line([10, 0, 70, 0], 1, 'rgba(74,58,52,0.4)');
-        }
-        pen.ellipse(0, 0, 6, 6, '#d98f6a');
-        ctx.restore();
-        break;
-      }
-      case 'fountain': {
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-        ctx.lineWidth = 1.6;
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2 + T * 0.3;
-          const k = (T * 1.2 + i * 0.3) % 1;
-          ctx.globalAlpha = 1 - k;
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y - 66);
-          ctx.quadraticCurveTo(p.x + Math.cos(a) * 16, p.y - 78, p.x + Math.cos(a) * 20, p.y - 42 + k * 4);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.ellipse(p.x, p.y - 9, 12 + k * 34, 4 + k * 10, 0, 0, 7);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        break;
-      }
-      case 'stage': {
-        if (!this.show?.live) break;
-        // coloured pools of light drifting over the boards
-        for (let i = 0; i < 3; i++) {
-          const x = p.x + Math.sin(T * 0.6 + i * 2.1) * 100, y = p.y - 62 + Math.cos(T * 0.5 + i) * 26;
-          const g = ctx.createRadialGradient(x, y, 0, x, y, 56);
-          const col = ['255,236,170', '249,180,196', '185,220,244'][i];
-          g.addColorStop(0, `rgba(${col},${0.35 + night * 0.25})`);
-          g.addColorStop(1, `rgba(${col},0)`);
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.ellipse(x, y, 56, 22, 0, 0, 7);
-          ctx.fill();
-        }
-        break;
-      }
-      case 'stagelight': {
-        if (!this.show?.live) break;
-        const sx = p.v === 0 ? 1 : -1;
-        const hx = p.x + sx * 24, hy = p.y - 74;
-        const k = Math.sin(T * 0.7 + p.v * 1.6) * 0.5 + 0.5;
-        const tx = (STAGE.x - 3.4 + k * 6.8) * TILE, ty = ((STAGE.back + STAGE.front) / 2 + 0.4) * TILE;
-        const col = ['255,236,170', '249,180,196', '185,220,244'][(Math.floor(T / 5) + p.v) % 3];
-        const a = 0.12 + night * 0.22;
-        const g = ctx.createLinearGradient(hx, hy, tx, ty);
-        g.addColorStop(0, `rgba(${col},${a * 1.6})`);
-        g.addColorStop(1, `rgba(${col},${a * 0.5})`);
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(hx, hy);
-        ctx.lineTo(tx - 44, ty);
-        ctx.lineTo(tx + 44, ty);
-        ctx.closePath();
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(tx, ty, 46, 15, 0, 0, 7);
-        ctx.fill();
-        break;
-      }
-      case 'hotspring': {
-        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-        for (let i = 0; i < 9; i++) {
-          const k = (T * 0.18 + i / 9) % 1;
-          const sx = p.x - 80 + ((i * 37) % 160) + Math.sin(k * 5 + i) * 10, sy = p.y - 70 - k * 90;
-          ctx.globalAlpha = Math.sin(k * Math.PI) * 0.75;
-          ctx.beginPath();
-          ctx.ellipse(sx, sy, 10 + k * 18, 6 + k * 10, 0, 0, 7);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        break;
-      }
-      case 'campfire': {
-        const hour = clock.worldClock().hour;
-        if (hour > 7 && hour < 17.5) break; // lit from dusk to morning
-        for (let i = 0; i < 3; i++) {
-          const fl = Math.sin(T * 9 + i * 2) * 3, h = 22 + Math.sin(T * 6 + i) * 5;
-          const x = p.x + (i - 1) * 7;
-          pen.begin(9 + i, 0.3, 1.4);
-          pen.shape([x - 7, p.y - 8, x + fl, p.y - 8 - h, x + 7, p.y - 8], ['#f39a45', '#ffd45e', '#f08a5d'][i]);
-        }
-        ctx.fillStyle = 'rgba(255,240,170,0.7)';
-        for (let i = 0; i < 4; i++) {
-          const k = (T * 0.6 + i / 4) % 1;
-          ctx.globalAlpha = 1 - k;
-          ctx.beginPath();
-          ctx.arc(p.x + Math.sin(k * 7 + i) * 8, p.y - 30 - k * 50, 1.6, 0, 7);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        break;
-      }
-      case 'kite': {
-        const kx = p.x + Math.sin(T * 0.7) * 20, ky = p.y - 200 + Math.cos(T * 0.9) * 12;
-        pen.begin(5, 0.4, 1.5);
-        pen.line([p.x + 10, p.y - 10, (p.x + kx) / 2 + 20, (p.y + ky) / 2, kx, ky + 14], 0.8, 'rgba(74,58,52,0.6)');
-        pen.shape([kx, ky - 16, kx + 12, ky, kx, ky + 14, kx - 12, ky], '#f49ab0');
-        pen.line([kx, ky + 14, kx - 6 + Math.sin(T * 3) * 4, ky + 30, kx + 2, ky + 42], 1.2, '#ffd45e');
-        break;
-      }
-      case 'lighthouse':
-        if (night > 0.4) {
-          const a = T * 0.8;
-          const g = ctx.createRadialGradient(p.x, p.y - 166, 4, p.x, p.y - 166, 260);
-          g.addColorStop(0, 'rgba(255,240,170,0.35)');
-          g.addColorStop(1, 'rgba(255,240,170,0)');
-          ctx.fillStyle = g;
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y - 166);
-          ctx.arc(p.x, p.y - 166, 260, a - 0.2, a + 0.2);
-          ctx.closePath();
-          ctx.fill();
-        }
-        break;
-      case 'house':
-        // chimney smoke
-        if (Math.floor(p.v) % 2 === 0) {
-          const cx = p.x + (136 / 2 - 34) * s, cy = p.y - 130 * s;
-          ctx.fillStyle = 'rgba(255,255,255,0.55)';
-          for (let i = 0; i < 3; i++) {
-            const k = (T * 0.25 + i / 3) % 1;
-            ctx.globalAlpha = (1 - k) * 0.7;
-            ctx.beginPath();
-            ctx.arc(cx + Math.sin(k * 4 + p.id) * 6 + k * 10, cy - k * 50, 4 + k * 8, 0, 7);
-            ctx.fill();
-          }
-          ctx.globalAlpha = 1;
-        }
-        break;
-    }
-  }
-
   private drawCritter(ctx: CanvasRenderingContext2D, c: Critter, T: number) {
     switch (c.k) {
       case 'butterfly': {
@@ -1658,21 +1339,7 @@ export class WorldScene implements Scene {
     for (const p of this.lamps) {
       if (p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) continue;
       if (p.season !== undefined && p.season !== clock.season()) continue;
-      if (p.k === 'lamp') lights.push([p.x, p.y - 66, 120, 1]);
-      else if (p.k === 'lanterns') for (let i = 0; i < 7; i++) lights.push([p.x - 90 + i * 30, p.y - 72, 46, 0.8]);
-      else if (p.k === 'lighthouse') lights.push([p.x, p.y - 166, 160, 1]);
-      else if (p.k === 'campfire') lights.push([p.x, p.y - 16, 170, 1]);
-      else if (p.k === 'stageback') {
-        for (let i = 0; i < 5; i++) lights.push([p.x - 150 + i * 75, p.y - 182, 56, 0.8]);
-        if (this.show?.live) lights.push([p.x, p.y + 64, 230, 1]);
-      } else if (p.k === 'stagelight' && this.show?.live) lights.push([p.x, p.y - 74, 60, 0.9]);
-      else if (p.k === 'stonelamp') lights.push([p.x, p.y - 26, 70, 0.8]);
-      else if (p.k === 'gazebo') lights.push([p.x, p.y - 52, 80, 0.8]);
-      else if (p.k === 'house' || p.k === 'shop') {
-        const s = p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136);
-        const off = p.k === 'shop' ? 70 : 42;
-        lights.push([p.x - off * s, p.y - 50 * s, 70, 0.8], [p.x + off * s, p.y - 50 * s, 70, 0.8], [p.x, p.y - 20 * s, 60, 0.6]);
-      } else if (p.k === 'fountain') lights.push([p.x, p.y - 20, 80, 0.4]);
+      lights.push(...propLights(p, !!this.show?.live));
     }
     for (const e of this.ents.values()) lights.push([e.x, e.y - 20, e.mine ? 80 : 34, e.mine ? 0.7 : 0.35]);
     for (const c of this.critters) if (c.k === 'firefly') lights.push([c.x, c.y - c.z, 22, 0.5]);

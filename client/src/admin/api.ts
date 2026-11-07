@@ -1,4 +1,5 @@
 // Requests from the admin panel. The panel's cookie only travels to /api/admin.
+import type { CatGenes } from '../../../shared/types';
 
 export class AdminError extends Error {
   constructor(public status: number, message: string) {
@@ -42,6 +43,11 @@ export interface WorldEnt {
   id: string;
   kind: 'cat' | 'town' | 'npc'; // a player's cat, one of the town's own cats, a resident
   name: string;
+  genes?: CatGenes; // older servers leave these out
+  outfit?: string[];
+  age?: number;
+  dir?: 1 | -1;
+  room?: string | null; // inside this shop; shown on its doorstep
   role: string | null;
   owner: string | null;
   ownerId: string | null;
@@ -62,6 +68,7 @@ export interface WorldSnap {
   watching: number;
   connections: number;
   clock: { time: string; phase: string; season: string; weather: string };
+  sky?: { hour: number; season: number; kind: 'clear' | 'cloudy' | 'rain' | 'snow'; rain: number; snow: number; cloud: number; wind: number };
 }
 
 export type Effort = 'low' | 'medium' | 'high';

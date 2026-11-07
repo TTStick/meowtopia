@@ -1,7 +1,8 @@
 // World props in line-art style. Each draws with its base at (0,0).
 import { Pen, shade, rgba, mix } from '../engine/pen';
 import { hashf } from '../../../shared/rng';
-import type { PropKind } from '../../../shared/world';
+import { STAGE } from '../../../shared/shows';
+import { TILE, type Prop, type PropKind } from '../../../shared/world';
 
 const INK = '#4a3a34';
 const TRUNK = '#b58a63';
@@ -13,6 +14,46 @@ export interface PropCtx {
   night: number;
   t: number;
   label?: string;
+}
+
+/** How much a prop is scaled when drawn: houses and shops are drawn to fill their lot. */
+export function propScale(p: Prop): number {
+  return p.k === 'house' || p.k === 'shop' ? p.s * 5 * TILE / (p.k === 'shop' ? 230 : 136) : p.s;
+}
+
+/** The lights a prop gives at night: [x, y, radius, strength] in world units. `live`: an evening show is on. */
+export function propLights(p: Prop, live: boolean): [number, number, number, number][] {
+  switch (p.k) {
+    case 'lamp':
+      return [[p.x, p.y - 66, 120, 1]];
+    case 'lanterns':
+      return Array.from({ length: 7 }, (_, i) => [p.x - 90 + i * 30, p.y - 72, 46, 0.8] as [number, number, number, number]);
+    case 'lighthouse':
+      return [[p.x, p.y - 166, 160, 1]];
+    case 'campfire':
+      return [[p.x, p.y - 16, 170, 1]];
+    case 'stageback': {
+      const out = Array.from({ length: 5 }, (_, i) => [p.x - 150 + i * 75, p.y - 182, 56, 0.8] as [number, number, number, number]);
+      if (live) out.push([p.x, p.y + 64, 230, 1]);
+      return out;
+    }
+    case 'stagelight':
+      return live ? [[p.x, p.y - 74, 60, 0.9]] : [];
+    case 'stonelamp':
+      return [[p.x, p.y - 26, 70, 0.8]];
+    case 'gazebo':
+      return [[p.x, p.y - 52, 80, 0.8]];
+    case 'house':
+    case 'shop': {
+      const s = propScale(p);
+      const off = p.k === 'shop' ? 70 : 42;
+      return [[p.x - off * s, p.y - 50 * s, 70, 0.8], [p.x + off * s, p.y - 50 * s, 70, 0.8], [p.x, p.y - 20 * s, 60, 0.6]];
+    }
+    case 'fountain':
+      return [[p.x, p.y - 20, 80, 0.4]];
+    default:
+      return [];
+  }
 }
 
 /** Visual bounds relative to base: [left, top, right, bottom]. */
@@ -881,6 +922,154 @@ export function drawProp(pen: Pen, kind: PropKind, v: number, c: PropCtx) {
       }
       return;
     }
+  }
+}
+
+/** The moving parts drawn over a prop's picture every frame: sails, spray, steam, fire, smoke, the lighthouse beam.
+ * `s` is the prop's drawing scale (propScale); `show`: an evening show is on. */
+export function drawPropLive(pen: Pen, p: Prop, s: number, T: number, o: { night: number; hour: number; show: boolean }) {
+  const ctx = pen.ctx;
+  switch (p.k) {
+    case 'windmill': {
+      ctx.save();
+      ctx.translate(p.x, p.y - 128);
+      ctx.rotate(T * 0.6);
+      pen.begin(77, 0.3, 1.7);
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        pen.shape([0, -4, 70, -10, 72, 10, 0, 4], '#fffaf0');
+        pen.line([10, 0, 70, 0], 1, 'rgba(74,58,52,0.4)');
+      }
+      pen.ellipse(0, 0, 6, 6, '#d98f6a');
+      ctx.restore();
+      break;
+    }
+    case 'fountain': {
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1.6;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + T * 0.3;
+        const k = (T * 1.2 + i * 0.3) % 1;
+        ctx.globalAlpha = 1 - k;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 66);
+        ctx.quadraticCurveTo(p.x + Math.cos(a) * 16, p.y - 78, p.x + Math.cos(a) * 20, p.y - 42 + k * 4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y - 9, 12 + k * 34, 4 + k * 10, 0, 0, 7);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'stage': {
+      if (!o.show) break;
+      // coloured pools of light drifting over the boards
+      for (let i = 0; i < 3; i++) {
+        const x = p.x + Math.sin(T * 0.6 + i * 2.1) * 100, y = p.y - 62 + Math.cos(T * 0.5 + i) * 26;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, 56);
+        const col = ['255,236,170', '249,180,196', '185,220,244'][i];
+        g.addColorStop(0, `rgba(${col},${0.35 + o.night * 0.25})`);
+        g.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(x, y, 56, 22, 0, 0, 7);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'stagelight': {
+      if (!o.show) break;
+      const sx = p.v === 0 ? 1 : -1;
+      const hx = p.x + sx * 24, hy = p.y - 74;
+      const k = Math.sin(T * 0.7 + p.v * 1.6) * 0.5 + 0.5;
+      const tx = (STAGE.x - 3.4 + k * 6.8) * TILE, ty = ((STAGE.back + STAGE.front) / 2 + 0.4) * TILE;
+      const col = ['255,236,170', '249,180,196', '185,220,244'][(Math.floor(T / 5) + p.v) % 3];
+      const a = 0.12 + o.night * 0.22;
+      const g = ctx.createLinearGradient(hx, hy, tx, ty);
+      g.addColorStop(0, `rgba(${col},${a * 1.6})`);
+      g.addColorStop(1, `rgba(${col},${a * 0.5})`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(tx - 44, ty);
+      ctx.lineTo(tx + 44, ty);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(tx, ty, 46, 15, 0, 0, 7);
+      ctx.fill();
+      break;
+    }
+    case 'hotspring': {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      for (let i = 0; i < 9; i++) {
+        const k = (T * 0.18 + i / 9) % 1;
+        const sx = p.x - 80 + ((i * 37) % 160) + Math.sin(k * 5 + i) * 10, sy = p.y - 70 - k * 90;
+        ctx.globalAlpha = Math.sin(k * Math.PI) * 0.75;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, 10 + k * 18, 6 + k * 10, 0, 0, 7);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'campfire': {
+      if (o.hour > 7 && o.hour < 17.5) break; // lit from dusk to morning
+      for (let i = 0; i < 3; i++) {
+        const fl = Math.sin(T * 9 + i * 2) * 3, h = 22 + Math.sin(T * 6 + i) * 5;
+        const x = p.x + (i - 1) * 7;
+        pen.begin(9 + i, 0.3, 1.4);
+        pen.shape([x - 7, p.y - 8, x + fl, p.y - 8 - h, x + 7, p.y - 8], ['#f39a45', '#ffd45e', '#f08a5d'][i]);
+      }
+      ctx.fillStyle = 'rgba(255,240,170,0.7)';
+      for (let i = 0; i < 4; i++) {
+        const k = (T * 0.6 + i / 4) % 1;
+        ctx.globalAlpha = 1 - k;
+        ctx.beginPath();
+        ctx.arc(p.x + Math.sin(k * 7 + i) * 8, p.y - 30 - k * 50, 1.6, 0, 7);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+    case 'kite': {
+      const kx = p.x + Math.sin(T * 0.7) * 20, ky = p.y - 200 + Math.cos(T * 0.9) * 12;
+      pen.begin(5, 0.4, 1.5);
+      pen.line([p.x + 10, p.y - 10, (p.x + kx) / 2 + 20, (p.y + ky) / 2, kx, ky + 14], 0.8, 'rgba(74,58,52,0.6)');
+      pen.shape([kx, ky - 16, kx + 12, ky, kx, ky + 14, kx - 12, ky], '#f49ab0');
+      pen.line([kx, ky + 14, kx - 6 + Math.sin(T * 3) * 4, ky + 30, kx + 2, ky + 42], 1.2, '#ffd45e');
+      break;
+    }
+    case 'lighthouse':
+      if (o.night > 0.4) {
+        const a = T * 0.8;
+        const g = ctx.createRadialGradient(p.x, p.y - 166, 4, p.x, p.y - 166, 260);
+        g.addColorStop(0, 'rgba(255,240,170,0.35)');
+        g.addColorStop(1, 'rgba(255,240,170,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 166);
+        ctx.arc(p.x, p.y - 166, 260, a - 0.2, a + 0.2);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    case 'house':
+      // chimney smoke
+      if (Math.floor(p.v) % 2 === 0) {
+        const cx = p.x + (136 / 2 - 34) * s, cy = p.y - 130 * s;
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        for (let i = 0; i < 3; i++) {
+          const k = (T * 0.25 + i / 3) % 1;
+          ctx.globalAlpha = (1 - k) * 0.7;
+          ctx.beginPath();
+          ctx.arc(cx + Math.sin(k * 4 + p.id) * 6 + k * 10, cy - k * 50, 4 + k * 8, 0, 7);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      break;
   }
 }
 

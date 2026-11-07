@@ -20,6 +20,13 @@ interface AnimDef {
   apply(p: CatPose, c: AnimCtx): void;
 }
 
+/** The server's activity names, as the animations that show them. */
+export const ANIM_MAP: Record<string, AnimName> = {
+  sit: 'sit', sit_happy: 'sit_happy', watch: 'watch', window: 'window', groom: 'groom', sniff: 'sniff' as AnimName, think: 'think', beg: 'beg',
+  nap: 'nap', sleep: 'sleep', loaf: 'loaf', pounce: 'pounce', bat: 'bat', run: 'run', belly: 'belly', roll: 'belly', scratch: 'scratch',
+  stand: 'stand', walk: 'walk', meow: 'meow', stretch: 'stretch', yawn: 'yawn', purr: 'purr',
+};
+
 const ANIMS: Record<AnimName, AnimDef> = {
   sit: {
     view: 'front',
