@@ -70,6 +70,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
         }
     }
 
+    /// A widget was clicked (catnest://open/home or catnest://open/letters).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first(where: { $0.scheme == "catnest" }) else { return }
+        DebugDump.note("opened \(url.absoluteString)")
+        openGame(query: url.lastPathComponent == "letters" ? "?panel=letters" : "")
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         openGame()
         sync.poll()
@@ -240,6 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, BridgeReceiver, NSPopo
     // MARK: for DebugDump
     var debugPopover: NSPopover { popover }
     var debugCompanion: WKWebView { companion }
+    var debugSync: CompanionSync { sync }
     var debugGameView: WKWebView? { gameView }
     var debugCat: StatusCat { cat }
 }

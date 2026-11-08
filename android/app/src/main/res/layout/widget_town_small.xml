@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_sky_day" android:clipToOutline="true">
+<ImageView android:id="@+id/deco" android:layout_width="58dp" android:layout_height="58dp" android:layout_gravity="top|end" android:layout_marginTop="6dp" android:layout_marginEnd="6dp" android:contentDescription="@null" android:scaleType="fitCenter" android:visibility="gone" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_horizontal" android:orientation="vertical">
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="40" />
+<ImageView android:id="@+id/houses" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="36" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_houses_day" android:layout_marginStart="10dp" android:layout_marginEnd="10dp" />
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="24" />
+</LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="70" />
+        <ImageView android:id="@+id/ground" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="30" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_floor" android:tint="#EBD3AE" />
+    </LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
+    <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="小镇" android:textColor="#AD4A3A34" android:textSize="11sp" />
+    <TextView android:id="@+id/phase" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="下午 · 晴" android:textColor="#4A3A34" android:textSize="16sp" android:textStyle="bold" android:layout_marginTop="2dp"/>
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <TextView android:id="@+id/show" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/widget_pill" android:ellipsize="end" android:maxLines="1" android:paddingStart="8dp" android:paddingTop="4dp" android:paddingEnd="8dp" android:paddingBottom="4dp" android:text="19:30 小镇乐团" android:textColor="#4A3A34" android:textSize="11.5sp" android:textStyle="bold" />
+</LinearLayout>
+</FrameLayout>

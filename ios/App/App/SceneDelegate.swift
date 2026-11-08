@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WidgetKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -12,9 +13,24 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+        connectionOptions.urlContexts.forEach { openedFromWidget($0.url) }
+    }
+
+    /// Just played: let the widgets catch up.
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// catnest://open/letters goes to the mailbox; catnest://open/home only needs the app in front.
+    @discardableResult
+    private func openedFromWidget(_ url: URL) -> Bool {
+        guard url.scheme == "catnest" else { return false }
+        if url.lastPathComponent == "letters" { KeychainPlugin.openPanel("letters") }
+        return true
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        if URLContexts.contains(where: { openedFromWidget($0.url) }) { return }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 

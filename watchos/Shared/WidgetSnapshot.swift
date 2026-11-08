@@ -1,9 +1,14 @@
 import Foundation
+#if canImport(UIKit)
 import UIKit
+typealias PlatformImage = UIImage
+#else
+import AppKit
+typealias PlatformImage = NSImage
+#endif
 
-/// What the watch face and the Smart Stack show: written by the app (when it's open,
-/// and in the background about every half hour), read by the widgets. Only these
-/// few facts and the cat's pictures are shared; the session stays in the app.
+/// What the widgets show (the watch's, and the iPhone's and Mac's): a few facts and
+/// the cat's pictures, kept in the shared app group.
 struct WidgetSnapshot: Codable, Equatable {
     var at = Date()
     var signedIn = false
@@ -30,9 +35,23 @@ struct WidgetSnapshot: Codable, Equatable {
     var townMode = "open"
     var town = ""
     var look = ""
+    // used by the home screen and desktop widgets (optional, so older saved files still load)
+    var goingHome: Bool?
+    var days: Int?
+    var phase: String?
+    var season: String?
+    var isSample: Bool?
 
+    #if os(watchOS)
     static let group = "group.com.catnest.watch"
-    private static var dir: URL? { FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) }
+    #elseif os(iOS)
+    static let group = "group.com.catnest.app"
+    #else
+    static let group = "group.com.catnest.mac"
+    #endif
+    /// Tools that draw the widgets outside the app point this at a folder of their own.
+    static var folder: URL?
+    private static var dir: URL? { folder ?? FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) }
 
     static func load() -> WidgetSnapshot? {
         guard let f = dir?.appendingPathComponent("snapshot.json"), let d = try? Data(contentsOf: f) else { return nil }
@@ -45,15 +64,27 @@ struct WidgetSnapshot: Codable, Equatable {
         guard let f = Self.dir?.appendingPathComponent("snapshot.json") else { return false }
         var old = Self.load()
         old?.at = at
-        guard old != self else { return false }
+        #if !os(watchOS)
+        old?.time = time // the desktop widgets work out the clock themselves, so a new minute is no reason to redraw
+        #endif
+        let changed = old != self
+        // always written: `at` says how fresh it is
         try? JSONEncoder().encode(self).write(to: f, options: .atomic)
-        return true
+        return changed
     }
 
-    /// The cat's pictures: sit, sleep, happy.
-    static func image(_ frame: String) -> UIImage? {
+    /// The cat's pictures: sit, sleep, happy (and on the bigger widgets loaf, groom, beg).
+    static func image(_ frame: String) -> PlatformImage? {
         guard let f = dir?.appendingPathComponent("cat-\(frame).png"), let d = try? Data(contentsOf: f) else { return nil }
-        return UIImage(data: d)
+        return PlatformImage(data: d)
+    }
+
+    /// Forgets everything saved (signed out, or another town or account).
+    static func clear() {
+        guard let d = dir, let files = try? FileManager.default.contentsOfDirectory(at: d, includingPropertiesForKeys: nil) else { return }
+        for f in files where f.lastPathComponent == "snapshot.json" || (f.lastPathComponent.hasPrefix("cat-") && f.pathExtension == "png") {
+            try? FileManager.default.removeItem(at: f)
+        }
     }
 
     static func saveImage(_ png: Data, frame: String) {
@@ -67,6 +98,7 @@ struct WidgetSnapshot: Codable, Equatable {
         if townMode == "paused" { return "小镇暂停开放" }
         if townMode == "closed" { return "小镇要关门了" }
         if let v = visiting { return "在\(v)家做客" }
+        if out, goingHome == true { return "在回家的路上" }
         if out { return place.map { "在\($0)" } ?? "出门探险中" }
         if sleepy { return "睡着了" }
         return mood

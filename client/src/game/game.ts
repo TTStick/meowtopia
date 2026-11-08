@@ -5,7 +5,7 @@ import { Input } from '../engine/input';
 import { NestScene, type NestEnv } from './nest';
 import { WorldScene } from './world';
 import { api, takeLegacyToken, clearLegacyToken, setBearer, WorldSocket, ApiError, onShut } from './net';
-import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, matchSystemBars, onResume, initNativePush, handOffToWatch, onBackButton } from './platform';
+import { isNative, isMacShell, toMac, loadToken, saveToken, hideSplash, matchSystemBars, onResume, initNativePush, handOffToWatch, onBackButton, syncWidgets } from './platform';
 import { confirmBox, dismissDialog } from '../ui/Dialog';
 import { takeGuestPow } from './pow';
 import { codeLogin, passkeyLogin, scheduleProtectNudge, guestLogin, registerApns } from './account';
@@ -143,7 +143,10 @@ class Game {
     // the app keeps its session token in the Keychain; the website uses a cookie,
     // and older website versions kept the token in localStorage: trade it for a cookie once
     const legacy = isNative ? null : takeLegacyToken();
-    if (isNative) setBearer(await loadToken());
+    if (isNative) {
+      setBearer(await loadToken());
+      syncWidgets();
+    }
     if (legacy) {
       try {
         await api('POST', '/api/auth/upgrade', {}, legacy);

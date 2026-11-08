@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_sky_day" android:clipToOutline="true">
+<ImageView android:id="@+id/deco" android:layout_width="58dp" android:layout_height="58dp" android:layout_gravity="top|end" android:layout_marginTop="6dp" android:layout_marginEnd="10dp" android:contentDescription="@null" android:scaleType="fitCenter" android:visibility="gone" />
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal">
+    <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="58" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="42" android:gravity="center_horizontal" android:orientation="vertical">
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="40" />
+<ImageView android:id="@+id/houses" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="36" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_houses_day" android:layout_marginEnd="10dp" />
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="24" />
+</LinearLayout>
+</LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="70" />
+        <ImageView android:id="@+id/ground" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="30" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_floor" android:tint="#EBD3AE" />
+    </LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal">
+    <LinearLayout android:id="@+id/card" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="10dp" android:layout_weight="58" android:background="@drawable/widget_card_light" android:gravity="center_vertical" android:orientation="vertical" android:paddingStart="13dp" android:paddingEnd="13dp">
+        <TextView android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="小镇 · 秋天" android:textColor="#AD4A3A34" android:textSize="11sp" />
+        <TextView android:id="@+id/phase" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="下午 · 晴" android:textColor="#4A3A34" android:textSize="19sp" android:textStyle="bold" android:layout_marginTop="2dp"/>
+        <TextView android:id="@+id/show" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="今晚 19:30 小镇乐团" android:textColor="#4A3A34" android:textSize="12.5sp" android:textStyle="bold" android:layout_marginTop="10dp"/>
+        <LinearLayout android:id="@+id/cat_row" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center_vertical" android:orientation="horizontal">
+            <ImageView android:id="@+id/cat" android:layout_width="25dp" android:layout_height="25dp" android:contentDescription="@null" android:src="@drawable/widget_preview_cat" />
+            <TextView android:id="@+id/where" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="汤圆在家里" android:textColor="#AD4A3A34" android:textSize="12sp" android:layout_marginStart="5dp"/>
+        </LinearLayout>
+    </LinearLayout>
+    <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="42" />
+</LinearLayout>
+</FrameLayout>

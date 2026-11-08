@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@android:id/background" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_wall_day" android:clipToOutline="true">
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+        <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="70" />
+        <ImageView android:id="@+id/ground" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="30" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_floor" android:tint="#EBD3AE" />
+    </LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="horizontal">
+    <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="43">
+        <FrameLayout android:id="@+id/window" android:layout_width="50dp" android:layout_height="44dp" android:layout_gravity="top|start" android:layout_marginStart="8dp" android:layout_marginTop="9dp">
+        <ImageView android:id="@+id/window_sky" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/widget_win_day" />
+        <ImageView android:id="@+id/window_deco" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="8dp" android:contentDescription="@null" android:scaleType="fitCenter" android:src="@drawable/widget_deco_sun" />
+        <ImageView android:id="@+id/window_frame" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:src="@drawable/widget_win_frame" />
+    </FrameLayout>
+        <ImageView android:id="@+id/deco" android:layout_width="50dp" android:layout_height="50dp" android:layout_gravity="top|start" android:layout_marginStart="8dp" android:layout_marginTop="6dp" android:contentDescription="@null" android:scaleType="fitCenter" android:visibility="gone" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_horizontal" android:orientation="vertical">
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="79" />
+<ImageView android:id="@+id/cushion" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="16" android:contentDescription="@null" android:scaleType="fitXY" android:src="@drawable/widget_cushion" android:layout_marginStart="16dp" android:layout_marginEnd="16dp"/>
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="5" />
+</LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_horizontal" android:orientation="vertical">
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="22" />
+<ImageView android:id="@+id/cat" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="73" android:contentDescription="@null" android:scaleType="fitCenter" android:src="@drawable/widget_preview_cat"/>
+<FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="5" />
+</LinearLayout>
+    </FrameLayout>
+    <LinearLayout android:id="@+id/card" android:layout_width="0dp" android:layout_height="match_parent" android:layout_margin="10dp" android:layout_weight="57" android:background="@drawable/widget_card_light" android:gravity="center_vertical" android:orientation="vertical" android:paddingStart="12dp" android:paddingEnd="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+            <TextView android:id="@+id/name" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="汤圆" android:textColor="#4A3A34" android:textSize="17sp" android:textStyle="bold" />
+            <TextView android:id="@+id/days" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="第 12 天" android:textColor="#AD4A3A34" android:textSize="10.5sp" android:layout_marginStart="5dp"/>
+            <FrameLayout android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <TextView android:id="@+id/letters" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/widget_letters" android:drawablePadding="3dp" android:drawableStart="@drawable/widget_envelope" android:gravity="center_vertical" android:paddingStart="7dp" android:paddingTop="3dp" android:paddingEnd="7dp" android:paddingBottom="3dp" android:text="2" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" android:visibility="gone" />
+        </LinearLayout>
+        <TextView android:id="@+id/status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="心情不错" android:textColor="#AD4A3A34" android:textSize="12sp" android:layout_marginTop="2dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="7dp">
+            <TextView android:id="@+id/food_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="饱腹" android:textColor="#AD4A3A34" android:textSize="10.5sp" />
+            <ProgressBar android:id="@+id/food" style="?android:attr/progressBarStyleHorizontal" android:layout_width="0dp" android:layout_height="6dp" android:layout_marginStart="5dp" android:layout_weight="1" android:max="100" android:progress="72" android:progressDrawable="@drawable/widget_bar_food" />
+        </LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="5dp">
+            <TextView android:id="@+id/energy_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="精神" android:textColor="#AD4A3A34" android:textSize="10.5sp" />
+            <ProgressBar android:id="@+id/energy" style="?android:attr/progressBarStyleHorizontal" android:layout_width="0dp" android:layout_height="6dp" android:layout_marginStart="5dp" android:layout_weight="1" android:max="100" android:progress="72" android:progressDrawable="@drawable/widget_bar_energy" />
+        </LinearLayout>
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:layout_marginTop="5dp">
+            <TextView android:id="@+id/mood_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="心情" android:textColor="#AD4A3A34" android:textSize="10.5sp" />
+            <ProgressBar android:id="@+id/mood" style="?android:attr/progressBarStyleHorizontal" android:layout_width="0dp" android:layout_height="6dp" android:layout_marginStart="5dp" android:layout_weight="1" android:max="100" android:progress="72" android:progressDrawable="@drawable/widget_bar_mood" />
+        </LinearLayout>
+        <TextView android:id="@+id/extra" android:layout_width="wrap_content" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:text="心愿 1/3：想玩逗猫棒" android:textColor="#AD4A3A34" android:textSize="11sp" android:layout_marginTop="7dp"/>
+    </LinearLayout>
+</LinearLayout>
+</FrameLayout>

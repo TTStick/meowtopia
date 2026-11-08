@@ -22,13 +22,21 @@ enum DebugDump {
         Task {
             // -CatNestDumpDelay N: look only after N seconds (to see the app recover from a bad start)
             try? await Task.sleep(for: .seconds(UserDefaults.standard.integer(forKey: "CatNestDumpDelay")))
-            // optional test sign-in: -CatNestDebugCode XXXX-XXXX-XXXX (test accounts only)
+            // optional test sign-in: -CatNestDebugCode XXXX-XXXX-XXXX (test accounts only). Done natively:
+            // a page that isn't on screen may be suspended, and then a script in it never finishes.
             if let code = UserDefaults.standard.string(forKey: "CatNestDebugCode") {
-                try? await Task.sleep(for: .seconds(2))
-                let js = "const r = await fetch('/api/auth/code',{method:'POST',headers:{'content-type':'application/json','x-catnest':'1'},body:JSON.stringify({code})}); return r.status"
-                let status = try? await app.debugCompanion.callAsyncJavaScript(js, arguments: ["code": code], contentWorld: .page)
-                log("debug sign-in: \(String(describing: status))")
-                app.debugCompanion.reload()
+                var req = URLRequest(url: Server.url("/api/auth/code"))
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                req.setValue("1", forHTTPHeaderField: "x-catnest")
+                req.setValue(Server.userAgent, forHTTPHeaderField: "User-Agent")
+                req.httpBody = try? JSONSerialization.data(withJSONObject: ["code": code])
+                if let (_, res) = try? await URLSession(configuration: .ephemeral).data(for: req), let http = res as? HTTPURLResponse, let url = http.url, let fields = http.allHeaderFields as? [String: String] {
+                    log("debug sign-in: \(http.statusCode)")
+                    for c in HTTPCookie.cookies(withResponseHeaderFields: fields, for: url) { await WKWebsiteDataStore.default().httpCookieStore.setCookie(c) }
+                    app.debugCompanion.reload()
+                    app.debugSync.poll()
+                }
                 try? await Task.sleep(for: .seconds(2))
             }
             // wait for the cat's frames to arrive

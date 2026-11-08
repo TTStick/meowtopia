@@ -2,12 +2,14 @@ import Foundation
 import Security
 import Capacitor
 import WatchConnectivity
+import WidgetKit
 
 /// The app's own native bits:
 /// - the session token in the iOS Keychain (encrypted, this device only; Keychain
 ///   items survive reinstalling the app, so the nest isn't lost with it)
 /// - sharing a file (data export, photos) through the system share sheet
 /// - handing the paired Apple Watch its own session, so it signs in by itself
+/// - telling the home screen widgets which town to ask, and with which session
 @objc(KeychainPlugin)
 public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate {
     public let identifier = "KeychainPlugin"
@@ -19,9 +21,27 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate {
         CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "watchState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendToWatch", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "widgetSync", returnType: CAPPluginReturnPromise),
     ]
 
+    private static weak var current: KeychainPlugin?
+    private static var pendingPanel: String?
+
+    /// A widget was tapped (catnest://open/letters); the page may not be up yet.
+    static func openPanel(_ panel: String) {
+        if let p = current {
+            p.notifyListeners("open", data: ["panel": panel], retainUntilConsumed: true)
+        } else {
+            pendingPanel = panel
+        }
+    }
+
     override public func load() {
+        Self.current = self
+        if let panel = Self.pendingPanel {
+            Self.pendingPanel = nil
+            notifyListeners("open", data: ["panel": panel], retainUntilConsumed: true)
+        }
         if WCSession.isSupported() {
             WCSession.default.delegate = self
             WCSession.default.activate()
@@ -93,6 +113,49 @@ public class KeychainPlugin: CAPPlugin, CAPBridgedPlugin, WCSessionDelegate {
             }
             vc.present(sheet, animated: true)
         }
+    }
+
+    // MARK: home screen widgets
+
+    /// The widgets' copy of the session: a Keychain item only this app and its widgets can read.
+    private func widgetQuery() -> [String: Any] {
+        return [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.catnest.widget",
+            kSecAttrAccount as String: "session",
+            kSecAttrAccessGroup as String: WidgetSnapshot.group,
+        ]
+    }
+
+    private func read(_ q: [String: Any]) -> String? {
+        var q = q
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess, let d = item as? Data else { return nil }
+        return String(data: d, encoding: .utf8)
+    }
+
+    /// { server } after every sign-in, sign-out and start: the widgets fetch the cat themselves.
+    @objc func widgetSync(_ call: CAPPluginCall) {
+        let server = call.getString("server") ?? ""
+        let token = read(query("session"))
+        let shared = UserDefaults(suiteName: WidgetSnapshot.group)
+        let old = read(widgetQuery())
+        if old != token || shared?.string(forKey: "server") != server {
+            // another account or town: nothing of the last one should linger on the home screen
+            WidgetSnapshot.clear()
+            SecItemDelete(widgetQuery() as CFDictionary)
+            if let token {
+                var q = widgetQuery()
+                q[kSecValueData as String] = Data(token.utf8)
+                q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                SecItemAdd(q as CFDictionary, nil)
+            }
+            shared?.set(server, forKey: "server")
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        call.resolve()
     }
 
     // MARK: Apple Watch

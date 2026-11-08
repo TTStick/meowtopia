@@ -50,6 +50,8 @@ interface CatNativePlugin {
   // Android: letters from the cat, checked in the background (no Google services needed)
   enableLetters(o: { server: string; prompt: boolean }): Promise<{ granted: boolean }>;
   setBackdrop(o: { color: string }): Promise<void>;
+  // the home screen widgets (iOS, Android) fetch the cat themselves
+  widgetSync(o: { server: string }): Promise<void>;
   disableLetters(): Promise<void>;
   sampleLetter(o: { title: string; body: string }): Promise<void>;
   addListener(event: 'open', fn: (e: { panel: string }) => void): Promise<{ remove(): void }>;
@@ -78,6 +80,12 @@ export async function saveToken(t: string | null) {
   } catch (e) {
     console.warn('keychain', e);
   }
+  syncWidgets();
+}
+
+/** Tells the home screen widgets which town to ask; the session itself stays in native code. */
+export function syncWidgets() {
+  if (isNative) void Native.widgetSync({ server: API_BASE }).catch(() => {});
 }
 
 /**
@@ -298,8 +306,8 @@ export async function sampleNotification(title: string, body: string, viaServer:
 /** Re-register silently on launch (tokens can change) and route taps on a notification. */
 export async function initNativePush(send: (token: string, env: string) => Promise<unknown>, onOpen: () => void, wanted = true) {
   if (!isNative) return;
+  void Native.addListener('open', () => onOpen()); // a letter notification (Android) or a widget (both)
   if (platform === 'android') {
-    void Native.addListener('open', () => onOpen());
     if (wanted) await Native.enableLetters({ server: API_BASE, prompt: false });
     else await Native.disableLetters();
     return;

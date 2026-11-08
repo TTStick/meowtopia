@@ -9,8 +9,8 @@ settings:
   base:
     SDKROOT: macosx
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.3"
-    CURRENT_PROJECT_VERSION: "4"
+    MARKETING_VERSION: "1.4"
+    CURRENT_PROJECT_VERSION: "5"
     DEVELOPMENT_TEAM: ""
     ALWAYS_SEARCH_USER_PATHS: NO
     LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
@@ -35,6 +35,13 @@ targets:
     platform: macOS
     sources:
       - CatNest
+      # keeps the desktop widgets' facts and pictures up to date
+      - path: ../watchos/Shared/WidgetSnapshot.swift
+        group: Shared
+      - path: ../ios/App/CatNestWidgets/Feed.swift
+        group: Shared
+    dependencies:
+      - target: CatNestWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.catnest.mac
@@ -52,3 +59,26 @@ targets:
           CATNEST_SERVER: https://localhost
         Release:
           CATNEST_SERVER: https://mycat.xioix.xin
+  # the desktop widgets (WidgetKit); same faces as the iPhone's, they read what the menu bar app saves
+  CatNestWidgets:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: CatNestWidgets
+      - path: ../watchos/Shared/WidgetSnapshot.swift
+        group: Shared
+      - path: ../ios/App/CatNestWidgets/Faces.swift
+        group: Shared
+      - path: ../ios/App/CatNestWidgets/Widgets.swift
+        group: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.catnest.mac.widgets
+        PRODUCT_NAME: CatNestWidgets
+        INFOPLIST_FILE: CatNestWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CatNestWidgets/CatNestWidgets.entitlements
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks"

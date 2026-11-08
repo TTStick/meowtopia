@@ -22,7 +22,13 @@ public class MainActivity extends BridgeActivity {
         handle(intent);
     }
 
-    /** A tapped letter notification opens the mailbox. */
+    @Override
+    public void onStop() {
+        super.onStop();
+        WidgetWorker.leftApp(this);
+    }
+
+    /** A tapped letter notification or widget opens the mailbox. */
     private void handle(Intent intent) {
         if (intent == null || bridge == null) return;
         String panel = intent.getStringExtra(EXTRA_OPEN);

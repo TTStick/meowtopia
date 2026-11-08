@@ -154,6 +154,16 @@ public class CatNativePlugin extends Plugin {
         return true;
     }
 
+    // ---------- home screen widgets ----------
+
+    /** { server } after every sign-in, sign-out and start: the widgets fetch the cat themselves. */
+    @PluginMethod
+    public void widgetSync(PluginCall call) {
+        String server = call.getString("server", "").replaceAll("/+$", "");
+        if (!server.isEmpty()) WidgetWorker.link(getContext(), server);
+        call.resolve();
+    }
+
     // ---------- watches (Apple Watch handoff is iOS only) ----------
 
     @PluginMethod

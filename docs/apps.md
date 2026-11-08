@@ -47,6 +47,17 @@ npm run build:ios
 
 想连自己的服务器：把 `.env.ios.example` 复制成 `.env.ios`，把 `VITE_API_BASE` 改成你的域名，再 `npm run build:ios`。
 
+### 桌面小组件
+
+长按主屏幕 → 左上角「+」→ 搜「猫窝」，可以放上两种小组件（需要 iOS 17 以上，App 本身仍支持 iOS 15）：
+
+- **猫猫**（小、中、大）：你的猫在家还是在外面、心情、饱腹 / 精神 / 心情条、今天的心愿，有新信时带一个小信封，点一下直接打开信箱。
+- **小镇**（小、中）：小镇此刻的时辰和天气、今晚的舞台、你的猫在哪儿。
+
+画面跟着小镇的时间、季节和天气变，猫在家时坐在窗边的垫子上，出门时站在山坡上。小组件和手表共用 `watchos/Shared/WidgetSnapshot.swift`，画面在 `ios/App/CatNestWidgets/Faces.swift`（Mac 版用同一份）。
+
+小组件自己大约每半小时问一次服务器（`GET /api/watch`），App 没开着也会更新；离开 App 时也会立刻刷新一次。登录凭证放在只有 App 和它的小组件能读的钥匙串项里（访问组 `group.com.catnest.app`），退出登录或换小镇时清掉。真机上要在开发者账号里给 `com.catnest.app` 和 `com.catnest.app.widgets` 都打开这个 App Group；用免费 Apple ID 改了 `CATNEST_BUNDLE_ID` 的话，App Group 也要在 Signing & Capabilities 里换成自己的名字，并同步改 `WidgetSnapshot.swift` 里的 `group`。
+
 ### 在本机用 Docker + 模拟器调试
 
 1. `.env` 里写 `CAT_DOMAIN=localhost`，然后启动服务（Caddy 会给 localhost 签一张本机证书）：
@@ -104,6 +115,7 @@ xcrun simctl push booted com.catnest.app push.apns
 - **照片**直接存进相册里的「猫窝」文件夹，同时弹出分享面板；导出数据也走分享面板。
 - 状态栏和底部手势条跟着场景变色（夜里深色、小镇浅色）；呼噜、发现宝贝时有震动。
 - 图标是自适应图标（支持 Android 13 起的主题图标），启动画面也是那只三花猫。
+- **桌面小组件**：长按桌面 →「小组件」→ 猫窝，有「猫猫」和「小镇」两种，内容和样子都和 iPhone 版一样。「猫猫」拖大拖小会在小、中、大三种版面之间切换，「小镇」有小、中两种。它们大约每半小时更新一次（`WidgetWorker.java`），离开 App 时也会刷新；有新信时点一下直接打开信箱。
 - Apple Watch 相关的功能只在 iPhone 上有。
 
 ### 在本机用模拟器调试
@@ -170,6 +182,7 @@ node --import tsx scripts/make-android-icons.ts
 - **点一下打开陪伴面板**：可以看到会动的猫、它说的话、饱腹 / 精力 / 心情和今天的小心愿。能摸摸、喂食、逗猫、出门、叫它回家、说晚安，也能直接打字对它说话。右键图标有「开机时陪着你」和「退出」。
 - **「打开完整游戏」**：在独立窗口里玩完整版，和面板共用同一个登录。窗口打开时 App 出现在 Dock，关掉后又安静地回到菜单栏。
 - 有新信时会发系统通知（在游戏设置里打开「猫猫的小纸条」）。
+- **桌面小组件**：右键桌面 →「编辑小组件」→ 搜「猫窝」，和 iPhone 版一样有「猫猫」和「小镇」。网页登录用的 cookie 小组件读不到，所以由菜单栏 App 替它们取数据（猫有变化时马上更新，平时每 5 分钟一次），存进 App Group `group.com.catnest.mac`。App 退出后小组件停在最后的样子，天色照常变，隔得久了会标上「几小时前」。
 
 构建与运行：
 
@@ -180,6 +193,8 @@ cd macos && xcodegen generate
 ```bash
 open macos/CatNest.xcodeproj
 ```
+
+（用了 App Group，在 Xcode 里运行需要在 Signing & Capabilities 选一个开发团队。不想选的话用下面「打包给别人下载」的脚本。）
 
 调试版连接 `https://localhost`（本机 Docker）。正式版默认连接公共服务器 `https://mycat.xioix.xin`，在游戏里「设置 → 所在的小镇」可以换到任何一个小镇。想让 App 默认连你的小镇，把 `macos/project.yml` 里 Release 的 `CATNEST_SERVER` 改成你的域名，已经装好的 App 也可以这样改：
 
@@ -194,7 +209,7 @@ defaults write com.catnest.mac serverURL https://你的域名
 用 Release 配置构建一个同时支持 Apple 芯片和 Intel 的 App：
 
 ```bash
-xcodebuild -project macos/CatNest.xcodeproj -scheme CatNest -configuration Release -derivedDataPath build/mac ONLY_ACTIVE_ARCH=NO build
+./deploy/build-mac.sh
 ```
 
 再放到服务器的下载目录（官网「下载」里的 Mac 卡片会显示版本、大小和 SHA-256；服务器上没有 Mac 版时，这张卡片自动隐藏）：

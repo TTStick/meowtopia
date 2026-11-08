@@ -2,6 +2,7 @@ import AppKit
 import Network
 import WebKit
 import UserNotifications
+import WidgetKit
 
 /// Keeps the menu bar cat and the letter notifications up to date from native code.
 /// (A page that isn't on screen gets suspended by WebKit, so it can't be relied on.)
@@ -23,6 +24,8 @@ final class CompanionSync: NSObject, URLSessionDelegate {
     private var retry: Timer?
     private var inFlight = false
     private var failures = 0
+    private var widgetsAsked = Date.distantPast
+    private var widgetsSaw = ""
     private let network = NWPathMonitor()
     private var online = true
     private lazy var session: URLSession = {
@@ -76,6 +79,7 @@ final class CompanionSync: NSObject, URLSessionDelegate {
             let cookies = await WKWebsiteDataStore.default().httpCookieStore.allCookies()
             guard let sid = Self.session(in: cookies, for: Server.base) else {
                 onUpdate?(false, nil)
+                signOutWidgets()
                 return
             }
             var req = URLRequest(url: Server.url("/api/companion"))
@@ -90,13 +94,42 @@ final class CompanionSync: NSObject, URLSessionDelegate {
             await keepCookie(http)
             if http.statusCode == 401 {
                 onUpdate?(false, nil)
+                signOutWidgets()
                 return
             }
             guard http.statusCode == 200, let home = try? JSONDecoder().decode(Home.self, from: data) else { return }
             DebugDump.note("companion: \(home.cat?.name ?? "no cat")")
             onUpdate?(true, home)
             notifyNew(home.letters ?? [])
+            await refreshWidgets(home, sid: sid.value)
         }
+    }
+
+    // MARK: desktop widgets
+
+    /// A widget can't see the sign-in, so this app fetches for them: right away when the cat's
+    /// doing something new, and every few minutes otherwise.
+    private func refreshWidgets(_ home: Home, sid: String) async {
+        let c = home.cat
+        let saw = "\(c?.id ?? "")|\(c?.look ?? "")|\(c?.out ?? false)|\(c?.sleepy ?? false)|\(c?.mood ?? "")|\(home.unread ?? 0)"
+        guard saw != widgetsSaw || Date().timeIntervalSince(widgetsAsked) > 5 * 60 else { return }
+        let outcome = await WidgetFeed.refresh(server: Server.base, session: session) { r in
+            r.setValue("cn_sid=\(sid)", forHTTPHeaderField: "Cookie")
+            r.setValue(Server.userAgent, forHTTPHeaderField: "User-Agent")
+        }
+        DebugDump.note("widgets: \(outcome)")
+        if case .unreachable = outcome { return }
+        widgetsSaw = saw
+        widgetsAsked = Date()
+        if case .changed = outcome { WidgetCenter.shared.reloadAllTimelines() }
+    }
+
+    private func signOutWidgets() {
+        guard WidgetSnapshot.load()?.signedIn != false else { return }
+        WidgetSnapshot.clear()
+        WidgetSnapshot().save()
+        widgetsSaw = ""
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// The sign-in cookie the pages would send to this town: one for exactly this host (or a domain

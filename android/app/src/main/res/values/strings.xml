@@ -4,4 +4,8 @@
     <string name="title_activity_main">猫窝</string>
     <string name="package_name">com.catnest.app</string>
     <string name="custom_url_scheme">com.catnest.app</string>
+    <string name="widget_cat_name">猫猫</string>
+    <string name="widget_cat_desc">你的猫在做什么、心情怎么样</string>
+    <string name="widget_town_name">小镇</string>
+    <string name="widget_town_desc">小镇的时辰天气和今晚的舞台</string>
 </resources>

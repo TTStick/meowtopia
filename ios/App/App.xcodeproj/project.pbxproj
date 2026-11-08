@@ -19,6 +19,13 @@
 		CA7000000000000000000001 /* KeychainPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000011 /* KeychainPlugin.swift */; };
 		CA7000000000000000000002 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000012 /* MainViewController.swift */; };
 		CA70A000000000000000000D /* CatNestWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = CA70A0000000000000000002 /* CatNestWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CA7100000000000000000021 /* Widgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000011 /* Widgets.swift */; };
+		CA7100000000000000000022 /* Faces.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000012 /* Faces.swift */; };
+		CA7100000000000000000023 /* Feed.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000013 /* Feed.swift */; };
+		CA7100000000000000000024 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000014 /* WidgetSnapshot.swift */; };
+		CA7100000000000000000025 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000017 /* Assets.xcassets */; };
+		CA7100000000000000000026 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000014 /* WidgetSnapshot.swift */; };
+		CA710000000000000000000C /* CatNestWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000001 /* CatNestWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,6 +35,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = CA70A0000000000000000003;
 			remoteInfo = CatNestWatch;
+		};
+		CA7100000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA7100000000000000000002;
+			remoteInfo = CatNestWidgets;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -41,6 +55,17 @@
 				CA70A000000000000000000D /* CatNestWatch.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA710000000000000000000B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				CA710000000000000000000C /* CatNestWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -61,6 +86,14 @@
 		CA7000000000000000000012 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		CA7000000000000000000013 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		CA70A0000000000000000002 /* CatNestWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CatNestWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA7100000000000000000001 /* CatNestWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CatNestWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA7100000000000000000011 /* Widgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widgets.swift; sourceTree = "<group>"; };
+		CA7100000000000000000012 /* Faces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Faces.swift; sourceTree = "<group>"; };
+		CA7100000000000000000013 /* Feed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Feed.swift; sourceTree = "<group>"; };
+		CA7100000000000000000014 /* WidgetSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WidgetSnapshot.swift; path = ../../../watchos/Shared/WidgetSnapshot.swift; sourceTree = "<group>"; };
+		CA7100000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		CA7100000000000000000016 /* CatNestWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CatNestWidgets.entitlements; sourceTree = "<group>"; };
+		CA7100000000000000000017 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -87,6 +120,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CA7100000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -96,6 +136,7 @@
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
 				CA70A0000000000000000001 /* CatNestWatch */,
+				CA710000000000000000000D /* CatNestWidgets */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -105,6 +146,7 @@
 			children = (
 				504EC3041FED79650016851F /* App.app */,
 				CA70A0000000000000000002 /* CatNestWatch.app */,
+				CA7100000000000000000001 /* CatNestWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -128,6 +170,20 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		CA710000000000000000000D /* CatNestWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				CA7100000000000000000011 /* Widgets.swift */,
+				CA7100000000000000000012 /* Faces.swift */,
+				CA7100000000000000000013 /* Feed.swift */,
+				CA7100000000000000000014 /* WidgetSnapshot.swift */,
+				CA7100000000000000000017 /* Assets.xcassets */,
+				CA7100000000000000000015 /* Info.plist */,
+				CA7100000000000000000016 /* CatNestWidgets.entitlements */,
+			);
+			path = CatNestWidgets;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -139,11 +195,13 @@
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
 				CA70A000000000000000000C /* Embed Watch Content */,
+				CA710000000000000000000B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				CA70A000000000000000000B /* PBXTargetDependency */,
+				CA710000000000000000000A /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -175,6 +233,23 @@
 			productReference = CA70A0000000000000000002 /* CatNestWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		CA7100000000000000000002 /* CatNestWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CA7100000000000000000006 /* Build configuration list for PBXNativeTarget "CatNestWidgets" */;
+			buildPhases = (
+				CA7100000000000000000003 /* Sources */,
+				CA7100000000000000000004 /* Frameworks */,
+				CA7100000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CatNestWidgets;
+			productName = CatNestWidgets;
+			productReference = CA7100000000000000000001 /* CatNestWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -185,6 +260,9 @@
 				LastUpgradeCheck = 0920;
 				TargetAttributes = {
 					CA70A0000000000000000003 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					CA7100000000000000000002 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 					504EC3031FED79650016851F = {
@@ -212,6 +290,7 @@
 			targets = (
 				504EC3031FED79650016851F /* App */,
 				CA70A0000000000000000003 /* CatNestWatch */,
+				CA7100000000000000000002 /* CatNestWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -237,6 +316,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CA7100000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA7100000000000000000025 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -248,6 +335,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				CA7000000000000000000002 /* MainViewController.swift in Sources */,
 				CA7000000000000000000001 /* KeychainPlugin.swift in Sources */,
+				CA7100000000000000000026 /* WidgetSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -255,6 +343,17 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CA7100000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA7100000000000000000021 /* Widgets.swift in Sources */,
+				CA7100000000000000000022 /* Faces.swift in Sources */,
+				CA7100000000000000000023 /* Feed.swift in Sources */,
+				CA7100000000000000000024 /* WidgetSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,6 +383,11 @@
 			isa = PBXTargetDependency;
 			target = CA70A0000000000000000003 /* CatNestWatch */;
 			targetProxy = CA70A000000000000000000A /* PBXContainerItemProxy */;
+		};
+		CA710000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA7100000000000000000002 /* CatNestWidgets */;
+			targetProxy = CA7100000000000000000009 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -507,6 +611,56 @@
 			};
 			name = Release;
 		};
+		CA7100000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CatNestWidgets/CatNestWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = CatNestWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CATNEST_BUNDLE_ID).widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CA7100000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = CatNestWidgets/CatNestWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = CatNestWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(CATNEST_BUNDLE_ID).widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -533,6 +687,15 @@
 			buildConfigurations = (
 				CA70A0000000000000000008 /* Debug */,
 				CA70A0000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CA7100000000000000000006 /* Build configuration list for PBXNativeTarget "CatNestWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CA7100000000000000000007 /* Debug */,
+				CA7100000000000000000008 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
