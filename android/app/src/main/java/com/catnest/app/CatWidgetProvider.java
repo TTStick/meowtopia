@@ -11,7 +11,7 @@ public class CatWidgetProvider extends AppWidgetProvider {
     public void onUpdate(Context c, AppWidgetManager m, int[] ids) {
         WidgetData d = WidgetData.load(c);
         for (int id : ids) m.updateAppWidget(id, WidgetViews.cat(c, d, m.getAppWidgetOptions(id)));
-        WidgetWorker.placed(c);
+        WidgetWorker.placed(c, goAsync());
     }
 
     @Override

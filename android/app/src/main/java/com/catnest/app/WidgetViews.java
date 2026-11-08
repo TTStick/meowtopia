@@ -141,7 +141,17 @@ final class WidgetViews {
         v.setTextColor(R.id.title, dark ? CREAM : INK);
         v.setTextColor(R.id.line, dark ? CREAM_SOFT : INK_SOFT);
         v.setTextViewText(R.id.title, d.signedIn() ? "还没有猫猫" : "猫窝");
-        v.setTextViewText(R.id.line, d.signedIn() ? "打开猫窝领养一只吧" : "打开 App 登录后，这里会住进你的猫");
+        String line;
+        if (d.signedIn()) {
+            line = "打开猫窝领养一只吧";
+        } else if (SecureStore.get(c, "session") != null) {
+            // signed in, only the answer hasn't come yet: say so, and why if we know
+            String problem = WidgetWorker.problem(c);
+            line = problem == null ? "正在找你的猫……" : "暂时连不上小镇，一会儿再试\n（" + problem + "）";
+        } else {
+            line = "打开 App 登录后，这里会住进你的猫";
+        }
+        v.setTextViewText(R.id.line, line);
         v.setOnClickPendingIntent(android.R.id.background, open(c, false));
         return v;
     }

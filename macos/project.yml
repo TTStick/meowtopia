@@ -9,8 +9,8 @@ settings:
   base:
     SDKROOT: macosx
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.4"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "1.4.1"
+    CURRENT_PROJECT_VERSION: "6"
     DEVELOPMENT_TEAM: ""
     ALWAYS_SEARCH_USER_PATHS: NO
     LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"

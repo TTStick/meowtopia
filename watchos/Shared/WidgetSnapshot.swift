@@ -8,7 +8,7 @@ typealias PlatformImage = NSImage
 #endif
 
 /// What the widgets show (the watch's, and the iPhone's and Mac's): a few facts and
-/// the cat's pictures, kept in the shared app group.
+/// the cat's pictures, kept where the app and its widgets can both reach them.
 struct WidgetSnapshot: Codable, Equatable {
     var at = Date()
     var signedIn = false
@@ -46,12 +46,23 @@ struct WidgetSnapshot: Codable, Equatable {
     static let group = "group.com.catnest.watch"
     #elseif os(iOS)
     static let group = "group.com.catnest.app"
-    #else
-    static let group = "group.com.catnest.mac"
     #endif
     /// Tools that draw the widgets outside the app point this at a folder of their own.
     static var folder: URL?
-    private static var dir: URL? { folder ?? FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) }
+    private static var dir: URL? {
+        if let folder { return folder }
+        #if os(macOS)
+        // The Mac app isn't signed by a registered developer, and macOS guards app group folders against
+        // such apps: a widget, which can't ask, just never gets in. So they share an ordinary folder instead
+        // (see the temporary-exception entitlements), under the real home, not the sandbox's.
+        let home = String(cString: getpwuid(getuid()).pointee.pw_dir)
+        let d = URL(fileURLWithPath: home).appendingPathComponent("Library/Application Support/CatNest Widgets", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+        #else
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
+        #endif
+    }
 
     static func load() -> WidgetSnapshot? {
         guard let f = dir?.appendingPathComponent("snapshot.json"), let d = try? Data(contentsOf: f) else { return nil }
